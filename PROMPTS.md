@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.4, P2.1, P2.2, P3.1, P3.2, P3.3 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Làm tiếp được không cần key: P1.5.
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.5, P2.1, P2.2, P3.1, P3.2, P3.3 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Làm tiếp được không cần key: P4.3, P5.1, P5.2.
 
 ---
 
@@ -37,7 +37,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 **P1.4 · Recorder** ✅ (hướng dẫn Task Scheduler: `docs/recorder_windows.md`)
 > Viết `recorder/`: ghi tick và snapshot sổ lệnh từ composite feed ra Parquet theo ngày, flush mỗi N giây, không mất dữ liệu khi crash (ghi file tạm rồi rename). Script `scripts/record_today.py` chạy từ 8:30 đến 15:00 rồi tự thoát. Hướng dẫn tôi đặt Windows Task Scheduler chạy mỗi ngày giao dịch.
 
-**P1.5 · Kiểm định dữ liệu**
+**P1.5 · Kiểm định dữ liệu** ✅ (tự chạy cuối `record_today.py`)
 > Viết `scripts/validate_day.py`: với một ngày dữ liệu, báo cáo số tick, khoảng trống > 5 giây trong phiên liên tục, tick ngoài biên độ, chênh lệch DNSE vs SSI, và dựng bar 1 phút. So khớp OHLC 1 phút với dữ liệu vnstock của cùng ngày, liệt kê sai lệch.
 
 **P1.6 · Tải dữ liệu lịch sử thật**

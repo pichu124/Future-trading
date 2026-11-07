@@ -2,7 +2,8 @@
 
 - Không phải ngày giao dịch (cuối tuần / config/holidays.yaml) ⇒ thoát 0 ngay.
 - Khởi động trước giờ `recorder.start` ⇒ chờ; sau `recorder.stop` ⇒ thoát 0.
-- Chạy feed + recorder tới `recorder.stop` (mặc định 15:00), flush lần cuối, gộp file ngày, thoát.
+- Chạy feed + recorder tới `recorder.stop` (mặc định 15:00), flush lần cuối, gộp file ngày, rồi
+  chạy `scripts/validate_day.py` (báo cáo chất lượng + `data/bars/<ngày>.parquet` cho backtest).
 - Feed chết bất thường ⇒ vẫn lưu phần đã nhận, thoát mã 1 (Task Scheduler ghi "Last Run Result").
 - Chặn hai tiến trình ghi cùng lúc trên một máy bằng `live.instance_lock.InstanceLock`
   (file `state/recorder.lock`, tách khỏi khoá của bot giao dịch).
@@ -156,9 +157,18 @@ def main(argv=None) -> int:
             rec = TickRecorder.from_settings(settings, mclock.clock)
             log.info("Ghi vào %s, dừng lúc %s", rec.day_dir(), stop.strftime("%H:%M"))
             return await record_session(feed, rec, mclock, stop_at=stop, heartbeat=lock.heartbeat)
-        return asyncio.run(go())
+        code = asyncio.run(go())
     finally:
         lock.release()
+    try:                                    # kiểm định + dựng bar 1 phút cho backtest (P1.5)
+        from scripts.validate_day import run as validate
+        vcode, rep = validate(mclock.now().date(), settings)
+        log.info("Kiểm định dữ liệu:\n%s", rep.summary())
+        if vcode == 1:
+            log.warning("Dữ liệu hôm nay có vấn đề — xem data/validation/%s.json", mclock.now().date())
+    except Exception:
+        log.exception("Kiểm định dữ liệu cuối ngày lỗi (dữ liệu tick đã lưu không bị ảnh hưởng)")
+    return code
 
 
 if __name__ == "__main__":

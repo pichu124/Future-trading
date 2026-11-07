@@ -59,6 +59,9 @@ Và tắt chế độ ngủ trong giờ giao dịch (Control Panel → Power Opt
 - Dữ liệu: `C:\vnbot\data\raw\YYYY-MM-DD\ticks.parquet` (sau 15:00). Còn file `part-*.parquet` nghĩa là
   bước gộp cuối ngày chưa chạy xong — không mất gì, lần chạy sau / `compact_day` sẽ gộp.
 - Log: `C:\vnbot\logs\record_YYYY-MM-DD.log` — tìm `im lặng`, `mất kết nối`, `ghi … thất bại`.
+- Cuối log có báo cáo kiểm định (khoảng trống, hụt khớp lệnh, lệch DNSE/SSI, so với bar vnstock);
+  bản đầy đủ ở `data\validation\YYYY-MM-DD.json`, bar 1 phút ở `data\bars\YYYY-MM-DD.parquet`.
+  Chạy lại tay: `.venv\Scripts\python.exe scripts\validate_day.py YYYY-MM-DD --ref-price <giá TC>`.
 
 ## 4. Việc định kỳ
 

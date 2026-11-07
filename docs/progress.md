@@ -1,5 +1,25 @@
 # Tiến độ
 
+## 2026-11-08 — P1.5 Kiểm định dữ liệu một ngày
+
+**Đã xong**
+- `recorder/validate.py` (hàm thuần) + `scripts/validate_day.py <ngày> [--ref-price] [--reference]`:
+  - mỗi nguồn: số tick (khớp/báo giá), khoảng trống > 5 giây trong phiên liên tục (tính cả đầu/cuối đoạn 09:00–11:30, 13:00–14:30), báo giá bid > ask, tick ngoài biên độ ±7% (chỉ khi có `--ref-price` — không tự đoán giá tham chiếu), giá nhảy > 1% giữa hai lần khớp;
+  - **đối chiếu KL luỹ kế với tổng KL từng lần khớp** ⇒ phát hiện feed rơi message (giao thức không có số thứ tự nên đây là cách duy nhất);
+  - DNSE vs SSI: mỗi giây so giá (mid nếu có, không thì giá khớp, chỉ khi cả hai còn mới) ⇒ số giây lệch > `feed_divergence_ticks`;
+  - dựng bar 1 phút từ giá khớp ⇒ `data/bars/<ngày>.parquet` (schema đọc được bởi `backtest.engine --bars data/bars`);
+  - so OHLC với bar tham chiếu (mặc định `data/imported/<ngày>.parquet` = vnstock-dashboard), dung sai 2 bước, liệt kê sai lệch và phút thiếu ở mỗi bên;
+  - báo cáo chữ + `data/validation/<ngày>.json`; mã thoát 0/1/2.
+- `scripts/record_today.py` tự chạy kiểm định sau khi gộp file cuối ngày (lỗi kiểm định không ảnh hưởng dữ liệu đã lưu).
+- `tests/test_validate_day.py` (viết trước): 25 test. Thử phá từng luật ⇒ đều có test đỏ (bổ sung 2 test thiếu: nguồn chính cũ không so, lệch đúng ngưỡng không tính).
+- 493 test.
+
+**Giả định / rủi ro còn mở**
+- Không dùng thư viện vnstock (lớn) — "dữ liệu vnstock" lấy từ bar đã import từ vnstock-dashboard; muốn so trực tiếp với vnstock thì cần cài thêm (hỏi trước).
+- Lệch hai nguồn đo theo giây ⇒ giá chạy nhanh + độ trễ khác nhau giữa hai feed có thể cho vài giây lệch "giả"; đọc cùng số liệu độ trễ khi có dữ liệu thật.
+- Kiểm KL cần `total_volume` (DNSE `te`, SSI `v`); nếu feed không gửi thì báo "không kiểm được KL".
+- Giá tham chiếu phải nhập tay (`--ref-price`) tới khi adapter lấy được secdef (P4.1).
+
 ## 2026-11-08 — P1.3 Feed SSI + feed ghép (composite)
 
 **Đã xong**
