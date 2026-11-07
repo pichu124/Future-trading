@@ -1,5 +1,30 @@
 # Tiến độ
 
+## 2026-11-08 — P3.3 Kiểm định độ bền (công cụ xong; CHƯA kết luận được)
+
+**Kết luận về edge của ORB: CHƯA CÓ BẰNG CHỨNG — coi như KHÔNG có edge cho tới khi chứng minh được.** Lý do: không có dữ liệu bar thật trong môi trường làm việc, `fees.*`/`risk.*` còn null ⇒ engine từ chối chạy. Không có con số nào để làm bằng chứng.
+
+**Đã xong**
+- `backtest/robustness.py`: một lần chạy gồm cấu hình gốc ⇒ IS/OOS theo `--split`; walk-forward theo `folds` đoạn ngày; độ nhạy ±20% từng tham số (số nguyên lệch ≥ 1 bước) **chỉ trên in-sample**; cấu hình gốc với trượt giá 2 tick; `verdict()` theo luật cố định `VerdictRules` ⇒ CÓ / KHÔNG / CHƯA ĐỦ BẰNG CHỨNG; HTML; CLI `python -m backtest.robustness --bars … --split …` (`--n-trials` mặc định đếm từ `research/log.md`).
+- Luật kết luận chốt trong code + test TRƯỚC khi có dữ liệu (xem bảng trong `research/orb_baseline.md`).
+- `tests/test_robustness.py` (viết trước): 21 test — edge cài sẵn trên dữ liệu giả ⇒ CÓ; random walk ⇒ không ra CÓ; dữ liệu snapshot ⇒ CHƯA ĐỦ; từng nhánh luật; độ nhạy không chạm OOS; trượt 2 tick làm giảm lãi. Thử phá từng điều kiện ⇒ đều có test đỏ.
+- `backtest/report.py`: `make_section`, `render_section` thành public để dùng lại.
+- 358 test.
+
+**Giả định / rủi ro còn mở**
+- Ngưỡng luật (≥ 30 lệnh OOS, ≥ 75% biến thể lãi, ≥ 50% đoạn lãi, p × n_trials < 0,10) là lựa chọn thận trọng của tôi, chưa được bạn duyệt — nếu muốn đổi, đổi **trước** khi chạy dữ liệu thật.
+- Walk-forward ở đây là đánh giá cấu hình cố định theo từng đoạn (không tối ưu lại từng đoạn) — đúng với baseline không tune; nếu sau này có bước tối ưu thì cần walk-forward optimize-rồi-test thật.
+- Độ nhạy chỉ ±20% một tham số mỗi lần, không xét tương tác giữa các tham số.
+- Mọi hạn chế của tick giả từ bar (P3.1) vẫn áp dụng; kết luận CÓ trên bar vẫn phải qua paper trade.
+
+**Người dùng cần làm**
+- [ ] Điền `fees.*` và `risk.*` còn null.
+- [ ] Có dữ liệu thật: cấp API key DNSE/SSI để làm P1.6 (dữ liệu import từ dashboard chỉ cho ra CHƯA ĐỦ BẰNG CHỨNG theo luật).
+- [ ] Chốt ngày chia OOS và ghi vào `research/log.md` trước khi chạy.
+- [ ] Duyệt (hoặc sửa) ngưỡng trong `VerdictRules` trước khi chạy.
+
+**Bước tiếp theo:** P1.6 (dữ liệu lịch sử thật) là điểm nghẽn của cả P3.2/P3.3 — cần API key. Song song có thể làm P1.2–P1.4 (feed + recorder) hoặc P4.x sau khi có key.
+
 ## 2026-11-08 — P3.2 Chiến lược baseline ORB (chưa chạy in-sample)
 
 **Đã xong**

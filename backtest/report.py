@@ -151,7 +151,7 @@ def compute_metrics(trades: Sequence[TradeRecord]) -> dict:
     }
 
 
-def _section(trades: list[TradeRecord], n_trials: int, th: Thresholds) -> dict:
+def make_section(trades: list[TradeRecord], n_trials: int, th: Thresholds) -> dict:
     v = validate_trades([{"pnl": t.pnl_vnd, "entry_ts": t.entry_ts} for t in trades], th)
     return {"trades": trades, "metrics": compute_metrics(trades),
             "validation": apply_selection_penalty(v, n_trials, th)}
@@ -161,11 +161,11 @@ def build_report(result, split_date: Optional[date] = None, n_trials: int = 1, t
                  thresholds: Thresholds = DEFAULT) -> dict:
     """Báo cáo dạng dict. `split_date` = ngày đầu out-of-sample; `n_trials` = số cấu hình đã thử."""
     trades = sorted(result.trades, key=lambda t: t.entry_ts)
-    sections = {"all": _section(trades, n_trials, thresholds)}
+    sections = {"all": make_section(trades, n_trials, thresholds)}
     if split_date is not None:
-        sections["in_sample"] = _section([t for t in trades if t.entry_ts.date() < split_date],
+        sections["in_sample"] = make_section([t for t in trades if t.entry_ts.date() < split_date],
                                          n_trials, thresholds)
-        sections["out_of_sample"] = _section([t for t in trades if t.entry_ts.date() >= split_date],
+        sections["out_of_sample"] = make_section([t for t in trades if t.entry_ts.date() >= split_date],
                                              n_trials, thresholds)
     q = result.data_quality
     warnings = list(result.warnings)
@@ -210,7 +210,7 @@ def _table(headers: Sequence[str], rows: Sequence[Sequence]) -> str:
 _SECTION_TITLES = {"all": "Toàn bộ", "in_sample": "In-sample", "out_of_sample": "Out-of-sample"}
 
 
-def _render_section(key: str, sec: dict) -> str:
+def render_section(key: str, sec: dict) -> str:
     m, v = sec["metrics"], sec["validation"]
     summary = _table(["Chỉ số", "Giá trị"], [
         ["Số lệnh", m["n_trades"]],
@@ -250,7 +250,7 @@ def render_html(report: dict) -> str:
     warn = "".join(f"<li>{html.escape(w)}</li>" for w in report["warnings"])
     assumptions = _table(["Giả định", "Giá trị"], [[k, v] for k, v in report["assumptions"].items()])
     quality = _table(["Dữ liệu", "Giá trị"], [[k, v] for k, v in report["data_quality"].items()])
-    sections = "".join(_render_section(k, report["sections"][k])
+    sections = "".join(render_section(k, report["sections"][k])
                        for k in ("all", "in_sample", "out_of_sample") if k in report["sections"])
     rej_counts = _table(["Mã", "Số lần"], sorted(report["rejection_counts"].items()))
     rej_list = _table(["Thời điểm", "Chi tiết"],

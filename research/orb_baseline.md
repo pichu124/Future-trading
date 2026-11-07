@@ -35,6 +35,43 @@ chối chạy. Khi đã có:
 
 4. Ghi kết quả (kể cả xấu) vào `research/log.md`. Mỗi lần đổi tham số ⇒ thêm dòng, tăng `--n-trials`.
 
+## Kiểm định độ bền (P3.3) — kết luận hiện tại: CHƯA CÓ BẰNG CHỨNG EDGE
+
+**Chưa chạy được trên dữ liệu thật** (không có dữ liệu bar; `fees.*` / `risk.*` còn null). Vì vậy
+hiện tại **không có bằng chứng nào cho thấy ORB có edge** — mặc định coi là KHÔNG có cho tới khi
+được chứng minh. Không được paper/live chiến lược này dựa trên kỳ vọng.
+
+Khi có dữ liệu thật (không phải snapshot), một lệnh duy nhất:
+
+```
+python -m backtest.robustness --bars data/history/... --split <ngày đầu OOS đã chốt> \
+    --folds 4 --out reports/orb_robustness.html
+```
+
+`--n-trials` mặc định = số dòng cấu hình trong `research/log.md`.
+
+Luật kết luận (chốt trong `backtest/robustness.py::VerdictRules` + test, **trước** khi có dữ liệu):
+
+| Điều kiện | Ngưỡng |
+|---|---|
+| Dữ liệu tin được (không phải snapshot dashboard) | bắt buộc — nếu không ⇒ CHƯA ĐỦ BẰNG CHỨNG |
+| Số lệnh out-of-sample | ≥ 30 — nếu không ⇒ CHƯA ĐỦ BẰNG CHỨNG |
+| P&L out-of-sample sau phí | > 0 |
+| Kiểm định OOS: p-value sign-flip × n_trials < 0,10, walk-forward theo lệnh ≥ 50% đoạn dương | đạt |
+| P&L OOS với trượt giá 2 tick | > 0 |
+| Biến thể ±20% từng tham số (chạy trên IN-SAMPLE) có lãi sau phí | ≥ 75% |
+| Đoạn walk-forward theo ngày có lãi sau phí | ≥ 50% |
+
+Trượt bất kỳ điều kiện nào (khi đã đủ dữ liệu) ⇒ **KHÔNG CÓ EDGE**. Đạt hết ⇒ CÓ BẰNG CHỨNG EDGE,
+vẫn phải paper trade trước live.
+
+Lưu ý chống tự lừa:
+- OOS chỉ nhìn **một lần** với cấu hình #1. Nếu sau khi xem kết quả mà đổi sang một biến thể ±20%
+  (hay bất kỳ tham số nào khác), phải ghi vào `research/log.md`, `n_trials` tăng ít nhất 7 (gốc + 6
+  biến thể đã xem), và cần một đoạn OOS **mới** chưa từng nhìn.
+- Bộ kiểm định đã được thử trên dữ liệu giả: có edge cài sẵn ⇒ ra CÓ; random walk ⇒ không ra CÓ;
+  dữ liệu snapshot ⇒ CHƯA ĐỦ (`tests/test_robustness.py`).
+
 ## 5 lý do kết quả backtest này có thể ĐẸP HƠN thực tế
 
 1. **Khớp lệnh lúc phá biên lạc quan.** Engine khớp ở tick mở bar sau với spread 1 bước + trượt
