@@ -9,7 +9,7 @@ Quy ước:
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Optional
 
@@ -125,6 +125,9 @@ class Order:
     broker_order_id: Optional[str] = None
     filled_qty: int = 0
     tag: str = ""                    # "entry" | "stop" | "take_profit" | "flatten" | "emergency"
+    # Giá stop-loss bảo vệ, BẮT BUỘC với lệnh mở vị thế (risk_manager kiểm, CLAUDE.md mục 5).
+    # Lệnh stop thật được đặt riêng (tag "stop") ngay sau khi lệnh vào khớp.
+    stop_loss: Optional[float] = None
 
     def __post_init__(self) -> None:
         if not self.client_order_id or len(self.client_order_id) > MAX_CLIENT_ORDER_ID_LEN:
@@ -195,12 +198,27 @@ class Position:
 
 @dataclass
 class AccountState:
-    """Ảnh chụp trạng thái cho risk manager. Có thể thay đổi (runner cập nhật)."""
+    """Trạng thái tài khoản cho risk manager. Có thể thay đổi.
+
+    Runner cập nhật `last_prices`, `broker_last_seen`, `feed_healthy`; còn vị thế, lệnh chờ và
+    bộ đếm trong ngày do `RiskManager.record_fill / on_order_update / new_day` ghi để mọi luật
+    dùng chung một sổ sách.
+    """
     positions: dict[str, Position] = field(default_factory=dict)   # key = f"{broker}:{symbol}"
     trades_today: int = 0
     consecutive_losses: int = 0
-    realized_points_today: float = 0.0
+    realized_points_today: float = 0.0       # điểm × số HĐ, chưa trừ phí
+    fees_points_today: float = 0.0           # phí quy ra điểm (fee_vnd / hệ số nhân)
     locked_for_day: bool = False
+    trading_day: Optional[date] = None       # ngày của các bộ đếm trên; lệch ngày ⇒ cấm mở vị thế
+    working_orders: dict[str, Order] = field(default_factory=dict)  # client_order_id → lệnh còn sống
+    approved_order_ids: set[str] = field(default_factory=set)       # id đã duyệt trong ngày
+    last_prices: dict[str, float] = field(default_factory=dict)     # symbol → giá đánh dấu
+    broker_last_seen: dict[str, datetime] = field(default_factory=dict)  # broker → lần cuối còn sống
+    feed_healthy: bool = True                # composite feed: lệch giá / im lặng ⇒ False
+    kill_reason: Optional[str] = None        # đặt bởi kill-switch; chỉ xoá bằng tay
+    round_trip_points: dict[str, float] = field(default_factory=dict)  # symbol → lãi/lỗ lượt đang mở
+    unprotected_since: dict[str, datetime] = field(default_factory=dict)  # symbol → lúc mất stop
 
     def net_qty(self, symbol: str) -> int:
         """Vị thế ròng của một hợp đồng cộng trên MỌI broker (CLAUDE.md mục 3)."""

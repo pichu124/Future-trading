@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1. Bắt đầu từ **P1.2** (hoặc P1.6 nếu đã có API key — dữ liệu lịch sử thật cho backtest).
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1, P2.1. Tiếp theo: **P2.2**, hoặc P1.2 / P1.6 khi đã có API key.
 
 ---
 
@@ -47,7 +47,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 
 ## Giai đoạn 2 — Rủi ro & paper broker (trước mọi chiến lược)
 
-**P2.1 · Risk manager**
+**P2.1 · Risk manager** ✅
 > Viết `risk/risk_manager.py` thực thi từng luật ở mục 5 CLAUDE.md. Viết test TRƯỚC cho từng luật (một test/luật, cả trường hợp biên), rồi mới implement. Theo dõi net position trên nhiều broker. Trả về `Rejected(reason)` có lý do rõ ràng để log.
 
 **P2.2 · Paper broker**
