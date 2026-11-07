@@ -146,3 +146,7 @@ SignalR, `fc-tradeapi`) là thế hệ trước.
 - [ ] DNSE/SSI: lịch sử tick/OHLC của hợp đồng đã đáo hạn lùi được bao xa.
 - [ ] SSI: mã hợp đồng nhận khi đặt lệnh (KRX hay VN30FYYMM), đơn vị giá phái sinh.
 - [ ] Biểu phí phái sinh hiện hành (môi giới, sở, VSDC) để điền `fees.*`.
+- [ ] ❓ DNSE/SSI có lệnh điều kiện (stop / stop-limit) cho phái sinh qua API không? Danh sách
+  `orderType` ở §1.3 và §2.3 **không có** stop ⇒ hiện giả định bot phải tự giữ stop (theo dõi giá
+  rồi gửi MTL). `OrderType.STOP` chỉ có trong paper broker; P4 phải quyết cách giả lập để luật
+  "có stop đã xác nhận" của risk manager vẫn đúng (stop tự giữ không có xác nhận từ sàn).

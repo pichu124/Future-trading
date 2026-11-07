@@ -1,5 +1,35 @@
 # Tiến độ
 
+## 2026-11-07 (khuya, tiếp) — P2.2 Paper broker
+
+**Đã xong**
+- `brokers/base.py`: `BrokerAdapter` (async `place` / `cancel` / `modify` / `positions` / `open_orders`, callback `on_fill` / `on_order_update`, `connect` / `close`), `BrokerError`, `assert_live_trading_allowed(live_flag)` — chỉ qua khi `TRADING_MODE=live` **và** có cờ `--live`; adapter thật gọi ngay trước mỗi request lệnh.
+- `brokers/paper.py` (`PaperBroker`, `PaperConfig`) — dùng chung cho backtest và paper:
+  - khớp ở tick **kế tiếp** (`ts >` lúc đặt và `≥` lúc đặt + độ trễ); mua khớp ask, bán khớp bid, cộng `slippage_ticks`;
+  - khối lượng giới hạn theo `ask_qty`/`bid_qty` (chia theo thứ tự đặt); MTL khớp một phần ⇒ phần dư thành LO giá khớp ± 1 bước (quy tắc sau KRX);
+  - LO khớp ngay được ⇒ không bao giờ tệ hơn giá LO; LO nằm chờ chỉ khớp khi giá **xuyên qua** (chạm chưa đủ);
+  - `OrderType.STOP` mô phỏng: kích hoạt bằng bid (bán) / ask (mua), khớp ở tick sau ⇒ giá nhảy cóc khớp ở giá nhảy cóc;
+  - độ trễ `latency_ms` + jitter có seed; phí = số HĐ × tổng `fees.*` một chiều (null ⇒ từ chối chạy);
+  - idempotent theo `client_order_id`; sửa lệnh cấp `broker_order_id` mới và tính lại độ trễ (như DNSE huỷ-đặt);
+  - có `session`: từ chối đặt khi đóng cửa, MTL ngoài phiên liên tục, huỷ/sửa trong ATO/ATC; chỉ khớp trong phiên liên tục.
+- `core/models.py`: `OrderType.STOP`, `Order.reject_reason`. `config/settings.yaml`: mục `paper` (latency 300 ms, jitter 200 ms, seed 0).
+- Test nối paper ↔ risk manager: lệnh vào khớp → stop được xác nhận → `check()` không còn yêu cầu đóng vị thế.
+- 281 test (54 mới); thử phá từng quy tắc khớp thì đều có test đỏ.
+
+**Giả định / rủi ro còn mở**
+- DNSE/SSI không có lệnh stop trong API lệnh thường (❓ đã ghi `docs/broker_notes.md` §4) ⇒ stop có thể phải do bot tự giữ; khi đó backtest với `OrderType.STOP` có thể lạc quan hơn thực tế (độ trễ bot theo dõi giá + gửi MTL). P4 phải thống nhất cách giả lập.
+- Không mô phỏng: khớp định kỳ ATO/ATC, MOK/MAK, ký quỹ, biên độ ±7%, hàng chờ theo thứ tự thời gian (dùng luật "xuyên giá" thay thế), tác động giá của chính lệnh mình.
+- Tick thiếu bid/ask bị bỏ qua ⇒ dữ liệu chỉ có bar/last (vd import từ dashboard) cần engine P3.1 dựng bid/ask giả định kèm spread — phải ghi rõ giả định đó trong báo cáo.
+- Phí thuế đang tính cố định theo HĐ (`tax_vnd_per_contract`); nếu thuế tính theo giá trị giao dịch thì phải đổi công thức.
+- Tên broker của paper mặc định `"paper"`; khi chạy paper trading, `brokers.primary` của risk manager phải trùng tên này (runner P5.1 lo).
+- Độ trễ 300 ± 200 ms là giá trị tạm, chưa đo.
+
+**Người dùng cần làm**
+- [ ] Điền `fees.*` (paper/backtest từ chối chạy khi còn null) và xem lại `paper.latency_ms`.
+- [ ] Khi đăng ký API: hỏi DNSE/SSI có lệnh điều kiện (stop) cho phái sinh qua API không.
+
+**Bước tiếp theo:** P3.1 (engine backtest) — cần dữ liệu (P1.6 hoặc dữ liệu import) để chạy thật; hoặc P1.2 nếu đã có API key.
+
 ## 2026-11-07 (khuya) — P2.1 Risk manager
 
 **Đã xong**

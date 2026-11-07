@@ -31,6 +31,10 @@ class OrderType(str, Enum):
     MARKET = "MTL"   # tên loại lệnh thị trường khác nhau theo broker — adapter tự map
     ATO = "ATO"
     ATC = "ATC"
+    # Stop thị trường: giá chạm `price` (giá kích hoạt) thì thành MTL. DNSE/SSI KHÔNG có loại lệnh
+    # này trong API lệnh thường (docs/broker_notes.md) ⇒ adapter thật phải tự giả lập; paper
+    # broker mô phỏng trực tiếp.
+    STOP = "STOP"
 
 
 # SSI FastConnect V3: client_request_id ≤ 20 ký tự, trùng trong ngày bị từ chối (HTTP 409).
@@ -128,6 +132,7 @@ class Order:
     # Giá stop-loss bảo vệ, BẮT BUỘC với lệnh mở vị thế (risk_manager kiểm, CLAUDE.md mục 5).
     # Lệnh stop thật được đặt riêng (tag "stop") ngay sau khi lệnh vào khớp.
     stop_loss: Optional[float] = None
+    reject_reason: str = ""          # broker điền khi status = REJECTED
 
     def __post_init__(self) -> None:
         if not self.client_order_id or len(self.client_order_id) > MAX_CLIENT_ORDER_ID_LEN:
@@ -136,6 +141,8 @@ class Order:
             raise ValueError("qty phải > 0")
         if self.order_type is OrderType.LIMIT and self.price is None:
             raise ValueError("Lệnh LO phải có giá")
+        if self.order_type is OrderType.STOP and self.price is None:
+            raise ValueError("Lệnh STOP phải có giá kích hoạt")
         if not 0 <= self.filled_qty <= self.qty:
             raise ValueError("filled_qty ngoài [0, qty]")
 

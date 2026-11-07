@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1, P2.1. Tiếp theo: **P2.2**, hoặc P1.2 / P1.6 khi đã có API key.
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1, P2.1, P2.2. Tiếp theo: **P3.1**, hoặc P1.2 / P1.6 khi đã có API key.
 
 ---
 
@@ -50,7 +50,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 **P2.1 · Risk manager** ✅
 > Viết `risk/risk_manager.py` thực thi từng luật ở mục 5 CLAUDE.md. Viết test TRƯỚC cho từng luật (một test/luật, cả trường hợp biên), rồi mới implement. Theo dõi net position trên nhiều broker. Trả về `Rejected(reason)` có lý do rõ ràng để log.
 
-**P2.2 · Paper broker**
+**P2.2 · Paper broker** ✅
 > Viết `brokers/base.py` (interface BrokerAdapter: place, cancel, modify, positions, on_fill callback) và `brokers/paper.py`: khớp theo bid/ask của tick kế tiếp, trượt giá cấu hình được, tính phí theo settings.yaml, mô phỏng độ trễ. Đây là broker dùng chung cho backtest và paper trading.
 
 ---

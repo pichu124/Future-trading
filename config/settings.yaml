@@ -42,6 +42,13 @@ backtest:
   slippage_ticks: 1                     # trượt giá tối thiểu mỗi lần khớp
   initial_capital_vnd: null
 
+# Paper broker (dùng chung cho backtest và paper trading). Độ trễ từ lúc gửi lệnh tới lúc lệnh
+# có thể khớp. KIỂM TRA LẠI bằng đo thực tế round-trip tới DNSE khi có API key.
+paper:
+  latency_ms: 300
+  latency_jitter_ms: 200                # cộng ngẫu nhiên [0, jitter] mỗi lệnh
+  seed: 0                               # cố định để backtest lặp lại được
+
 risk:
   max_contracts: 1
   max_daily_loss_points: null
