@@ -11,8 +11,9 @@ Luồng:
   chốt lời (`tag="take_profit"`) ngược chiều với khối lượng = |net|. Net về 0 ⇒ huỷ cả hai.
   Khối lượng lệch ⇒ huỷ rồi đặt lại (khoảng hở ngắn được `stop_grace_seconds` của risk che).
 - `handle_actions`: FLATTEN_* / KILL ⇒ huỷ lệnh chờ rồi MTL đóng `tag="flatten"`; KILL còn
-  dừng nhận tín hiệu. EMERGENCY_HEDGE: hiện chỉ đóng trên chính broker (P4.3 sẽ đối ứng qua
-  broker dự phòng).
+  dừng nhận tín hiệu. EMERGENCY_HEDGE ⇒ `live.emergency.EmergencyHandler` (đối ứng trên broker
+  dự phòng); không có handler thì đóng trên chính broker. Đóng vị thế mà net = 0 nhưng còn vị thế
+  chéo broker (sau đối ứng) ⇒ nhờ handler gỡ cả hai chân.
 - Mọi lệnh đi qua `risk.approve` — không có đường tắt.
 """
 from __future__ import annotations
@@ -32,7 +33,7 @@ from risk.risk_manager import ActionKind, OrderIdFactory, RiskAction, RiskManage
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())   # thư viện: runner/CLI tự cấu hình logging
 
-CLOSE_TAGS = ("exit", "flatten")
+CLOSE_TAGS = ("exit", "flatten", "unwind")
 PROTECT_TAGS = ("stop", "take_profit")
 
 
@@ -52,7 +53,8 @@ class _Targets:
 
 class ExecutionManager:
     def __init__(self, broker: BrokerAdapter, risk: RiskManager, state: AccountState,
-                 clock: Clock, tick_size: float, ids: Optional[OrderIdFactory] = None):
+                 clock: Clock, tick_size: float, ids: Optional[OrderIdFactory] = None,
+                 emergency=None):
         self.broker = broker
         self.risk = risk
         self.state = state
@@ -63,6 +65,7 @@ class ExecutionManager:
         self.rejections: list[Rejected] = []
         self.events: list[ExecEvent] = []
         self.halted = False
+        self.emergency = emergency                       # live.emergency.EmergencyHandler | None
         self._targets: dict[str, _Targets] = {}
         self._queue: deque[Callable[[], Awaitable[None]]] = deque()
         broker.on_fill(self._on_fill)
@@ -129,9 +132,10 @@ class ExecutionManager:
                 self._event("action", f"FLATTEN_SYMBOL: {a.reason}", a.symbol or "")
                 await self._close(a.symbol, "flatten")
             elif a.kind is ActionKind.EMERGENCY_HEDGE:
-                # TODO(P4.3): đối ứng trên broker dự phòng; tạm thời đóng trên chính broker.
                 self._event("action", f"EMERGENCY_HEDGE ({a.broker}): {a.reason}")
-                if a.broker == self.broker.name:
+                if self.emergency is not None:
+                    await self.emergency.on_action(a)
+                elif a.broker == self.broker.name:
                     await self._flatten_everything()
 
     async def _flatten_everything(self) -> None:
@@ -156,6 +160,9 @@ class ExecutionManager:
         self._targets.pop(symbol, None)
         net = self.state.net_qty(symbol)
         if net == 0:
+            gross = any(p.qty != 0 for p in self.state.positions.values() if p.symbol == symbol)
+            if gross and self.emergency is not None:
+                await self.emergency.unwind(symbol, at_flatten=(tag == "flatten"))
             return
         side = Side.SELL if net > 0 else Side.BUY
         await self._submit(self._new_order(symbol, side, abs(net), OrderType.MARKET, tag))

@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.5, P2.1, P2.2, P3.1, P3.2, P3.3 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Làm tiếp được không cần key: P4.3, P5.1, P5.2.
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.5, P2.1, P2.2, P3.1, P3.2, P3.3, P4.3 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Làm tiếp được không cần key: P5.1, P5.2.
 
 ---
 
@@ -76,7 +76,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 **P4.2 · Adapter SSI**
 > Tương tự cho `brokers/ssi.py` với FastConnect Trading: ký RSA, OTP, stream trạng thái lệnh và danh mục phái sinh, lưu notify_id để reconnect không mất sự kiện.
 
-**P4.3 · Quy trình khẩn cấp**
+**P4.3 · Quy trình khẩn cấp** ✅ (`live/emergency.py`)
 > Viết `live/emergency.py`: khi broker chính mất kết nối quá `broker_timeout_seconds` mà đang có vị thế, đặt lệnh đối ứng trên broker dự phòng để net = 0, cảnh báo Telegram, khoá mở vị thế mới. Viết test mô phỏng các kịch bản: mất kết nối giữa chừng, khớp một phần, cả hai broker đều lỗi.
 
 ---

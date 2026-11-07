@@ -1,5 +1,27 @@
 # Tiến độ
 
+## 2026-11-08 — P4.3 Quy trình khẩn cấp
+
+**Đã xong**
+- `live/emergency.py` — `EmergencyHandler`, nhận `EMERGENCY_HEDGE` từ risk (qua `ExecutionManager`):
+  - khoá mở vị thế mới bằng `state.emergency_reason` (risk từ chối với `RejectCode.EMERGENCY`; KHÔNG tự mở khoá, kể cả sang ngày mới — người gọi `risk.clear_emergency` sau khi đối soát);
+  - đặt MTL đối ứng trên broker dự phòng để net = 0; idempotent (`cần = −net − phần đối ứng đang chờ`) vì risk phát tín hiệu mỗi lần `check()`;
+  - lệnh đối ứng chờ quá `hedge_requote_s` (5s) ⇒ huỷ và đặt lại MTL — xử lý trường hợp MTL khớp một phần, phần dư thành LO và giá chạy mất (test tái hiện: vị thế lộ một phần cho tới khi đặt lại);
+  - broker dự phòng lỗi / từ chối ⇒ thử lại tối đa 3 lần với id mới rồi cảnh báo XỬ LÝ TAY; cả hai broker mất kết nối ⇒ cảnh báo "CẢ HAI BROKER LỖI" (giới hạn 1 lần/60s);
+  - gỡ hedge (`unwind`) khi broker chính sống lại hoặc tới giờ flatten: huỷ lệnh chờ, đóng ĐỒNG THỜI hai chân; gọi lặp khi đang gỡ dở không huỷ/gửi trùng; broker chính vẫn chết lúc flatten ⇒ GIỮ hedge (đóng chân dự phòng sẽ lộ vị thế trần) và cảnh báo;
+  - `notify` nhận hàm thường hoặc async (để nối Telegram).
+- `risk/risk_manager.py`: `approve_unwind` (duyệt cả bộ lệnh gỡ khi mỗi lệnh giảm vị thế trên chính broker của nó và tổng giữ nguyên net; hỏng một ⇒ từ chối tất cả), `RejectCode.EMERGENCY` / `UNWIND_INVALID`, `clear_emergency`, `broker_alive` công khai; `AccountState.emergency_reason`.
+- `core/execution.py`: chuyển `EMERGENCY_HEDGE` cho handler; đóng vị thế khi net = 0 nhưng còn vị thế chéo broker ⇒ nhờ handler gỡ; lệnh `unwind` đang chờ được coi như lệnh đóng (không bị huỷ bởi FLATTEN lặp).
+- `tests/test_emergency.py` (viết trước): 21 test — mất kết nối giữa chừng, khớp một phần (cả khi giá chạy mất), broker dự phòng ném lỗi / từ chối, cả hai broker lỗi, không có vị thế, gỡ hedge, FLATTEN lặp khi đang gỡ, flatten khi broker chính còn chết, luật `approve_unwind`. Thử phá từng cơ chế ⇒ đều có test đỏ (bổ sung 2 test thiếu về gỡ hedge lặp).
+- 514 test.
+
+**Giả định / rủi ro còn mở**
+- Phát hiện "mất kết nối" dựa vào `state.broker_last_seen` — runner (P5.1) phải cập nhật bằng ping/thao tác thành công với từng broker; adapter thật (P4.1/P4.2) phải có `ping`.
+- Khi broker chính mất kết nối, lệnh stop của nó vẫn có thể đang nằm trên sàn và khớp mà bot không biết ⇒ sau khi đối ứng, net thật có thể lệch; khi kết nối lại PHẢI đối soát vị thế từ broker (runner P5.1) trước khi gỡ hedge.
+- Đối ứng dùng MTL; trong ATO/ATC không đặt được MTL ⇒ lỗi được ghi và cảnh báo, không có đường khác.
+- Giữ hedge qua đêm nếu broker chính chết tới hết phiên — vi phạm "không giữ vị thế qua đêm" theo nghĩa gộp (net = 0) nhưng an toàn hơn đóng một chân; cần người xử lý.
+- Giới hạn tần suất cảnh báo theo khoá; cảnh báo thường (đã đặt đối ứng…) gửi mỗi lần xảy ra.
+
 ## 2026-11-08 — P1.5 Kiểm định dữ liệu một ngày
 
 **Đã xong**

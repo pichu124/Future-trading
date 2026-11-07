@@ -63,6 +63,8 @@ class RejectCode(str, Enum):
     CONSECUTIVE_LOSSES = "CONSECUTIVE_LOSSES"
     NO_STOP_LOSS = "NO_STOP_LOSS"
     INVALID_STOP_LOSS = "INVALID_STOP_LOSS"
+    EMERGENCY = "EMERGENCY"
+    UNWIND_INVALID = "UNWIND_INVALID"
 
 
 @dataclass(frozen=True)
@@ -261,6 +263,9 @@ class RiskManager:
         # ---- lệnh MỞ vị thế: toàn bộ luật mục 5 ----
         if state.kill_reason:
             return rej(RejectCode.KILLED, f"Kill-switch đang bật ({state.kill_reason})")
+        if state.emergency_reason:
+            return rej(RejectCode.EMERGENCY,
+                       f"Đang trong quy trình khẩn cấp ({state.emergency_reason}) — chờ người kiểm tra")
         if state.trading_day != now.date():
             return rej(RejectCode.STALE_STATE,
                        f"Sổ sách của ngày {state.trading_day}, hôm nay {now.date()} — runner phải "
@@ -322,6 +327,37 @@ class RiskManager:
                        f"Đang có lệnh {dup.client_order_id} cùng chiều {order.side.value} chờ khớp")
         return Approved(order)
 
+    def approve_unwind(self, orders: list[Order], state: AccountState) -> list[Decision]:
+        """Duyệt CẢ BỘ lệnh gỡ vị thế chéo broker (sau đối ứng khẩn cấp: Long ở broker A, Short ở B).
+
+        Đạt khi: mỗi lệnh giảm vị thế trên CHÍNH broker của nó (ngược chiều, không vượt), tổng các
+        lệnh theo từng hợp đồng = 0 (net không đổi), id chưa dùng. Không áp luật giờ/khoá/kill vì
+        bộ lệnh chỉ làm giảm tổng vị thế. Một lệnh hỏng ⇒ từ chối tất cả (không gửi lẻ một chân).
+        """
+        def reject_all(msg: str) -> list[Decision]:
+            return [Rejected(o, RejectCode.UNWIND_INVALID, msg) for o in orders]
+        if not orders:
+            return []
+        ids = [o.client_order_id for o in orders]
+        if len(set(ids)) != len(ids) or any(i in state.approved_order_ids for i in ids):
+            return reject_all("client_order_id trùng")
+        per_symbol: dict[str, int] = {}
+        for o in orders:
+            if not o.broker:
+                return reject_all("lệnh gỡ thiếu broker")
+            pos = state.positions.get(f"{o.broker}:{o.symbol}")
+            q = pos.qty if pos else 0
+            if q == 0 or _sign(q) == o.side.sign or o.qty > abs(q):
+                return reject_all(f"chân {o.broker} {o.side.value} {o.qty} không giảm vị thế {q:+d} "
+                                  f"của chính broker đó")
+            per_symbol[o.symbol] = per_symbol.get(o.symbol, 0) + o.side.sign * o.qty
+        if any(v != 0 for v in per_symbol.values()):
+            return reject_all(f"tổng các chân phải giữ nguyên net, đang lệch {per_symbol}")
+        for o in orders:
+            state.approved_order_ids.add(o.client_order_id)
+            state.working_orders[o.client_order_id] = o
+        return [Approved(o) for o in orders]
+
     def _exposure_breach(self, order: Order, state: AccountState, net: int) -> Optional[str]:
         """Trần hợp đồng theo kịch bản xấu nhất: mọi lệnh chờ cùng chiều đều khớp."""
         pending = sum(_remaining(o) for o in state.working_orders.values()
@@ -382,6 +418,9 @@ class RiskManager:
                     f"Broker '{b}' mất kết nối ({ago} > {self.limits.broker_timeout_seconds:g}s) "
                     "khi đang có vị thế", broker=b))
         return out
+
+    def broker_alive(self, state: AccountState, broker: str, now: Optional[datetime] = None) -> bool:
+        return self._broker_alive(state, broker, now or self.clock.now())
 
     def _broker_alive(self, state: AccountState, broker: str, now: datetime) -> bool:
         last = state.broker_last_seen.get(broker)
@@ -450,7 +489,7 @@ class RiskManager:
         self._refresh_protection(state, order.symbol, self.clock.now())
 
     def new_day(self, state: AccountState, d: date) -> None:
-        """Đặt lại bộ đếm trong ngày. Vị thế thật và kill-switch KHÔNG bị xoá."""
+        """Đặt lại bộ đếm trong ngày. Vị thế thật, kill-switch và khoá khẩn cấp KHÔNG bị xoá."""
         state.trading_day = d
         state.trades_today = 0
         state.consecutive_losses = 0
@@ -486,6 +525,10 @@ class RiskManager:
         if self.kill_file is not None and self.kill_file.exists():
             raise RuntimeError(f"Xoá file {self.kill_file} trước khi tắt kill-switch")
         state.kill_reason = None
+
+    def clear_emergency(self, state: AccountState) -> None:
+        """Chỉ người dùng gọi sau khi đã đối soát vị thế trên mọi broker."""
+        state.emergency_reason = None
 
     def _refresh_kill(self, state: AccountState) -> None:
         if not state.kill_reason and self.kill_file is not None and self.kill_file.exists():
