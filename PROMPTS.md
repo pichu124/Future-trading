@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1, P2.1, P2.2, P3.1, P3.2, P3.3 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: **P1.6** (cần API key) để có dữ liệu thật.
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1, P1.2, P2.1, P2.2, P3.1, P3.2, P3.3 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE (để chốt ❓ của feed và làm **P1.6**). Làm tiếp được không cần key: P1.3, P1.4.
 
 ---
 
@@ -28,7 +28,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 **P1.1 · Ghi chú tài liệu broker** ✅
 > Đọc tài liệu chính thức DNSE LightSpeed Market Data (bản sau KRX) và SSI FastConnect Data. Ghi vào `docs/broker_notes.md`: cách xác thực, giao thức streaming, cách subscribe tick khớp lệnh và sổ lệnh (top 3/top 10) cho hợp đồng tương lai VN30, tên field, đơn vị giá, cách lấy danh sách mã hợp đồng hiện hành. Đánh dấu rõ chỗ nào chưa chắc chắn. Không viết code.
 
-**P1.2 · Feed DNSE**
+**P1.2 · Feed DNSE** ✅ (message mẫu theo SDK; chờ khoá để kiểm với server thật)
 > Dựa trên broker_notes.md, viết `feeds/data_feed_dnse.py`: async, tự lấy mã F1M lúc khởi động, subscribe tick + sổ lệnh, chuẩn hoá về `Tick`, tự reconnect với backoff, phát hiện gap theo sequence nếu có, log số message/phút. Interface chung `DataFeed` ở `feeds/base.py`. Viết test với message mẫu (fixture JSON).
 
 **P1.3 · Feed SSI**

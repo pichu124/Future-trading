@@ -92,6 +92,18 @@ lệnh đôi ⇒ adapter DNSE phải: không tự retry lệnh đặt; khi khôn
   - order: `order_id`, `symbol`, `side`, `qty`, `price`, `status`, `timestamp`;
   - position: `symbol`, `qty`, `avg_price`, `market_value`.
 - SDK tự reconnect 10 lần (backoff 1s → 60s) rồi ném lỗi ✅ ⇒ runner phải tự xử lý khi hết lượt.
+- **Đối chiếu mã nguồn SDK `dnse` 0.5.0 (`dnse/stream/*.py`, đọc 08/11/2026)** — áp vào `feeds/data_feed_dnse.py`:
+  - sau khi mở kết nối, server gửi một lời chào (SDK đọc `session_id`) TRƯỚC khi xác thực ✅;
+  - message đăng ký là `{"name": "tick.G1.json", "symbols": [<mã KRX>]}` — **không** có trường `action` ✅;
+    trade, quote, giá dự kiến, secdef đều đi chung kênh `tick.G1.json` ✅;
+  - phản hồi xác thực thành công: SDK chỉ kiểm `action != "auth_error"` ⇒ định dạng bản thành công ❓;
+  - model dùng `alias_generator=to_camel` + `populate_by_name` ⇒ field trên dây nhiều khả năng camelCase
+    (`bidPrice`, `askVolume`, `totalVolume`, `refPrice`) ❓ — parser của bot nhận cả hai kiểu;
+  - model không có trường số thứ tự ⇒ **không phát hiện gap theo sequence được** ✅ (SDK) — bot dùng phát hiện im lặng;
+  - SDK coi `recv` timeout 5s là bình thường (chỉ lặp lại), không coi kết nối im lặng là chết — bot tự đặt ngưỡng;
+  - SDK 0.5.0 **chưa cài** endpoint `GET /instruments` (chỉ có trong đặc tả OpenAPI) ⇒ danh sách hợp đồng để đối chiếu
+    lúc khởi động phải tự gọi REST ký HMAC (P4.1); field trả về ❓.
+- Kiểm bằng `scripts/dnse_feed_probe.py --krx <mã>` khi có khoá: ghi message thô ra `data/probe/` để chốt các ❓ trên.
 - ❓ Kênh có sổ lệnh nhiều bước giá (top 3/top 10) hay không; trường `side` của trade là bên chủ động?;
   đơn vị `timestamp` (giây/ms); kênh `orders` có cần trading token không; có số thứ tự message để phát hiện gap không.
 

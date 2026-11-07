@@ -1,5 +1,37 @@
 # Tiến độ
 
+## 2026-11-08 — P1.2 Feed DNSE
+
+**Đã xong**
+- Đọc mã nguồn SDK chính thức `dnse` 0.5.0 (PyPI) để chốt giao thức WebSocket trước khi viết code; ghi vào `docs/broker_notes.md` §1.4 (định dạng subscribe, lời chào, không có số thứ tự, SDK chưa có `/instruments`).
+- `feeds/base.py`: interface `DataFeed` (`on_tick`, `run`, `stop`, `is_stale`, `stats`, `last_message_at`).
+- `feeds/data_feed_dnse.py` — `DnseFeed`:
+  - khởi động: tính hợp đồng giao dịch hôm nay (F1M, có roll) → mã KRX → **bắt buộc có trong danh sách broker trả về** (`contract_lister` tiêm vào), không có ⇒ từ chối kết nối;
+  - lời chào → xác thực HMAC → đăng ký `tick.G1.json`; trả pong khi server ping, tự ping mỗi 30 giây;
+  - chuẩn hoá về `Tick` (`DnseNormalizer`): trade/te/quote, nhận cả camelCase lẫn snake_case, tự nhận đơn vị timestamp (s/ms/µs/ns) → giờ VN, tick khớp lệnh mang giá tốt nhất gần nhất; giá ngoài [300, 5000] điểm bị bỏ và đếm (không tự chia 1000);
+  - kết nối lại vô hạn, backoff 1s → 60s, có dữ liệu thì backoff về 1s; kết nối im lặng quá `recv_timeout_s` ⇒ kết nối lại; sai khoá (`auth_error`) ⇒ dừng hẳn, không thử lại;
+  - `is_stale()` theo `feeds.feed_stale_seconds`, chỉ tính trong phiên liên tục; log số message/phút; lỗi ở bộ nhận tick không làm chết feed; không log/repr khoá hay chữ ký.
+- `scripts/dnse_feed_probe.py`: chạy với khoá thật, in tick, ghi message thô ra `data/probe/` để chốt các mục ❓ và thay fixture mẫu.
+- `.env.example`: DNSE V2 dùng `DNSE_API_KEY` / `DNSE_API_SECRET` (bỏ username/password kiểu cũ).
+- Thêm thư viện `websockets>=12.0` (nhỏ, thuần Python, chính SDK DNSE dùng) — nhập muộn, chỉ cần khi kết nối thật.
+- `tests/test_feed_dnse.py` (viết trước): 33 test với message mẫu `tests/fixtures/dnse_stream.json` + transport giả; 1 test chạy qua WebSocket thật với server giả lập cục bộ. Thử phá từng cơ chế (reset backoff, đối chiếu hợp đồng, chặn giá lạ, ngưỡng im lặng, auth lỗi là cố định, pong, cô lập lỗi callback, timeout nhận, gắn báo giá vào trade) ⇒ đều có test đỏ.
+- 391 test.
+
+**Giả định / rủi ro còn mở**
+- Message mẫu dựng theo model SDK, **chưa phải bản ghi server thật** — tên field, đơn vị timestamp/giá, định dạng phản hồi xác thực đều ❓ tới khi chạy `scripts/dnse_feed_probe.py`.
+- Chỉ có giá tốt nhất (bid/ask 1 mức); kênh sổ lệnh nhiều bước giá không có trong SDK.
+- Không có số thứ tự message ⇒ mất message lẻ trong một kết nối KHÔNG phát hiện được; chỉ phát hiện im lặng/rớt kết nối. Recorder/validate_day (P1.4/P1.5) nên đối chiếu `total_volume` của `te` để phát hiện hụt khớp lệnh.
+- Hợp đồng được chọn lúc `run()`; không tự đổi hợp đồng giữa phiên (roll xảy ra theo ngày; chạy lại mỗi ngày).
+- `contract_lister` thật (REST `/instruments` ký HMAC) chưa viết — thuộc adapter DNSE (P4.1); script thăm dò dùng mã KRX bạn tự xác nhận.
+- Tick khớp lệnh mang giá tốt nhất GẦN NHẤT, có thể đã cũ vài trăm ms so với lúc khớp.
+
+**Người dùng cần làm**
+- [ ] Đăng ký DNSE Open API V2, điền `DNSE_API_KEY` / `DNSE_API_SECRET` vào `.env`.
+- [ ] Trong giờ giao dịch chạy `python scripts/dnse_feed_probe.py --krx <mã KRX F1M> --seconds 120`, gửi lại file `data/probe/dnse_raw_*.jsonl` (không chứa khoá) để chốt các mục ❓.
+- [ ] `pip install -r requirements.txt` (thêm `websockets`).
+
+**Bước tiếp theo:** P1.3 (feed SSI + composite) hoặc P1.4 (recorder) — cả hai dùng được ngay interface `DataFeed`.
+
 ## 2026-11-08 — P3.3 Kiểm định độ bền (công cụ xong; CHƯA kết luận được)
 
 **Kết luận về edge của ORB: CHƯA CÓ BẰNG CHỨNG — coi như KHÔNG có edge cho tới khi chứng minh được.** Lý do: không có dữ liệu bar thật trong môi trường làm việc, `fees.*`/`risk.*` còn null ⇒ engine từ chối chạy. Không có con số nào để làm bằng chứng.
