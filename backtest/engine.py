@@ -39,7 +39,7 @@ from core.calendar import TradingCalendar  # noqa: E402
 from core.clock import FakeClock, MarketClock  # noqa: E402
 from core.execution import ExecEvent, ExecutionManager  # noqa: E402
 from core.models import AccountState, Bar, Fill, Order, Signal, SignalAction, Tick  # noqa: E402
-from core.settings import Settings, load_settings  # noqa: E402
+from core.settings import MissingSetting, Settings, load_settings  # noqa: E402
 from risk.risk_manager import Rejected, RiskManager  # noqa: E402
 from strategy.base import Strategy, StrategyContext  # noqa: E402
 
@@ -377,12 +377,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = ap.parse_args(argv)
 
     settings = load_settings()
+    try:
+        engine = BacktestEngine(settings, _load_strategy(args.strategy, settings))
+    except MissingSetting as exc:
+        print(f"❌ {exc.args[0]}\n   Chạy `python -m core.settings` để xem mọi khoá còn thiếu.")
+        return 2
     bars, skipped = load_bars_parquet(args.bars)
     if args.date_from:
         bars = [b for b in bars if b.start.date() >= date.fromisoformat(args.date_from)]
     if args.date_to:
         bars = [b for b in bars if b.start.date() <= date.fromisoformat(args.date_to)]
-    engine = BacktestEngine(settings, _load_strategy(args.strategy, settings))
     res = engine.run_bars(bars)
     rep = build_report(res, split_date=date.fromisoformat(args.split) if args.split else None,
                        n_trials=args.n_trials, title=args.strategy)

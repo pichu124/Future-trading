@@ -66,6 +66,15 @@ risk:
   # quá hạn ⇒ risk_manager yêu cầu đóng vị thế. KIỂM TRA LẠI theo độ trễ thực tế của broker.
   stop_grace_seconds: 5
 
+# Tham số chiến lược. Mỗi lần đổi cấu hình để thử ⇒ ghi một dòng vào research/log.md và tăng
+# --n-trials khi chạy backtest (CLAUDE.md mục 6). KHÔNG tối ưu trên toàn bộ dữ liệu.
+strategy:
+  orb:                                  # strategy/baseline_orb.py — phá biên độ đầu phiên
+    range_minutes: 15                   # biên = đỉnh/đáy N phút đầu phiên liên tục sáng
+    reward_risk: 1.5                    # chốt lời = 1.5 × khoảng cách tới stop (cạnh đối diện)
+    max_trades_per_day: 2
+    qty: 1
+
 feeds:
   primary: dnse
   backup: ssi

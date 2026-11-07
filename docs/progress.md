@@ -1,5 +1,28 @@
 # Tiến độ
 
+## 2026-11-08 — P3.2 Chiến lược baseline ORB (chưa chạy in-sample)
+
+**Đã xong**
+- `strategy/baseline_orb.py` — `OpeningRangeBreakout`: biên = đỉnh/đáy các bar mở trong 15 phút đầu phiên liên tục (đủ bar, thiếu ⇒ bỏ ngày, bỏ qua bar ATO); bar 1 phút đóng ngoài biên khi đang phẳng ⇒ vào; stop cạnh đối diện; TP 1,5R (tròn bước giá); ≤ 2 tín hiệu/ngày. Tham số ở `settings.strategy.orb`. Không I/O, không đọc giờ (có test quét mã nguồn).
+- `tests/test_strategy_orb.py` (viết trước): 28 test, gồm test qua toàn pipeline engine (vào ở tick mở 09:16, chốt lời đúng 1,5R). Thử phá từng quy tắc (ngưỡng đóng ngoài biên, cạnh stop, giới hạn 2 lệnh, đủ bar, bỏ bar ATO, chỉ vào khi phẳng) ⇒ đều có test đỏ.
+- CLI backtest báo lỗi một dòng khi settings còn null (thay vì traceback).
+- `research/orb_baseline.md`: đặc tả, cách chạy in-sample, **5 lý do kết quả có thể đẹp hơn thực tế**. `research/log.md`: ghi cấu hình #1 (n_trials = 1).
+- 337 test.
+
+**Chưa làm được: chạy backtest in-sample** — container không có dữ liệu bar (`data/` không commit), DNSE MCP chỉ có OHLC ngày, endpoint biểu đồ công khai bị chặn mạng (và không phải API chính thức), `fees.*`/`risk.*` còn null ⇒ engine từ chối chạy đúng thiết kế. Lệnh chạy sẵn trong `research/orb_baseline.md`.
+
+**Giả định / rủi ro còn mở**
+- Đặc tả lấy theo ví dụ trong PROMPTS P3.2; chi tiết tự chọn: đóng **đúng bằng** cạnh biên không tính là phá; tín hiệu bị risk từ chối vẫn tính vào giới hạn 2 lệnh; sau khi chốt lời mà giá vẫn ngoài biên thì bar kế tiếp vào lại cùng chiều (theo đúng câu chữ "đóng ngoài biên"), sau khi dừng lỗ có thể vào ngược chiều nếu bar đóng ngoài cạnh kia.
+- R tính từ giá đóng bar tín hiệu, không từ giá khớp thật ⇒ TP thực tế < 1,5R khi trượt giá.
+- Chưa có lọc biên quá hẹp/quá rộng — biên hẹp ⇒ R nhỏ, phí chiếm tỷ trọng lớn.
+
+**Người dùng cần làm**
+- [ ] Điền `fees.*`, `risk.max_daily_loss_points`, `risk.max_trades_per_day`, `risk.max_consecutive_losses`.
+- [ ] Có dữ liệu: chạy `scripts/import_dashboard_bars.py` (chỉ thử nhanh) hoặc cấp API key để làm P1.6.
+- [ ] Chốt khoảng ngày in-sample trước khi chạy, ghi vào `research/log.md`.
+
+**Bước tiếp theo:** chạy in-sample khi có dữ liệu; sau đó P3.3 (out-of-sample, walk-forward, độ nhạy ±20%, trượt 2 tick).
+
 ## 2026-11-08 — P3.1 Engine backtest
 
 **Đã xong**
