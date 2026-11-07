@@ -1,0 +1,22 @@
+# holidays.yaml — ngày NGHỈ GIAO DỊCH (ngoài thứ 7, CN).
+#
+# ⚠️ DANH SÁCH NÀY CHƯA ĐẦY ĐỦ. Chỉ chứa:
+#   - các ngày lễ cố định dương lịch (01/01, 30/04, 01/05, 02/09) rơi vào ngày thường;
+#   - các ngày Tết 2026 suy ra được chắc chắn (VN30F2602 đáo hạn 13/02 thay vì 19/02).
+# Ngày nghỉ bù, Tết Nguyên đán, Giỗ Tổ Hùng Vương và ngày nghỉ thêm dịp 02/09
+# PHẢI bổ sung theo thông báo lịch nghỉ hằng năm của HOSE/HNX.
+# `python scripts/check_calendar.py` cảnh báo khi một năm còn thiếu.
+#
+# Định dạng: YYYY-MM-DD: mô tả
+
+"2026-01-01": Tết Dương lịch
+"2026-02-16": Tết Nguyên đán (suy từ lịch đáo hạn VN30F2602)
+"2026-02-17": Tết Nguyên đán (suy từ lịch đáo hạn VN30F2602)
+"2026-02-18": Tết Nguyên đán (suy từ lịch đáo hạn VN30F2602)
+"2026-02-19": Tết Nguyên đán (suy từ lịch đáo hạn VN30F2602)
+"2026-04-30": Ngày Giải phóng miền Nam
+"2026-05-01": Quốc tế Lao động
+"2026-09-02": Quốc khánh
+
+"2027-01-01": Tết Dương lịch
+"2027-04-30": Ngày Giải phóng miền Nam

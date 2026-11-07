@@ -1,0 +1,27 @@
+# Secret
+.env
+*.key
+*.pem
+secrets/
+
+# Dữ liệu & trạng thái bot (không commit, không đặt trong Dropbox)
+data/
+state/
+logs/
+KILL
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
