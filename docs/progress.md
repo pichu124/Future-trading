@@ -1,5 +1,32 @@
 # Tiến độ
 
+## 2026-11-08 — P5.1 Runner + giám sát
+
+**Đã xong**
+- `live/runner.py` — `Runner` (vòng `step()` mỗi giây, `run()` = khởi động + lặp) và `main()`:
+  - khởi động: ngày nghỉ ⇒ thoát; `risk.new_day`; nạp bộ đếm trong ngày đã lưu; ĐỐI SOÁT vị thế + lệnh chờ từ broker (broker là sự thật), có vị thế sẵn ⇒ cảnh báo;
+  - mỗi vòng: heartbeat khoá phiên TRƯỚC mọi việc (mất khoá ⇒ dừng ngay, mọi vòng sau cũng không gửi lệnh, thoát 3); ping broker ⇒ `broker_last_seen` TRƯỚC khi ra quyết định (sửa lỗi thứ tự: vòng lặp khựng > 10s từng làm lệnh bị từ chối oan); tick ⇒ giá đánh dấu, paper khớp, bar; sức khoẻ feed ⇒ `feed_healthy`; bar đóng theo đồng hồ ⇒ strategy; lệnh Telegram; `risk.check` ⇒ hành động; gỡ hedge khi broker chính sống lại;
+  - kết thúc: kill + phẳng ⇒ 0 (quá hạn chưa phẳng ⇒ 1); sau 14:45 ⇒ 0 nếu phẳng, 1 nếu còn vị thế; báo cáo cuối ngày (lệnh, P&L sau phí, lệnh bị risk từ chối + lý do, cảnh báo) gửi Telegram + `data/reports/daily_YYYY-MM-DD.txt`;
+  - `main()`: live/`--live` ⇒ kiểm hai chốt rồi từ chối vì chưa có adapter thật; paper ⇒ `check_allowed_machine` + `InstanceLock` + feed DNSE + `PaperBroker` mang tên broker chính; Telegram qua thread.
+- `core/bars.py` — `BarBuilder`: đóng bar theo đồng hồ (kể cả không có tick), grace 0,5s cho tick trễ, tick trễ cho bar đã phát bị bỏ và đếm.
+- `live/state_store.py`: lưu/nạp bộ đếm trong ngày (lượt, chuỗi thua, lãi/lỗ, phí, khoá ngày, kill, khẩn cấp, id lệnh); sang ngày chỉ giữ khoá tay; file hỏng ⇒ từ chối chạy.
+- `monitoring/telegram.py`: `parse_commands` (chỉ nhận từ đúng chat, bỏ tin sửa) + `fetch_updates`.
+- `brokers/base.py`: `ping()` (mặc định True; adapter mạng phải ghi đè).
+- `brokers/paper.py`: **sửa độ lạc quan** — LO đặt khi giá chưa tới giờ nằm chờ NGAY từ lúc đặt (trước đây nếu tick kế tiếp nhảy qua giá LO thì khớp ở giá tốt hơn LO ⇒ chốt lời trong backtest đẹp hơn thật). Có test tái hiện trước khi sửa.
+- `docs/runner.md`: cách chạy paper, lệnh điều khiển, mã thoát.
+- Test viết trước: `tests/test_runner_parts.py` (12), `tests/test_runner.py` (18), 2 test paper mới. Thử phá từng cơ chế ⇒ đều có test đỏ (siết 2 test: vòng sau khi mất khoá vẫn không giao dịch; đối soát với state trống thật).
+- 546 test.
+
+**Giả định / rủi ro còn mở**
+- Chưa chạy thật: cần khoá DNSE (feed) và điền settings; live cần adapter P4.1/P4.2.
+- Feed composite chưa nối vào runner (chờ token SSI — P4.2); hiện runner paper chỉ dùng feed DNSE, nên một nguồn im là `feed_healthy=False` theo `is_stale` của feed DNSE.
+- Lệnh Telegram đọc mỗi 3 giây bằng getUpdates (không webhook); mất mạng ⇒ bỏ lượt, không ảnh hưởng giao dịch. Chưa có lệnh `/unlock` (mở kill/khẩn cấp) — cố ý để người mở bằng tay.
+- Runner chạy trong một ngày; qua nửa đêm không được hỗ trợ (Task Scheduler khởi động lại mỗi sáng).
+- Ghi file trạng thái/báo cáo đồng bộ trong vòng lặp (nhỏ, mỗi 30 giây).
+
+**Người dùng cần làm**
+- [ ] Điền `live.allowed_machine` (hostname máy desktop) và các khoá rủi ro/phí; tạo bot Telegram riêng cho kênh trading.
+
 ## 2026-11-08 — P4.3 Quy trình khẩn cấp
 
 **Đã xong**

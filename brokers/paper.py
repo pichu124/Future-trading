@@ -6,7 +6,8 @@ Quy tắc khớp (thận trọng, không tự lừa mình):
 - MTL: mua khớp ask + `slippage_ticks`, bán khớp bid − `slippage_ticks`. Khối lượng khớp bị
   giới hạn bởi `ask_qty`/`bid_qty` nếu feed có (chia sẻ giữa các lệnh theo thứ tự đặt). Phần
   chưa khớp thành LO tại giá khớp ± 1 bước giá (quy tắc MTL sau KRX, broker_notes §0).
-- LO khớp được ngay ở tick đầu tiên đủ điều kiện ⇒ khớp min(giá LO, ask + trượt) (mua) /
+- LO đặt khi KHÔNG khớp được với báo giá đã biết ⇒ nằm chờ ngay từ lúc đặt. LO khớp được ngay ở
+  tick đầu tiên đủ điều kiện ⇒ khớp min(giá LO, ask + trượt) (mua) /
   max(giá LO, bid − trượt) (bán). Không khớp ngay ⇒ nằm chờ; lệnh chờ chỉ khớp khi giá
   XUYÊN qua giá LO (ask < LO khi mua, bid > LO khi bán) và khớp đúng giá LO — chạm giá chưa
   chắc tới lượt trong hàng chờ.
@@ -88,6 +89,7 @@ class PaperBroker(BrokerAdapter):
         self._orders: dict[str, Order] = {}        # mọi lệnh đã nhận (kể cả đã kết thúc)
         self._book: dict[str, _Working] = {}       # lệnh còn sống, theo thứ tự đặt
         self._positions: dict[str, Position] = {}
+        self._last_quote: dict[str, tuple] = {}     # symbol → (bid, ask) gần nhất đã thấy
         self._seq = 0
 
     @classmethod
@@ -111,7 +113,8 @@ class PaperBroker(BrokerAdapter):
             return o
         o = o.with_status(OrderStatus.PENDING, broker_order_id=self._next_broker_id())
         self._orders[o.client_order_id] = o
-        self._book[o.client_order_id] = _Working(placed_at=now, active_at=now + self._delay())
+        self._book[o.client_order_id] = _Working(placed_at=now, active_at=now + self._delay(),
+                                                 resting=self._rests_on_arrival(o))
         self._emit_order(o)
         return o
 
@@ -158,6 +161,9 @@ class PaperBroker(BrokerAdapter):
 
     def on_tick(self, tick: Tick) -> None:
         """Gọi cho MỖI tick theo thứ tự thời gian (backtest: engine; paper: feed)."""
+        prev_bid, prev_ask = self._last_quote.get(tick.symbol, (None, None))
+        self._last_quote[tick.symbol] = (tick.bid if tick.bid is not None else prev_bid,
+                                         tick.ask if tick.ask is not None else prev_ask)
         if self.session is not None and \
                 self.session.session_state(tick.ts) is not SessionState.CONTINUOUS:
             return
@@ -182,6 +188,15 @@ class PaperBroker(BrokerAdapter):
             qty = int(min(o.qty - o.filled_qty, avail[o.side]))
             avail[o.side] -= qty
             self._fill(o, w, qty, price, tick.ts)
+
+    def _rests_on_arrival(self, o: Order) -> bool:
+        """LO không khớp được với báo giá ĐÃ BIẾT lúc đặt ⇒ nằm chờ ngay (chỉ khớp khi xuyên giá)."""
+        if o.order_type is not OrderType.LIMIT:
+            return False
+        bid, ask = self._last_quote.get(o.symbol, (None, None))
+        if o.side is Side.BUY:
+            return ask is not None and ask > o.price + _EPS
+        return bid is not None and bid < o.price - _EPS
 
     def _maybe_trigger(self, o: Order, w: _Working, tick: Tick) -> None:
         px = tick.bid if o.side is Side.SELL else tick.ask

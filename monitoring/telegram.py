@@ -142,3 +142,46 @@ def notify(text: str, channel: Optional[str] = "trading", **kwargs: Any) -> bool
     except Exception as exc:          # cảnh báo hỏng không được làm sập bot
         log.error("Gửi Telegram thất bại: %s", exc)
         return False
+
+
+# ------------------------------------------------------------------ lệnh điều khiển ----
+
+def parse_commands(updates: list, authorized_chat_id: str) -> tuple[list[str], Optional[int]]:
+    """Kết quả getUpdates → (lệnh, offset kế tiếp). Chỉ nhận tin MỚI từ đúng chat được cấu hình.
+
+    "/status@ten_bot" ⇒ "status". Tin sửa (edited_message) bị bỏ: không chạy lại lệnh cũ.
+    """
+    cmds: list[str] = []
+    last_id: Optional[int] = None
+    for u in updates:
+        uid = u.get("update_id")
+        if isinstance(uid, int):
+            last_id = uid if last_id is None else max(last_id, uid)
+        msg = u.get("message")
+        if not isinstance(msg, dict):
+            continue
+        if str((msg.get("chat") or {}).get("id")) != str(authorized_chat_id):
+            continue
+        text = str(msg.get("text") or "").strip()
+        if text.startswith("/"):
+            cmds.append(text[1:].split()[0].split("@")[0].lower())
+    return cmds, (last_id + 1 if last_id is not None else None)
+
+
+def fetch_updates(offset: Optional[int], channel: Optional[str] = "trading", session: Any = None,
+                  env: Optional[dict] = None, timeout: float = 10.0) -> list:
+    """Gọi getUpdates (không long-poll). Lỗi mạng ⇒ ném để người gọi tự bỏ qua lượt này."""
+    if session is None:
+        import requests
+        session = requests
+    token, _ = credentials(channel, env)
+    if not token:
+        raise TelegramConfigError("Thiếu token Telegram")
+    params = {"timeout": 0}
+    if offset is not None:
+        params["offset"] = offset
+    resp = session.get(_API.format(token=token, method="getUpdates"), params=params, timeout=timeout)
+    data = resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(f"Telegram getUpdates lỗi: {data.get('description')}")
+    return list(data.get("result") or [])

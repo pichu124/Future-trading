@@ -57,6 +57,11 @@ class BrokerAdapter(ABC):
     async def close(self) -> None:
         return None
 
+    async def ping(self) -> bool:
+        """Còn kết nối được với broker không. Runner gọi mỗi giây để cập nhật broker_last_seen
+        (risk dùng để kích hoạt quy trình khẩn cấp). Adapter mạng phải ghi đè."""
+        return True
+
     # ---- lệnh ----
     @abstractmethod
     async def place(self, order: Order) -> Order:

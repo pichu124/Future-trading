@@ -474,3 +474,19 @@ def test_paper_callbacks_drive_risk_manager(session_cfg, cal, tmp_path):
     clock.set(T0 + timedelta(seconds=30))
     state.broker_last_seen["paper"] = clock.now()
     assert rm.check(state) == []
+
+
+def test_limit_placed_away_from_market_rests_from_placement(rig):
+    """LO đặt khi giá chưa tới phải nằm chờ ngay từ lúc đặt: giá nhảy qua ⇒ khớp đúng giá LO,
+    không được hưởng giá tốt hơn (không thì chốt lời trong backtest đẹp hơn thật)."""
+    rig.tick(1, bid=1350.3, ask=1350.5)                       # giá thị trường đã biết
+    rig.place(Side.SELL, otype=OrderType.LIMIT, price=1351.0, cid="TP")
+    rig.tick(20, bid=1351.9, ask=1352.1)                      # nhảy qua giá LO
+    assert rig.fills[-1].price == pytest.approx(1351.0)
+
+
+def test_marketable_limit_at_placement_still_fills_at_quote(rig):
+    rig.tick(1, bid=1350.3, ask=1350.5)
+    rig.place(Side.BUY, otype=OrderType.LIMIT, price=1351.0)  # ask 1350.5 ≤ LO ⇒ khớp được ngay
+    rig.tick(2, bid=1350.4, ask=1350.6)
+    assert rig.fills[-1].price == pytest.approx(1350.7)       # ask + 1 bước trượt, ≤ LO
