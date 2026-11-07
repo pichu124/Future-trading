@@ -70,6 +70,11 @@ def write_dataframe_atomic(df, out_path: Path | str, compression: str = "snappy"
     write_table_atomic(pa.Table.from_pandas(df, preserve_index=False), out_path, compression)
 
 
+def write_text_atomic(text: str, out_path: Path | str, encoding: str = "utf-8") -> None:
+    """Ghi văn bản (vd báo cáo HTML) theo kiểu tmp-rồi-tráo."""
+    _write_via_tmp(Path(out_path), lambda tmp: Path(tmp).write_text(text, encoding=encoding))
+
+
 def write_json_atomic(payload: Any, out_path: Path | str, *, indent: int = 2) -> None:
     """Serialize TRƯỚC khi đụng đĩa: payload lỗi không bao giờ làm cụt file cũ."""
     blob = json.dumps(payload, ensure_ascii=False, indent=indent, default=str)

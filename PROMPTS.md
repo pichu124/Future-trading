@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1, P2.1, P2.2. Tiếp theo: **P3.1**, hoặc P1.2 / P1.6 khi đã có API key.
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1, P2.1, P2.2, P3.1. Tiếp theo: **P3.2** (cần bạn mô tả chiến lược baseline), hoặc P1.2 / P1.6 khi đã có API key.
 
 ---
 
@@ -57,7 +57,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 
 ## Giai đoạn 3 — Backtest & chiến lược
 
-**P3.1 · Engine**
+**P3.1 · Engine** ✅
 > Viết `backtest/engine.py` replay dữ liệu Parquet qua đúng pipeline live: feed giả → strategy → risk_manager → paper broker. Xuất báo cáo theo mục 6 CLAUDE.md ra HTML. Thêm test chứng minh không có look-ahead: chiến lược "gian lận" dùng giá tương lai phải bị engine chặn hoặc lộ ra.
 
 **P3.2 · Chiến lược baseline**

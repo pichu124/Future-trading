@@ -1,5 +1,39 @@
 # Tiến độ
 
+## 2026-11-08 — P3.1 Engine backtest
+
+**Đã xong**
+- `strategy/base.py`: `Strategy.on_bar(bar, ctx) -> [Signal]`, `StrategyContext(position_qty, avg_price, bars_today)`. Strategy chỉ thấy bar đã đóng.
+- `core/execution.py` — `ExecutionManager`, **dùng chung cho backtest và live**: Signal → lệnh MTL qua `risk.approve` → broker; sau mỗi lần khớp tự đặt/cập nhật STOP + LO chốt lời đúng |net|, net về 0 thì huỷ; EXIT / ENTER ngược chiều ⇒ huỷ lệnh chờ rồi đóng; xử lý `FLATTEN_ALL` / `FLATTEN_SYMBOL` / `KILL` (`EMERGENCY_HEDGE` tạm thời chỉ đóng trên chính broker — P4.3).
+- `backtest/engine.py`:
+  - pipeline giống live: nguồn sự kiện → strategy → ExecutionManager → RiskManager → PaperBroker → `risk.check`;
+  - hai nguồn: `run_bars` (bar → tick giả) và `run_events` (tick thật; `bars_from_ticks` dựng bar 1 phút);
+  - chống look-ahead: sự kiện lùi thời gian ⇒ `ValueError`; bar chỉ phát lúc đóng; lệnh khớp ở tick sau; `detect_lookahead()` lật ngược dữ liệu sau một mốc rồi so tín hiệu trước mốc — chiến lược "gian lận" nhìn bar kế tiếp bị bắt, chiến lược trung thực qua;
+  - tick giả bi quan: bid = giá, ask = giá + `synthetic_spread_ticks`; đường đi theo `bar_high_first`, không quyết được ⇒ về phía bất lợi cho vị thế + lệnh vào đang chờ; cực trị lặp hai tick ⇒ stop khớp tại cực trị, LO chỉ khớp khi xuyên giá;
+  - chỉ đưa vào hợp đồng đang giao dịch theo ngày (`trading_contract`, có roll); cảnh báo vị thế còn mở cuối ngày;
+  - `load_bars_parquet` đọc schema `data/imported/`; CLI `python -m backtest.engine --bars data/imported --strategy module:Class --split YYYY-MM-DD --n-trials N --out reports/x.html`.
+- `backtest/report.py`: `TradeBook` (ghép fill thành lệnh khứ hồi, lý do thoát theo tag), `compute_metrics` (số lệnh, win rate, avg win/loss, PF, max DD, P&L sau phí VNĐ/điểm, theo giờ, theo thứ), `build_report` (toàn bộ / in-sample / out-of-sample, mỗi phần có `validate_trades` + `apply_selection_penalty(n_trials)`), HTML có cảnh báo dữ liệu snapshot ("không dùng để kết luận có edge") và "tick giả", danh sách lệnh bị risk từ chối.
+- `utils/atomic_io.write_text_atomic`; `settings.backtest.synthetic_spread_ticks: 1`; `.gitignore` thêm `reports/`.
+- 309 test (28 mới). Thử phá từng cơ chế (thứ tự thời gian, tick lặp ở cực trị, chiều bất lợi, lật dữ liệu, lọc hợp đồng, huỷ bảo vệ, phí, drawdown) thì đều có test đỏ. 13 ngày × 240 bar chạy ~0,25 giây.
+- Kiểm chứng sơ bộ: chiến lược momentum trên random walk lỗ sau phí (p = 1.0, walk-forward 0/4 đoạn dương) — đúng kỳ vọng "dữ liệu ngẫu nhiên thì không có edge".
+
+**Giả định / rủi ro còn mở**
+- Tick giả **bi quan có chủ ý**: stop khớp tại đáy/đỉnh bar − trượt (thường tệ hơn thực tế), thanh khoản vô hạn, spread 1 bước. Kết quả trên bar chỉ là cận dưới thô; kết luận phải dựa trên dữ liệu tick thật (P1.4/P1.6).
+- Dữ liệu `data/imported/` là snapshot ~2 giây, volume không tin được ⇒ báo cáo tự cảnh báo; không dùng để kết luận edge.
+- `OrderType.STOP` mô phỏng stop phía sàn; nếu P4 cho thấy stop phải do bot tự giữ, cần thêm độ trễ phát hiện + gửi MTL vào mô phỏng.
+- Bảo vệ sửa bằng huỷ-rồi-đặt lại ⇒ có khoảng hở ngắn (risk `stop_grace_seconds` che); live có thể cần `modify` thay vì huỷ.
+- Lệnh đóng bị broker từ chối (vd MTL lúc nghỉ trưa) chỉ được ghi lại, không tự thử lại; FLATTEN của risk sẽ đặt lại ở lần `check()` sau.
+- `ExecutionManager` nằm ở `core/` nhưng phụ thuộc `risk/` và `brokers/` (chấp nhận để live và backtest dùng chung một chỗ).
+- `detect_lookahead` chỉ bắt rò rỉ qua dữ liệu đưa vào engine; vẫn phải đọc code chiến lược.
+- Chưa dùng `backtest.initial_capital_vnd` (báo cáo theo VNĐ tuyệt đối, chưa có % lợi nhuận/ký quỹ).
+- Định dạng Parquet tick (`run_events`) chưa có loader — chờ recorder P1.4 chốt schema.
+
+**Người dùng cần làm**
+- [ ] Điền `fees.*` và `risk.*` còn null — engine từ chối chạy khi còn thiếu.
+- [ ] Chạy `scripts/import_dashboard_bars.py` nếu chưa (archive dashboard tự xoá sau 30 ngày).
+
+**Bước tiếp theo:** P3.2 — mô tả chiến lược baseline bằng lời (khung `[...]` trong PROMPTS.md).
+
 ## 2026-11-07 (khuya, tiếp) — P2.2 Paper broker
 
 **Đã xong**
