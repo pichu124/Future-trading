@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.5, P2.1, P2.2, P3.1, P3.2, P3.3, P4.3, P5.1 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Làm tiếp được không cần key: P5.2.
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.5, P2.1, P2.2, P3.1, P3.2, P3.3, P4.3, P5.1, P5.2 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Làm tiếp được không cần key: sửa lỗi #1–#7 trong `docs/golive_checklist.md`.
 
 ---
 
@@ -86,7 +86,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 **P5.1 · Runner + giám sát** ✅ (paper; live chờ P4.1/P4.2 — `docs/runner.md`)
 > Viết `live/runner.py`: khởi động (kiểm tra kết nối, lấy mã hợp đồng, đối soát vị thế thực tế với state), vòng lặp sự kiện, heartbeat mỗi 30 giây, kill-switch (file KILL và lệnh Telegram /kill /status /pnl). Cuối ngày gửi báo cáo Telegram: lệnh, P&L sau phí, lệnh bị risk từ chối và lý do.
 
-**P5.2 · Checklist trước live**
+**P5.2 · Checklist trước live** ✅ (`docs/golive_checklist.md`)
 > Rà toàn bộ repo theo CLAUDE.md và lập checklist go-live: test nào chưa có, luật rủi ro nào chưa được thực thi, chỗ nào có thể gửi lệnh trùng, chỗ nào log lộ secret. Chưa sửa gì, chỉ báo cáo.
 
 ---

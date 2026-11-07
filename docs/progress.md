@@ -1,5 +1,9 @@
 # Tiến độ
 
+## 2026-11-08 — P5.2 Checklist go-live
+
+- `docs/golive_checklist.md`: đối chiếu từng mục CLAUDE.md + review độc lập "như người muốn bot thua tiền". Kết luận: **không chạy live, không chạy cả paper** trước khi sửa 3 lỗi CRITICAL + 4 HIGH (đã tái hiện bằng script): đối ứng khẩn cấp bị risk chặn khi có TP; lệnh đóng khớp một phần để lại vị thế không stop; lỗi mạng làm chết runner; stop + TP cùng khớp gây đảo chiều; flatten + đối ứng đóng hai lần; lộ token Telegram trong log; flatten bị chặn khi xác nhận huỷ trễ.
+
 ## 2026-11-08 — P5.1 Runner + giám sát
 
 **Đã xong**
