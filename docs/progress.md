@@ -1,5 +1,35 @@
 # Tiến độ
 
+## 2026-11-08 — P1.3 Feed SSI + feed ghép (composite)
+
+**Đã xong**
+- Đọc mã nguồn SDK chính thức `ssi-sdk` 3.3.2 để chốt giao thức stream trước khi viết code; ghi vào `docs/broker_notes.md` §2.4. Điểm quan trọng: stream cần **access token Bearer lúc bắt tay** (lấy qua REST `/api/v3/auth/token`), quote có nhiều bước giá, trade có KL luỹ kế `v`.
+- `feeds/data_feed_ssi.py` — `SsiFeed` (cùng interface `DataFeed`):
+  - đối chiếu hợp đồng với danh sách broker trước khi kết nối; đăng ký `trade.<KRX>` + `quote.<KRX>`; `ping_pong` mỗi 30 giây;
+  - chuẩn hoá frame `{channel, topic, data}` về `Tick` (`SsiNormalizer`): số dạng chuỗi `"1,234.0"`, thời gian epoch / `HH:MM:SS` / ISO, giá chữ ("ATO") và giá ngoài khoảng hợp lý bị bỏ, nến `@1m/@5m` bị bỏ, quote lấy mức tốt nhất;
+  - token qua `token_provider(force_refresh)` tiêm vào; 401/403 (bắt tay hoặc frame từ chối) ⇒ lấy token mới MỘT lần, lần nữa ⇒ dừng hẳn; cờ thử-lại được xoá khi kết nối đã có dữ liệu (token hết hạn giữa phiên không làm feed chết — lỗi này được test tái hiện trước rồi mới sửa); 429 ⇒ chờ max(30s, retryAfter); ack đăng ký lỗi ⇒ dừng hẳn; backoff lũy thừa có jitter, chặn 60 giây.
+- `feeds/composite.py` — `CompositeFeed(DNSE chính, SSI dự phòng)`:
+  - `on_tick` chỉ phát tick của nguồn đang dùng; `on_any_tick` phát mọi nguồn (recorder ghi cả hai);
+  - `healthy` = cả hai nguồn có tick mới, không nguồn nào chết, không lệch giá quá `feed_divergence_ticks` (so mid nếu có, không thì giá khớp, chỉ so giá còn mới) ⇒ runner gán vào `AccountState.feed_healthy` để risk chặn mở vị thế;
+  - DNSE im > `feed_stale_seconds` mà SSI sống ⇒ chuyển sang SSI; DNSE sống lại liên tục `switch_back_after_seconds` (30s) ⇒ chuyển về; SSI đang dùng mà chết ⇒ về ngay; cả hai im ⇒ không chuyển;
+  - không báo động giả lúc khởi động và ngay sau nghỉ trưa (im lặng tính từ mốc muộn nhất: tick cuối / lúc bắt đầu theo dõi / 09:00 hoặc 13:00), nhưng `healthy` vẫn False tới khi cả hai có dữ liệu;
+  - cảnh báo chỉ phát khi trạng thái đổi (`STALE`, `RECOVERED`, `DIVERGENCE`, `DIVERGENCE_CLEARED`, `SWITCHED`, `SWITCHED_BACK`, `FEED_DOWN`), `on_alert` để nối Telegram; một feed chết thì composite chạy tiếp với feed kia, cả hai chết ⇒ ném lỗi.
+- `settings.feeds.switch_back_after_seconds: 30`; `.env.example`: biến SSI V3 (`SSI_CLIENT_ID`, `SSI_API_KEY`, `SSI_API_SECRET`).
+- Test viết trước: `tests/test_feed_ssi.py` (27, gồm 1 test WebSocket thật với server cục bộ kiểm header Bearer và mã 401) và `tests/test_feed_composite.py` (24). Thử phá từng luật ⇒ đều có test đỏ (phát hiện và bổ sung 4 test thiếu: không chuyển sang nguồn đã chết, feed chết là không khoẻ ngay, nến có trường giá vẫn bị bỏ, jitter backoff).
+- 472 test.
+
+**Giả định / rủi ro còn mở**
+- `token_provider` thật cho SSI chưa có — thuộc adapter SSI (P4.2), phải tuân luật refresh token CHỈ DÙNG MỘT LẦN. Chưa rõ server có cấp token chỉ-dữ-liệu không cần OTP (nếu cần OTP mỗi ngày thì feed dự phòng phụ thuộc thao tác tay buổi sáng).
+- Frame mẫu SSI dựng theo SDK, chưa phải bản ghi thật: định dạng `t`, đơn vị giá phái sinh, số bước giá còn ❓.
+- Khi chuyển nguồn, tick từ hai feed có thể lệch thời gian/giá một chút; strategy dựng bar từ nguồn đang dùng — bar ở phút chuyển nguồn có thể pha trộn hai nguồn.
+- So lệch giá dùng mid của mức tốt nhất; khi một bên chỉ có giá khớp, bên kia có mid, so sánh khác loại có thể báo lệch giả lúc thị trường mỏng (ngưỡng 3 bước giảm rủi ro này).
+- `scripts/record_today.py` vẫn chỉ dùng feed DNSE; chuyển sang composite khi có `token_provider` SSI.
+
+**Người dùng cần làm**
+- [ ] Đăng ký SSI FastConnect V3, điền các biến SSI trong `.env`; khi đăng ký hỏi rõ: lấy token stream dữ liệu có cần OTP không.
+
+**Bước tiếp theo:** P1.5 (kiểm định dữ liệu một ngày — đã có recorder ghi cả hai nguồn để đối chiếu), hoặc P4.1/P4.2 khi có khoá (adapter + lấy danh sách hợp đồng + token SSI).
+
 ## 2026-11-08 — P1.4 Recorder
 
 **Đã xong**

@@ -139,6 +139,19 @@ SignalR, `fc-tradeapi`) là thế hệ trước.
 - `OrderStatusMessage`: `client_request_id`, `order_id`, `status`, `filled_quantity`, `avg_price`, `reject_reason`, **`notify_id`** … ✅.
 - `PortfolioMessage` (chỉ tài khoản phái sinh): `long_qty`, `short_qty`, `net`, `bid_avg_price`, `ask_avg_price`, `floating_pl`, `trading_pl` ✅.
 - Frame gửi lên ≤ 4.096 byte ✅.
+- **Đối chiếu mã nguồn SDK `ssi-sdk` 3.3.2 (`transport/websocket_client.py`, `transport/dispatch.py`,
+  `services/streaming.py`, `models/streaming.py`, đọc 08/11/2026)** — áp vào `feeds/data_feed_ssi.py`:
+  - xác thực stream bằng header **`Authorization: Bearer <access token>`** lúc bắt tay ✅; token lấy qua REST
+    `POST /api/v3/auth/token` body `{"apiKey","apiSecret"[,"otp"|"transactionId"]}` ✅ — OTP là tuỳ chọn trong
+    SDK; server có cấp token chỉ-dữ-liệu KHÔNG cần OTP không ❓ (ghi chú cũ "không cần OTP" chưa kiểm);
+  - yêu cầu: `{"method": "subscribe"|"unsubscribe"|"ping_pong"|"list_subscription", "channel": "DATA"|"TRADING"|"HEARTBEAT", "topics": [...]}` ✅;
+    ack `{"method","channel","status","message"}` (không có `topic`); `status:"error"` với "Invalid"/"Denied" ✅;
+  - dữ liệu: `{"channel":"DATA","topic":"trade.<mã>","data":{...}}` ✅; trade: `t` thời gian (định dạng ❓), `s` mã,
+    `p` giá (có thể là chữ như "ATO"), `q` KL lần khớp, `si` chiều, `v` KL luỹ kế; số có thể là chuỗi `"1,234.0"` ✅;
+    quote: `bids`/`asks` = `[[giá, KL], …]`, tốt nhất đứng đầu ✅ (số mức ❓); nến `trade.<mã>@1m|@5m` ✅;
+  - server từ chối kết nối: frame `{"code","msg"[,"retryAfter"]}` rồi đóng; 401/403 = xác thực, 429 = quá hạn mức
+    (SDK chờ ≥ 30s) ✅; bắt tay HTTP 401/403 ⇒ SDK lấy token mới MỘT lần rồi bỏ cuộc ✅;
+  - backoff kết nối lại: lũy thừa, chặn 60s, jitter 50–100% ✅; tối đa 10 socket / client ✅.
 
 ### 2.5 Dữ liệu lịch sử
 - `get_ohlc_{1minute…1hour}_historical(symbol, from_date, to_date, page, size≤1000)` ✅. ❓ có trả dữ liệu cho hợp đồng đã đáo hạn không.

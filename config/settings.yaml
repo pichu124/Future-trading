@@ -87,6 +87,7 @@ feeds:
   backup: ssi
   feed_divergence_ticks: 3
   feed_stale_seconds: 5
+  switch_back_after_seconds: 30         # DNSE sống lại liên tục N giây mới chuyển về làm nguồn chính
 
 brokers:
   primary: dnse

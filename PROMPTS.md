@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1, P1.2, P1.4, P2.1, P2.2, P3.1, P3.2, P3.3 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Làm tiếp được không cần key: P1.3, P1.5.
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.4, P2.1, P2.2, P3.1, P3.2, P3.3 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Làm tiếp được không cần key: P1.5.
 
 ---
 
@@ -31,7 +31,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 **P1.2 · Feed DNSE** ✅ (message mẫu theo SDK; chờ khoá để kiểm với server thật)
 > Dựa trên broker_notes.md, viết `feeds/data_feed_dnse.py`: async, tự lấy mã F1M lúc khởi động, subscribe tick + sổ lệnh, chuẩn hoá về `Tick`, tự reconnect với backoff, phát hiện gap theo sequence nếu có, log số message/phút. Interface chung `DataFeed` ở `feeds/base.py`. Viết test với message mẫu (fixture JSON).
 
-**P1.3 · Feed SSI**
+**P1.3 · Feed SSI** ✅ (frame mẫu theo SDK; token SSI thật chờ P4.2)
 > Viết `feeds/data_feed_ssi.py` theo cùng interface `DataFeed`. Sau đó viết `feeds/composite.py`: chạy song song DNSE (chính) và SSI (dự phòng), phát cảnh báo khi lệch > `feed_divergence_ticks` hoặc một feed im > `feed_stale_seconds`, tự chuyển nguồn chính khi DNSE chết.
 
 **P1.4 · Recorder** ✅ (hướng dẫn Task Scheduler: `docs/recorder_windows.md`)
