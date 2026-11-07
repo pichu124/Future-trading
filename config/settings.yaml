@@ -35,7 +35,7 @@ session:
 fees:
   broker_fee_vnd_per_contract: null
   exchange_fee_vnd_per_contract: null
-  clearing_fee_vnd_per_contract: null   # phí VSD
+  clearing_fee_vnd_per_contract: null   # phí bù trừ VSDC — FAQ KRX của DNSE ghi 2.550đ/HĐ mỗi giao dịch; kiểm biểu phí hiện hành
   tax_vnd_per_contract: null            # thuế TNCN theo quy định hiện hành (tính theo giá trị giao dịch nếu cần)
 
 backtest:

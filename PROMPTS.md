@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm trong phiên khởi tạo: P0.1, P0.2, P0.3 và P1.0. Bắt đầu từ **P1.1**.
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1. Bắt đầu từ **P1.2** (hoặc P1.6 nếu đã có API key — dữ liệu lịch sử thật cho backtest).
 
 ---
 
@@ -25,7 +25,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 **P1.0 · Cứu dữ liệu từ dashboard** ✅
 > Viết `scripts/import_dashboard_bars.py`: đọc `bars_*.parquet` trong `_live/archive` (và `_live`) của vnstock-dashboard, lọc dòng phái sinh VN30, đổi mã `41I1…`/`VN30F1M` về tên hợp đồng thật theo ngày, ghi `data/imported/YYYY-MM-DD.parquet`, cột `volume_reliable=False`. Chạy idempotent, không sửa file nguồn.
 
-**P1.1 · Ghi chú tài liệu broker**
+**P1.1 · Ghi chú tài liệu broker** ✅
 > Đọc tài liệu chính thức DNSE LightSpeed Market Data (bản sau KRX) và SSI FastConnect Data. Ghi vào `docs/broker_notes.md`: cách xác thực, giao thức streaming, cách subscribe tick khớp lệnh và sổ lệnh (top 3/top 10) cho hợp đồng tương lai VN30, tên field, đơn vị giá, cách lấy danh sách mã hợp đồng hiện hành. Đánh dấu rõ chỗ nào chưa chắc chắn. Không viết code.
 
 **P1.2 · Feed DNSE**
@@ -39,6 +39,9 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 
 **P1.5 · Kiểm định dữ liệu**
 > Viết `scripts/validate_day.py`: với một ngày dữ liệu, báo cáo số tick, khoảng trống > 5 giây trong phiên liên tục, tick ngoài biên độ, chênh lệch DNSE vs SSI, và dựng bar 1 phút. So khớp OHLC 1 phút với dữ liệu vnstock của cùng ngày, liệt kê sai lệch.
+
+**P1.6 · Tải dữ liệu lịch sử thật**
+> Theo `docs/broker_notes.md` §1.3 và §2.5: viết `scripts/download_history.py` tải OHLC 1 phút (`GET /price/ohlc`, `type=DERIVATIVE`) và lịch sử khớp lệnh (`GET /price/{symbol}/trades`, `boardId=G1`) của DNSE cho từng hợp đồng VN30F (mã KRX từ `core.contracts`), ghi `data/history/<loại>/<hợp đồng>/<ngày>.parquet` (ghi nguyên tử, chạy lại không tải trùng). Trước khi viết code: gọi thử bằng tay để chốt các mục ❓ (đơn vị `from`/`to`, độ sâu lịch sử hợp đồng đã đáo hạn) và cập nhật broker_notes. Tôn trọng HTTP 429 `retry_after`. Viết test với response mẫu.
 
 ---
 

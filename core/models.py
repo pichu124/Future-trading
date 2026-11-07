@@ -33,6 +33,11 @@ class OrderType(str, Enum):
     ATC = "ATC"
 
 
+# SSI FastConnect V3: client_request_id ≤ 20 ký tự, trùng trong ngày bị từ chối (HTTP 409).
+# Dùng chung giới hạn này cho mọi broker để một id đi được mọi nơi (docs/broker_notes.md §2.3).
+MAX_CLIENT_ORDER_ID_LEN = 20
+
+
 class OrderStatus(str, Enum):
     NEW = "NEW"                  # đã tạo, chưa gửi
     PENDING = "PENDING"          # đã gửi, chờ khớp
@@ -122,6 +127,8 @@ class Order:
     tag: str = ""                    # "entry" | "stop" | "take_profit" | "flatten" | "emergency"
 
     def __post_init__(self) -> None:
+        if not self.client_order_id or len(self.client_order_id) > MAX_CLIENT_ORDER_ID_LEN:
+            raise ValueError(f"client_order_id phải 1–{MAX_CLIENT_ORDER_ID_LEN} ký tự")
         if self.qty <= 0:
             raise ValueError("qty phải > 0")
         if self.order_type is OrderType.LIMIT and self.price is None:

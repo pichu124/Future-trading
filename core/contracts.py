@@ -6,9 +6,10 @@ symbol_contract, third_thursday, candidates), thêm:
 - chọn hợp đồng F1M/F2M theo ngày và hợp đồng ĐANG GIAO DỊCH sau khi roll;
 - chuẩn hoá mọi kiểu mã (VN30FYYMM, 41I1…, VN30F1M theo ngày).
 
-Mã KRX: 41I1 + chữ năm (A=2020; đã đo 2024=E … 2027=H) + chữ tháng (1–9, A/B/C) + 000.
-Năm ≥ 2028 CHƯA được xác minh — lúc khởi động bot phải đối chiếu với danh sách hợp đồng
-broker trả về (CLAUDE.md mục 4).
+Mã KRX: 4 (CKPS) 1 (HĐTL) I1 (VN30) + chữ năm + chữ tháng (1–9, A/B/C) + 000.
+Chữ năm A=2020, B=2021 … — hai nguồn độc lập khớp nhau (quy định giao dịch MBS: 41I1F6000 =
+06/2025; Vietstock: 41I1G9000 = 09/2026, GDCC 17/09/2026). Năm ≥ 2028 chưa đối chiếu thực tế —
+lúc khởi động bot vẫn phải so với danh sách hợp đồng broker trả về (docs/broker_notes.md §0).
 """
 from __future__ import annotations
 

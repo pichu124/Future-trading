@@ -21,6 +21,17 @@ class TestNames:
         assert c.krx_symbol(2026, 10) == "41I1GA000"
         assert c.krx_symbol(2027, 12) == "41I1HC000"
 
+    def test_codes_confirmed_by_external_sources(self):
+        # MBS (quy định giao dịch HĐTL VN30): 41I1F6000 = VN30 tháng 06/2025
+        assert c.symbol_contract("41I1F6000") == "VN30F2506"
+        # Vietstock: 41I1G9000 = VN30 tháng 09/2026, ngày GDCC 17/09/2026
+        assert c.symbol_contract("41I1G9000") == "VN30F2609"
+        # Ví dụ đặt lệnh trong đặc tả DNSE Open API V2
+        assert c.symbol_contract("41I1G4000") == "VN30F2604"
+
+    def test_last_trading_day_matches_vietstock(self, cal):
+        assert c.contract_expiry("VN30F2609", cal) == date(2026, 9, 17)
+
     def test_symbol_contract_accepts_all_fixed_forms(self):
         assert c.symbol_contract("41I1G4000") == "VN30F2604"
         assert c.symbol_contract(" vn30f2611 ") == "VN30F2611"

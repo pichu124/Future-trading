@@ -46,6 +46,11 @@ class TestModels:
             Order("x", "VN30F2611", Side.BUY, 0, OrderType.MARKET, T)
         with pytest.raises(ValueError):
             Order("x", "VN30F2611", Side.BUY, 1, OrderType.LIMIT, T)       # LO thiếu giá
+        with pytest.raises(ValueError):
+            Order("", "VN30F2611", Side.BUY, 1, OrderType.MARKET, T)
+        with pytest.raises(ValueError):
+            Order("x" * 21, "VN30F2611", Side.BUY, 1, OrderType.MARKET, T)   # SSI: ≤ 20 ký tự
+        Order("x" * 20, "VN30F2611", Side.BUY, 1, OrderType.MARKET, T)
         o = Order("x", "VN30F2611", Side.BUY, 1, OrderType.LIMIT, T, price=1350.0)
         filled = o.with_status(OrderStatus.FILLED, filled_qty=1)
         assert o.status is OrderStatus.NEW and filled.status.is_terminal

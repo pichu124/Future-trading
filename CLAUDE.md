@@ -39,8 +39,8 @@ Luật kiến trúc:
 
 | Nguồn | Vai trò | Ghi chú |
 |---|---|---|
-| DNSE LightSpeed (Market Data + Trading) | Feed realtime **chính** + broker thực thi **chính** | Xác thực JWT + trading token qua OTP. Dùng **emailOTP** để tự động hoá; OTP email chỉ sống ~2 phút. Dùng tài liệu bản **sau KRX** |
-| SSI FastConnect (FC Data + FC Trading) | Feed **dự phòng/đối chiếu** + broker **dự phòng** | Ký lệnh bằng RSA private key + OTP. Stream lệnh dùng `notify_id`: lưu lại để reconnect, reset về 0 lúc 00:00 |
+| DNSE Open API V2 (LightSpeed V2) | Feed realtime **chính** + broker thực thi **chính** | Ký HMAC-SHA256 mọi request (`api_key`/`api_secret`); lệnh thay đổi cần `trading-token` lấy qua email OTP (sống ~2 phút) hoặc Smart OTP. **Không có khoá idempotency** khi đặt lệnh ⇒ không tự retry. Tài liệu "trước KRX" (JWT + MQTT) là bản cũ |
+| SSI FastConnect V3 (`ssi-sdk`) | Feed **dự phòng/đối chiếu** + broker **dự phòng** | Token qua OTP/Smart OTP; refresh token **chỉ dùng một lần** (dùng lại ⇒ thu hồi cả phiên). `client_request_id` ≤ 20 ký tự là khoá idempotency. Stream lệnh có `notify_id` để reconnect không mất sự kiện |
 | TCBS Open API | Broker thứ 3 (tuỳ chọn), không bật mặc định | Chỉ bật sau khi DNSE + SSI ổn định |
 | Finhay / vnstock | Dữ liệu tham khảo, EOD, lịch sự kiện | **Không** dùng cho tín hiệu intraday hay thực thi. Live Mode của vnstock-dashboard là poll HTTP ~2 giây, không phải stream tick |
 
@@ -98,7 +98,7 @@ Người dùng có hai máy (desktop + laptop) và thư mục dữ liệu của 
 ## 8. Cách làm việc với Claude
 
 - Mỗi lần chỉ làm **một module**. Viết interface + test trước, rồi mới implement.
-- Trước khi viết code gọi API broker: đọc tài liệu chính thức mới nhất, ghi endpoint/field vào `docs/broker_notes.md`. Không đoán tên field.
+- Trước khi viết code gọi API broker: đọc tài liệu chính thức mới nhất, ghi endpoint/field vào `docs/broker_notes.md`. Không đoán tên field; mục đánh dấu ❓ trong đó phải được kiểm bằng gọi thử trước khi dựa vào.
 - Kết thúc mỗi task: chạy `python -m pytest -q`, liệt kê rủi ro/giả định còn lại, cập nhật `docs/progress.md`.
 - Không tự ý thêm thư viện lớn; hỏi trước.
 - Không bao giờ đề xuất "tối ưu tham số cho lợi nhuận cao nhất" trên toàn bộ dữ liệu.
