@@ -122,7 +122,8 @@ def load_bars_parquet(path: Union[str, Path, Sequence[Path]]) -> tuple[list[Bar]
     skipped = 0
     for f in files:
         df = pd.read_parquet(f)
-        reliable = df["volume_reliable"] if "volume_reliable" in df else [True] * len(df)
+        # thiếu cột ⇒ không xác nhận được nguồn ⇒ coi là KHÔNG tin được (golive #14)
+        reliable = df["volume_reliable"] if "volume_reliable" in df else [False] * len(df)
         interval = df["interval_s"] if "interval_s" in df else [60] * len(df)
         for row, rel, iv in zip(df.itertuples(index=False), reliable, interval):
             try:
@@ -220,6 +221,8 @@ class BacktestEngine:
                 yield ev
 
         async def step() -> None:
+            await execu.maintain()                 # như runner live: lệnh đóng kẹt, stop bị thiếu
+            await execu.drain()
             actions = risk.check(state)
             if actions:
                 await execu.handle_actions(actions)

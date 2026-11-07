@@ -1,5 +1,15 @@
 # Tiến độ
 
+## 2026-11-08 — Sửa lỗi từ checklist go-live (#1–#8, #10–#12, #14)
+
+- Mỗi lỗi một test tái hiện trước (`tests/test_golive_fixes.py`, 15 test, tất cả đỏ trước khi sửa); thử phá từng bản sửa ⇒ đều có test đỏ (siết thêm test phí trong chuỗi thua).
+- Luật risk thay đổi: lệnh GIẢM vị thế không còn bị trần "kịch bản xấu nhất" (đã khiến lệnh đối ứng khẩn cấp và lệnh flatten bị chặn); thay bằng `DUPLICATE_CLOSE`. Lệnh mở giữ nguyên trần cũ. Chuỗi thua tính sau phí.
+- `ExecutionManager`: `maintain()` (đặt lại lệnh đóng kẹt, giữ stop), phát hiện đảo chiều ngoài ý muốn ⇒ đóng, vị thế không kế hoạch ⇒ đóng, không gửi lệnh tới broker mất kết nối, lỗi mạng không để lại lệnh ma, không để hai lệnh bảo vệ cùng sống.
+- Runner: drain sau từng tick, gọi `maintain()`, lưu bộ đếm ngay khi đổi, chịu được lỗi vòng lặp (5 lần ⇒ kill, thoát 1). Engine backtest cũng gọi `maintain()` để hành xử như live.
+- Telegram: xoá token khỏi mọi lỗi. Emergency: reset bộ đếm thử lại. Backtest: bar thiếu cột độ tin cậy ⇒ không tin được.
+- Còn mở: #9 (chính sách khi feed chết mà đang có vị thế — chờ bạn quyết), #13 (chờ P4.2).
+- 560 test.
+
 ## 2026-11-08 — P5.2 Checklist go-live
 
 - `docs/golive_checklist.md`: đối chiếu từng mục CLAUDE.md + review độc lập "như người muốn bot thua tiền". Kết luận: **không chạy live, không chạy cả paper** trước khi sửa 3 lỗi CRITICAL + 4 HIGH (đã tái hiện bằng script): đối ứng khẩn cấp bị risk chặn khi có TP; lệnh đóng khớp một phần để lại vị thế không stop; lỗi mạng làm chết runner; stop + TP cùng khớp gây đảo chiều; flatten + đối ứng đóng hai lần; lộ token Telegram trong log; flatten bị chặn khi xác nhận huỷ trễ.

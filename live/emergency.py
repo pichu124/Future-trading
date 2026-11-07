@@ -119,6 +119,8 @@ class EmergencyHandler:
                           for o in self._orders(symbol, self.backup, EMERGENCY_TAG))
             needed = -net - pending
             if needed == 0:
+                if net == 0:
+                    self._attempts[symbol] = 0                     # đã đối ứng xong ⇒ sự cố sau có đủ lượt
                 continue
             if self._attempts[symbol] >= self.max_attempts:
                 await self._say(f"🚨 Đối ứng {symbol} thất bại {self._attempts[symbol]} lần, net {net:+d} — "

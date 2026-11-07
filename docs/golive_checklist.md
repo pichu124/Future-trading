@@ -4,6 +4,10 @@
 > (b) một lượt review độc lập "như người muốn bot thua tiền" (agent riêng, không xem kết luận của
 > tôi), các lỗi nặng đã được TÁI HIỆN bằng script rồi tôi chạy lại xác nhận.
 
+> **Cập nhật cùng ngày:** đã sửa #1–#8, #10–#12, #14 (mỗi lỗi có test tái hiện trong
+> `tests/test_golive_fixes.py`, thử phá từng bản sửa đều có test đỏ). Còn mở: #9 (cần bạn quyết
+> chính sách), #13 (chờ token SSI — P4.2), và mọi mục "chưa có" ở phần 2. Vẫn **không chạy live**.
+
 ## Kết luận
 
 **KHÔNG được chạy live.** Thiếu adapter broker thật, chưa có dữ liệu thật, chiến lược chưa có bằng
@@ -11,6 +15,8 @@ chứng edge, và còn **3 lỗi CRITICAL + 4 lỗi HIGH** trong đường đặ
 trước khi sửa CRITICAL/HIGH — kết quả paper sẽ sai (đóng vị thế hụt, đảo chiều ngoài ý muốn).
 
 ## 1. Lỗi phát hiện (theo mức độ)
+
+Cột "Xác minh" là trạng thái lúc rà; trạng thái sửa ở bảng 1b.
 
 | # | Mức | Vị trí | Vấn đề | Kịch bản | Xác minh |
 |---|---|---|---|---|---|
@@ -28,6 +34,27 @@ trước khi sửa CRITICAL/HIGH — kết quả paper sẽ sai (đóng vị th�
 | 12 | MEDIUM | `live/runner.py` | Bộ đếm ngày chỉ lưu mỗi 30s ⇒ mất điện ngay sau khi chạm ngưỡng lỗ ⇒ khởi động lại giao dịch tiếp | Mất điện | đọc code |
 | 13 | MEDIUM | `live/runner.py` `main` | Đối chiếu giá DNSE/SSI (CLAUDE.md §3) **chưa được áp** — runner chỉ dùng feed DNSE | — | đọc code (chờ token SSI P4.2) |
 | 14 | LOW | `backtest/engine.py`, `backtest/report.py` | Lạc quan backtest: file bar thiếu cột `volume_reliable` mặc định là tin được; lệnh còn mở cuối dữ liệu không vào số liệu; spread 1 bước ⇒ bán ở bid = last không mất nửa spread; tick lặp cực trị cách 1s ⇒ độ trễ ≥ 1s thì stop khớp ở cực trị kia | — | đọc code |
+
+## 1b. Đã sửa
+
+| # | Cách sửa |
+|---|---|
+| 1, 7 | Lệnh GIẢM vị thế không còn bị trần "kịch bản xấu nhất" (vẫn áp cho lệnh mở); thay bằng chặn hai lệnh đóng (hoặc hai lệnh bảo vệ cùng loại) cùng chiều trên cùng broker (`RejectCode.DUPLICATE_CLOSE`) |
+| 2 | `ExecutionManager.maintain()` mỗi vòng: lệnh đóng chờ quá 3s ⇒ huỷ, đóng lại bằng MTL; vị thế mở không có lệnh đóng ⇒ đảm bảo stop |
+| 3 | Lỗi bất kỳ từ `place` ⇒ xoá lệnh ma khỏi sổ, ghi `broker_error`, vòng sau tự đặt lại stop; `cancel` bắt mọi lỗi; runner bắt lỗi vòng lặp, lặp 5 lần ⇒ kill + cố đóng vị thế, thoát mã 1 |
+| 4 | Runner xử lý từng tick rồi mới tới tick sau; đảo chiều ngoài ý muốn (net khác chiều lệnh vào) ⇒ đóng ngay, không đặt stop sai phía; vị thế không có kế hoạch (vd nhận lúc khởi động) ⇒ đóng |
+| 5 | Không gửi lệnh tới broker đang mất kết nối; quy trình khẩn cấp lo đối ứng |
+| 6 | Mọi lỗi Telegram đi qua `redact()` (xoá token và đường dẫn `/bot…`) |
+| 8 | Huỷ chưa được xác nhận ⇒ không đặt lệnh bảo vệ mới (đợi vòng sau) |
+| 10 | Bộ đếm thử lại đối ứng về 0 khi net đã về 0 |
+| 11 | Chuỗi thua tính SAU phí (phí mở + phí đóng) |
+| 12 | Runner lưu bộ đếm ngay khi đổi (không đợi heartbeat 30s) |
+| 14 | File bar thiếu cột `volume_reliable` ⇒ coi là không tin được |
+
+**Cần bạn quyết (#9):** feed mất dữ liệu khi đang có vị thế — hiện chỉ chặn mở vị thế mới (đúng
+chữ CLAUDE.md §3). Với stop do bot giữ (broker không có lệnh stop qua API), mất feed = stop "mù".
+Đề xuất: feed im > N giây (vd 30s) khi đang có vị thế ⇒ đóng vị thế bằng MTL. Chưa làm vì đây là
+thay đổi luật rủi ro.
 
 ## 2. Đối chiếu CLAUDE.md
 

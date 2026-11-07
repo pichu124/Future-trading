@@ -49,12 +49,13 @@ class ExecEvent:
 class _Targets:
     stop: Optional[float]
     take_profit: Optional[float]
+    side: Optional[Side] = None          # chiều của lệnh vào — net khác chiều ⇒ đảo chiều ngoài ý muốn
 
 
 class ExecutionManager:
     def __init__(self, broker: BrokerAdapter, risk: RiskManager, state: AccountState,
                  clock: Clock, tick_size: float, ids: Optional[OrderIdFactory] = None,
-                 emergency=None):
+                 emergency=None, close_requote_s: float = 3.0):
         self.broker = broker
         self.risk = risk
         self.state = state
@@ -66,6 +67,9 @@ class ExecutionManager:
         self.events: list[ExecEvent] = []
         self.halted = False
         self.emergency = emergency                       # live.emergency.EmergencyHandler | None
+        self.close_requote_s = close_requote_s
+        self._sent_at: dict[str, datetime] = {}
+        self._last_down_event: Optional[datetime] = None
         self._targets: dict[str, _Targets] = {}
         self._queue: deque[Callable[[], Awaitable[None]]] = deque()
         broker.on_fill(self._on_fill)
@@ -108,7 +112,7 @@ class ExecutionManager:
         order = self._new_order(sig.symbol, side, sig.qty, OrderType.MARKET, "entry",
                                 stop_loss=self._round(sig.stop_loss))
         previous = self._targets.get(sig.symbol)
-        self._targets[sig.symbol] = _Targets(self._round(sig.stop_loss), self._round(sig.take_profit))
+        self._targets[sig.symbol] = _Targets(self._round(sig.stop_loss), self._round(sig.take_profit), side)
         placed = await self._submit(order)
         if placed is None or placed.status is OrderStatus.REJECTED:
             if previous is None:
@@ -167,6 +171,30 @@ class ExecutionManager:
         side = Side.SELL if net > 0 else Side.BUY
         await self._submit(self._new_order(symbol, side, abs(net), OrderType.MARKET, tag))
 
+    async def maintain(self) -> None:
+        """Gọi mỗi vòng (runner/engine): đặt lại lệnh đóng bị kẹt, giữ stop cho vị thế đang mở.
+
+        - Lệnh đóng chờ quá `close_requote_s` (vd MTL khớp một phần ⇒ phần dư thành LO, giá chạy
+          mất) ⇒ huỷ và đóng lại bằng MTL cho phần còn lại (golive #2).
+        - Vị thế đang mở mà không có lệnh đóng ⇒ đảm bảo bảo vệ (đặt lại stop nếu lần trước lỗi).
+        """
+        now = self.clock.now()
+        symbols = {p.symbol for p in self.state.positions.values() if p.qty != 0}
+        symbols |= {o.symbol for o in self.state.working_orders.values() if o.broker == self.broker.name}
+        for symbol in sorted(symbols):
+            closes = self._working(symbol, CLOSE_TAGS)
+            stale = [o for o in closes if o.tag in ("exit", "flatten")
+                     and (now - self._sent_at.get(o.client_order_id, now)).total_seconds()
+                     >= self.close_requote_s]
+            if stale:
+                for o in stale:
+                    await self._cancel(o)
+                if not self._working(symbol, CLOSE_TAGS):
+                    self._event("info", f"Lệnh đóng chờ > {self.close_requote_s:g}s ⇒ đặt lại MTL", symbol)
+                    await self._close(symbol, stale[0].tag)
+            elif not closes and self.state.net_qty(symbol) != 0:
+                await self._ensure_protection(symbol)
+
     async def _ensure_protection(self, symbol: str) -> None:
         net = self.state.net_qty(symbol)
         protective = self._working(symbol, PROTECT_TAGS)
@@ -177,8 +205,15 @@ class ExecutionManager:
         if self._working(symbol, CLOSE_TAGS):
             return                                      # đang đóng: không đặt thêm bảo vệ
         targets = self._targets.get(symbol)
+        if targets is not None and targets.side is not None and (net > 0) != (targets.side is Side.BUY):
+            # vd stop và TP cùng khớp ⇒ đảo chiều ngoài ý muốn: ĐÓNG, không bảo vệ (golive #4)
+            self._event("info", f"Đảo chiều ngoài ý muốn (net {net:+d}) ⇒ đóng ngay", symbol)
+            await self._close(symbol, "flatten")
+            return
         if targets is None or targets.stop is None:
-            self._event("info", f"Net {net:+d} nhưng không có giá stop — risk sẽ yêu cầu đóng", symbol)
+            # vị thế không có kế hoạch (nhận lúc khởi động, hoặc sau khi đã đóng mà còn sót) ⇒ đóng
+            self._event("info", f"Net {net:+d} không có stop/kế hoạch ⇒ đóng (CLAUDE.md mục 5)", symbol)
+            await self._close(symbol, "flatten")
             return
         side = Side.SELL if net > 0 else Side.BUY
         await self._sync(symbol, "stop", side, abs(net), OrderType.STOP, targets.stop)
@@ -195,16 +230,36 @@ class ExecutionManager:
             return
         for o in existing:
             await self._cancel(o)
+        if self._working(symbol, (tag,)):
+            return            # huỷ chưa được xác nhận ⇒ đợi vòng sau, không để hai lệnh cùng sống (golive #8)
         await self._submit(self._new_order(symbol, side, qty, otype, tag, price=price))
 
     async def _submit(self, order: Order) -> Optional[Order]:
+        now = self.clock.now()
+        if not self.risk.broker_alive(self.state, self.broker.name, now):
+            # không gửi lệnh tới broker đang mất kết nối — quy trình khẩn cấp lo đối ứng (golive #5)
+            if self._last_down_event is None or (now - self._last_down_event).total_seconds() >= 60:
+                self._last_down_event = now
+                self._event("broker_down", f"{self.broker.name} mất kết nối ⇒ không gửi {order.tag}",
+                            order.symbol)
+            return None
         decision = self.risk.approve(order, self.state)
         if isinstance(decision, Rejected):
             self.rejections.append(decision)
             self._event("rejected", str(decision), order.symbol)
             return None
-        placed = await self.broker.place(order)
+        try:
+            placed = await self.broker.place(order)
+        except Exception as exc:
+            # lỗi mạng/không rõ: không để lệnh "ma" trong sổ; adapter thật phải đối soát sổ lệnh
+            # trước khi coi là chưa gửi (DNSE không có idempotency) — golive #3
+            self.risk.on_order_update(self.state, order.with_status(
+                OrderStatus.REJECTED, reject_reason=f"{type(exc).__name__}: {exc}"))
+            self._event("broker_error", f"{order.client_order_id} ({order.tag}): {type(exc).__name__}: {exc}",
+                        order.symbol)
+            return None
         self.orders[placed.client_order_id] = placed
+        self._sent_at[placed.client_order_id] = now
         if placed.status is OrderStatus.REJECTED:
             # adapter có thể không phát callback cho lệnh bị từ chối ⇒ tự dọn sổ sách
             self.risk.on_order_update(self.state, placed)
@@ -213,8 +268,9 @@ class ExecutionManager:
     async def _cancel(self, order: Order) -> None:
         try:
             await self.broker.cancel(order.client_order_id)
-        except BrokerError as exc:
-            self._event("cancel_failed", f"{order.client_order_id}: {exc}", order.symbol)
+        except Exception as exc:
+            self._event("cancel_failed", f"{order.client_order_id}: {type(exc).__name__}: {exc}",
+                        order.symbol)
 
     def _new_order(self, symbol: str, side: Side, qty: int, otype: OrderType, tag: str,
                    price: Optional[float] = None, stop_loss: Optional[float] = None) -> Order:
@@ -229,5 +285,6 @@ class ExecutionManager:
 
     def _event(self, kind: str, message: str, symbol: str = "") -> None:
         self.events.append(ExecEvent(self.clock.now(), kind, message, symbol))
-        level = logging.WARNING if kind in ("rejected", "broker_rejected", "cancel_failed") else logging.INFO
+        level = logging.WARNING if kind in ("rejected", "broker_rejected", "cancel_failed", "broker_error",
+                                            "broker_down") else logging.INFO
         log.log(level, "%s %s", kind, message)

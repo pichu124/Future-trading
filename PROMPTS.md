@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.5, P2.1, P2.2, P3.1, P3.2, P3.3, P4.3, P5.1, P5.2 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Làm tiếp được không cần key: sửa lỗi #1–#7 trong `docs/golive_checklist.md`.
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.5, P2.1, P2.2, P3.1, P3.2, P3.3, P4.3, P5.1, P5.2 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Lỗi #1–#8, #10–#12, #14 trong `docs/golive_checklist.md` đã sửa; #9 chờ bạn quyết. Phần còn lại cần API key.
 
 ---
 

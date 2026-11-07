@@ -66,6 +66,7 @@ class RunnerConfig:
     command_poll_s: float = 3.0
     kill_flat_timeout_s: float = 120.0
     bar_grace_s: float = 0.5
+    max_consecutive_errors: int = 5
 
 
 class Runner:
@@ -107,6 +108,7 @@ class Runner:
         self._alerts: list[str] = []
         self._halted = False
         self._reported = False
+        self._saved_key: Optional[tuple] = None
 
     # ------------------------------------------------------------------ tiện ích ----
 
@@ -125,6 +127,18 @@ class Runner:
     def _flat(self) -> bool:
         return (not any(p.qty != 0 for p in self.state.positions.values())
                 and not self.state.working_orders)
+
+    def _counters(self) -> tuple:
+        s = self.state
+        return (s.trades_today, s.consecutive_losses, s.realized_points_today, s.fees_points_today,
+                s.locked_for_day, s.kill_reason, s.emergency_reason, len(s.approved_order_ids))
+
+    def _save_if_changed(self) -> None:
+        """Lưu ngay khi bộ đếm rủi ro đổi — mất điện ngay sau khi chạm ngưỡng không được làm mất khoá (golive #12)."""
+        key = self._counters()
+        if key != self._saved_key:
+            self._save()
+            self._saved_key = key
 
     def _save(self) -> None:
         if self.state_path is not None:
@@ -201,8 +215,8 @@ class Runner:
             for b in self.brokers.values():
                 if isinstance(b, PaperBroker):
                     b.on_tick(t)
+            await self.execution.drain()      # từng tick: huỷ TP/stop còn lại TRƯỚC tick sau (golive #4)
             new_bars += self.bars.on_tick(t)
-        await self.execution.drain()
         healthy = getattr(self.feed, "healthy", None)
         self.state.feed_healthy = (not self.feed.is_stale(now)) if healthy is None else bool(healthy)
         new_bars += self.bars.on_time(now)
@@ -211,10 +225,13 @@ class Runner:
 
         await self._commands(now)
 
+        await self.execution.maintain()
+        await self.execution.drain()
         actions = self.risk.check(self.state)
         if actions:
             await self.execution.handle_actions(actions)
             await self.execution.drain()
+        self._save_if_changed()
         if self.emergency is not None and self.emergency.needs_unwind() and \
                 self.risk.broker_alive(self.state, self.broker.name):
             await self.emergency.unwind()
@@ -342,17 +359,48 @@ class Runner:
 
     # ------------------------------------------------------------------ vòng lặp ----
 
+    async def _on_loop_errors(self, errors: int) -> Optional[int]:
+        """Lỗi lặp lại ⇒ kill + cố đóng vị thế bằng đường tối thiểu; quá gấp đôi ngưỡng ⇒ bỏ cuộc."""
+        n = self.config.max_consecutive_errors
+        if errors < n:
+            return None
+        self.risk.kill(self.state, f"lỗi vòng lặp lặp lại {errors} lần")
+        try:
+            await self.execution.handle_actions(self.risk.check(self.state))
+            await self.execution.drain()
+        except Exception:
+            log.exception("runner: đóng vị thế khi lỗi vòng lặp cũng lỗi")
+        now = self.clock.now()
+        if self._flat():
+            await self._finish(now, "dừng vì lỗi vòng lặp")
+            return 1
+        if errors >= 2 * n:
+            await self._finish(now, "dừng vì lỗi vòng lặp — CHƯA đóng được vị thế")
+            await self._say("🚨🚨 Runner dừng vì lỗi lặp lại, VỊ THẾ CÓ THỂ CÒN MỞ — XỬ LÝ TAY NGAY")
+            return 1
+        return None
+
     async def run(self) -> int:
         code = await self.startup()
         if code is not None:
             return code
         feed_task = asyncio.create_task(self.feed.run())
+        errors = 0
         try:
             while True:
                 if feed_task.done() and feed_task.exception() is not None:
                     await self._say(f"🚨 Feed dừng: {feed_task.exception()} — risk sẽ chặn mở vị thế")
                     feed_task = asyncio.create_task(asyncio.sleep(10 ** 9))
-                code = await self.step()
+                try:
+                    code = await self.step()
+                    errors = 0
+                except Exception as exc:
+                    # lỗi lạ KHÔNG được làm chết tiến trình (stop do bot giữ sẽ mất) — golive #3
+                    errors += 1
+                    log.exception("runner: lỗi vòng lặp")
+                    await self._say(f"🚨 Lỗi vòng lặp ({errors}/{self.config.max_consecutive_errors}): "
+                                    f"{type(exc).__name__}: {exc}")
+                    code = await self._on_loop_errors(errors)
                 if code is not None:
                     return code
                 await asyncio.sleep(self.config.tick_s)

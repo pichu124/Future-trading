@@ -10,8 +10,9 @@ Hai việc:
 
 Phân loại lệnh theo TÁC DỤNG lên net position (cộng mọi broker), không theo `tag`:
 - **Lệnh giảm** (ngược chiều net, qty ≤ |net|): luôn được duyệt — kể cả khi đã khoá ngày,
-  kill-switch, ngoài giờ — vì chặn lệnh thoát còn nguy hiểm hơn. Chỉ còn kiểm id trùng và trần
-  hợp đồng theo kịch bản xấu nhất (vd hai stop + một lệnh đóng cùng khớp ⇒ đảo chiều quá trần).
+  kill-switch, ngoài giờ — vì chặn lệnh thoát còn nguy hiểm hơn. Chỉ kiểm id trùng và không cho
+  hai lệnh đóng (exit/flatten/emergency/unwind) hoặc hai lệnh bảo vệ cùng loại cùng chiều trên cùng
+  broker. Đảo chiều ngoài ý muốn (stop và TP cùng khớp) do ExecutionManager phát hiện và đóng.
 - **Lệnh mở** (mọi lệnh còn lại, gồm cả đảo chiều): qua toàn bộ luật mục 5.
 
 Đơn vị lãi/lỗ: ĐIỂM × số hợp đồng (như `Position.realized_points`); phí VNĐ quy ra điểm bằng
@@ -35,6 +36,8 @@ from core.models import (MAX_CLIENT_ORDER_ID_LEN, AccountState, Fill, Order, Ord
 from core.settings import REPO_ROOT, Settings
 
 STOP_TAG = "stop"
+CLOSE_TAGS = ("exit", "flatten", "emergency", "unwind")
+PROTECT_TAGS = ("stop", "take_profit")
 DEFAULT_KILL_FILE = REPO_ROOT / "KILL"
 _ACKED = (OrderStatus.PENDING, OrderStatus.PARTIALLY_FILLED)
 _EPS = 1e-9
@@ -65,6 +68,7 @@ class RejectCode(str, Enum):
     INVALID_STOP_LOSS = "INVALID_STOP_LOSS"
     EMERGENCY = "EMERGENCY"
     UNWIND_INVALID = "UNWIND_INVALID"
+    DUPLICATE_CLOSE = "DUPLICATE_CLOSE"
 
 
 @dataclass(frozen=True)
@@ -256,9 +260,22 @@ class RiskManager:
         signed = order.side.sign * order.qty
         reducing = net != 0 and _sign(signed) != _sign(net) and order.qty <= abs(net)
 
-        exposure = self._exposure_breach(order, state, net)
         if reducing:
-            return rej(RejectCode.MAX_CONTRACTS, exposure) if exposure else Approved(order)
+            # KHÔNG áp trần "kịch bản xấu nhất" cho lệnh giảm: stop + TP + lệnh đóng/đối ứng cộng lại
+            # luôn vượt trần, và chặn chúng đúng lúc cần thoát còn nguy hiểm hơn (golive #1, #7).
+            # Thay bằng: không hai lệnh đóng (hoặc hai lệnh bảo vệ cùng loại) cùng chiều trên cùng broker.
+            group = CLOSE_TAGS if order.tag in CLOSE_TAGS else (
+                (order.tag,) if order.tag in PROTECT_TAGS else None)
+            if group:
+                dup = next((o for o in state.working_orders.values()
+                            if o.symbol == order.symbol and o.side is order.side
+                            and o.broker == order.broker and o.tag in group), None)
+                if dup is not None:
+                    return rej(RejectCode.DUPLICATE_CLOSE,
+                               f"Đã có lệnh {dup.tag} {dup.client_order_id} cùng chiều trên {dup.broker}")
+            return Approved(order)
+
+        exposure = self._exposure_breach(order, state, net)
 
         # ---- lệnh MỞ vị thế: toàn bộ luật mục 5 ----
         if state.kill_reason:
@@ -432,7 +449,7 @@ class RiskManager:
         """Cập nhật vị thế, lãi/lỗ, phí, lượt giao dịch, chuỗi thua và lệnh chờ sau một lần khớp.
 
         Một "lượt" bắt đầu khi net (cộng mọi broker) rời 0 và kết thúc khi net về 0 hoặc đổi
-        chiều. Lượt lỗ (< 0 điểm, chưa trừ phí) tăng chuỗi thua; lãi đặt lại 0; hoà giữ nguyên.
+        chiều. Lượt lỗ (< 0 điểm SAU PHÍ) tăng chuỗi thua; lãi đặt lại 0; hoà giữ nguyên.
         """
         if not fill.broker:
             raise ValueError("Fill thiếu broker — không biết cộng vào vị thế nào")
@@ -447,11 +464,13 @@ class RiskManager:
         state.realized_points_today += delta
         state.fees_points_today += fill.fee_vnd / self.limits.multiplier_vnd_per_point
 
+        fee_pts = fill.fee_vnd / self.limits.multiplier_vnd_per_point
         if net_before == 0:
             if net_after != 0:
                 self._start_round_trip(state, fill.symbol)
+                state.round_trip_points[fill.symbol] -= fee_pts
         else:
-            rt = state.round_trip_points.get(fill.symbol, 0.0) + delta
+            rt = state.round_trip_points.get(fill.symbol, 0.0) + delta - fee_pts
             if net_after == 0 or _sign(net_after) != _sign(net_before):
                 if rt < -_EPS:
                     state.consecutive_losses += 1
