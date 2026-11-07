@@ -233,6 +233,15 @@ class BacktestEngine:
             if last_ts is not None and ts < last_ts:
                 raise ValueError(f"Sự kiện lùi thời gian ({ts} < {last_ts}) — nguồn dữ liệu sai "
                                  "thứ tự hoặc phát bar trước khi hết tick của bar (look-ahead)")
+            # live kiểm mỗi giây; backtest chỉ có sự kiện ⇒ gặp khoảng dữ liệu thủng dài hơn ngưỡng
+            # "mất dữ liệu khi có vị thế" thì chạy một vòng kiểm tại mốc đó (như runner sẽ làm)
+            silence = risk.limits.flatten_on_feed_silence_seconds
+            if state.market_data_at is not None and state.trading_day == ts.date() and \
+                    (ts - state.market_data_at).total_seconds() > silence + 1:
+                probe = state.market_data_at + timedelta(seconds=silence + 1)
+                clock.set(probe)
+                state.broker_last_seen[broker.name] = probe
+                await step()
             if state.trading_day != ts.date():
                 if state.trading_day is not None:
                     self._end_day(state, warnings)
@@ -246,6 +255,7 @@ class BacktestEngine:
                 mark = ev.last if ev.last is not None else ev.mid
                 if mark is not None:
                     state.last_prices[ev.symbol] = mark
+                    state.market_data_at = ts
                 broker.on_tick(ev)
                 await execu.drain()
             else:

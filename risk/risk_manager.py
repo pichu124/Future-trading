@@ -138,6 +138,7 @@ class RiskLimits:
     trade_on_expiry_day: bool
     broker_timeout_seconds: float
     stop_grace_seconds: float
+    flatten_on_feed_silence_seconds: float
     primary_broker: str
     multiplier_vnd_per_point: float
 
@@ -163,6 +164,8 @@ class RiskLimits:
             broker_timeout_seconds=_number("broker_timeout_seconds",
                                            r("broker_timeout_seconds"), _EPS, False),
             stop_grace_seconds=_number("stop_grace_seconds", r("stop_grace_seconds"), 0, False),
+            flatten_on_feed_silence_seconds=_number("flatten_on_feed_silence_seconds",
+                                                    r("flatten_on_feed_silence_seconds"), _EPS, False),
             primary_broker=str(s.require("brokers.primary")),
             multiplier_vnd_per_point=_number("multiplier",
                                              s.require("contract.multiplier_vnd_per_point"),
@@ -408,6 +411,10 @@ class RiskManager:
             flatten_reasons.append("Bot đã khoá trong ngày nhưng còn vị thế/lệnh chờ")
         if now.time() >= L.flatten_time and exposed:
             flatten_reasons.append(f"Đến giờ flatten {L.flatten_time:%H:%M} (trước ATC)")
+        silent = self._data_silence(state, now)
+        if silent is not None and any(p.qty != 0 for p in state.positions.values()):
+            flatten_reasons.append(f"Mất dữ liệu thị trường {silent:.0f}s (> "
+                                   f"{L.flatten_on_feed_silence_seconds:g}s) khi đang có vị thế — stop đang mù")
         if flatten_reasons:
             actions.append(RiskAction(ActionKind.FLATTEN_ALL, "; ".join(flatten_reasons)))
 
@@ -422,6 +429,22 @@ class RiskManager:
                         f"{(now - since).total_seconds():.1f}s (≥ {L.stop_grace_seconds:g}s)",
                         symbol=symbol))
         return actions + self._emergencies(state, now)
+
+    def _data_silence(self, state: AccountState, now: datetime) -> Optional[float]:
+        """Số giây không có dữ liệu thị trường nếu VƯỢT ngưỡng (chỉ trong phiên liên tục), không thì None.
+
+        Mốc tính = muộn nhất của: lần cuối có dữ liệu, đầu đoạn phiên liên tục hiện tại (09:00 /
+        13:00) ⇒ nghỉ trưa không tính, vào phiên chiều có thời gian chờ tick đầu tiên.
+        """
+        if self.clock.session_state(now) is not SessionState.CONTINUOUS:
+            return None
+        sched = self.clock.schedule
+        seg = sched.continuous_pm_start if now.time() >= sched.continuous_pm_start else sched.continuous_am_start
+        ref = datetime.combine(now.date(), seg)
+        if state.market_data_at is not None and state.market_data_at > ref:
+            ref = state.market_data_at
+        gap = (now - ref).total_seconds()
+        return gap if gap > self.limits.flatten_on_feed_silence_seconds else None
 
     def _emergencies(self, state: AccountState, now: datetime) -> list[RiskAction]:
         brokers = sorted({p.broker for p in state.positions.values() if p.qty != 0})

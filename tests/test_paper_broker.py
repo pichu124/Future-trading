@@ -452,7 +452,7 @@ def test_paper_callbacks_drive_risk_manager(session_cfg, cal, tmp_path):
     rm = RiskManager.from_settings(make_settings(session_cfg), mclock, kill_file=tmp_path / "KILL")
     rm.limits = replace(rm.limits, primary_broker="paper")
     state = AccountState(trading_day=T0.date(), last_prices={SYM: 1350.0},
-                         broker_last_seen={"paper": T0})
+                         broker_last_seen={"paper": T0}, market_data_at=T0)
     broker = PaperBroker(config(), clock, name="paper", session=mclock)
     broker.on_fill(lambda f: rm.record_fill(state, f))
     broker.on_order_update(lambda o: rm.on_order_update(state, o))
@@ -473,6 +473,7 @@ def test_paper_callbacks_drive_risk_manager(session_cfg, cal, tmp_path):
     assert state.working_orders["S1"].status is OrderStatus.PENDING
     clock.set(T0 + timedelta(seconds=30))
     state.broker_last_seen["paper"] = clock.now()
+    state.market_data_at = clock.now()
     assert rm.check(state) == []
 
 

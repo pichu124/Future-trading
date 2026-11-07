@@ -223,6 +223,7 @@ class AccountState:
     last_prices: dict[str, float] = field(default_factory=dict)     # symbol → giá đánh dấu
     broker_last_seen: dict[str, datetime] = field(default_factory=dict)  # broker → lần cuối còn sống
     feed_healthy: bool = True                # composite feed: lệch giá / im lặng ⇒ False
+    market_data_at: Optional[datetime] = None  # lần cuối có dữ liệu thị trường (runner/engine ghi)
     kill_reason: Optional[str] = None        # đặt bởi kill-switch; chỉ xoá bằng tay
     emergency_reason: Optional[str] = None   # quy trình khẩn cấp (broker chính mất kết nối); xoá bằng tay
     round_trip_points: dict[str, float] = field(default_factory=dict)  # symbol → lãi/lỗ lượt đang mở

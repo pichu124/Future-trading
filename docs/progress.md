@@ -1,5 +1,14 @@
 # Tiến độ
 
+## 2026-11-08 — Luật rủi ro mới: đóng vị thế khi mất dữ liệu (golive #9, theo quyết định của người dùng)
+
+- `risk.flatten_on_feed_silence_seconds: 30` (bắt buộc, null ⇒ từ chối chạy): đang có vị thế mà không có dữ liệu thị trường > 30s trong phiên liên tục ⇒ `FLATTEN_ALL`. Mốc tính = muộn nhất của tick cuối, đầu đoạn phiên (09:00/13:00), lúc runner khởi động ⇒ nghỉ trưa / vào phiên chiều không đóng oan. Chỉ áp cho IM LẶNG; lệch giá DNSE/SSI vẫn chỉ chặn mở vị thế.
+- `AccountState.market_data_at`: runner ghi mỗi tick (và lúc khởi động), engine backtest ghi mỗi tick; engine chạy thêm một vòng kiểm khi dữ liệu thủng dài hơn ngưỡng (live kiểm mỗi giây — trước đó backtest không bao giờ thấy luật này kích hoạt; test phát hiện ra).
+- CLAUDE.md §5 thêm dòng mô tả luật.
+- Test viết trước: 5 test risk (ranh giới 30s, không vị thế, nghỉ trưa + đầu phiên chiều, chưa từng có dữ liệu), 1 test runner, 1 test backtest; thử phá từng điều kiện ⇒ đều có test đỏ.
+- Hạn chế: ở chế độ paper, lệnh đóng chỉ khớp khi có tick trở lại (paper khớp theo tick); broker thật khớp MTL độc lập với feed của bot.
+- 569 test.
+
 ## 2026-11-08 — Sửa lỗi từ checklist go-live (#1–#8, #10–#12, #14)
 
 - Mỗi lỗi một test tái hiện trước (`tests/test_golive_fixes.py`, 15 test, tất cả đỏ trước khi sửa); thử phá từng bản sửa ⇒ đều có test đỏ (siết thêm test phí trong chuỗi thua).

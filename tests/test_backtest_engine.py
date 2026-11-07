@@ -29,7 +29,7 @@ def bt_settings(session_cfg, **risk_over) -> Settings:
     risk = dict(max_contracts=1, max_daily_loss_points=50, max_trades_per_day=5,
                 max_consecutive_losses=3, no_entry_open_minutes=15, last_entry_time="14:15",
                 flatten_time="14:25", trade_on_expiry_day=False, broker_timeout_seconds=10,
-                stop_grace_seconds=5)
+                stop_grace_seconds=5, flatten_on_feed_silence_seconds=30)
     risk.update(risk_over)
     return Settings({
         "contract": {"multiplier_vnd_per_point": 100000, "tick_size_points": 0.1,
@@ -315,6 +315,7 @@ class TestSources:
         ticks = [Tick(SYM, datetime(2026, 11, 9, 10, 0, 30), last=1350.0, bid=1349.9, ask=1350.0),
                  Tick(SYM, datetime(2026, 11, 9, 10, 1, 0, 100000), last=1350.0, bid=1349.9, ask=1350.0),
                  Tick(SYM, datetime(2026, 11, 9, 10, 1, 2), last=1351.0, bid=1350.8, ask=1351.1),
+                 Tick(SYM, datetime(2026, 11, 9, 10, 1, 31), last=1351.0, bid=1350.8, ask=1351.1),
                  Tick(SYM, datetime(2026, 11, 9, 10, 2, 0, 500000), last=1351.0, bid=1350.8, ask=1351.1)]
         res = BacktestEngine(settings, Script({"10:00": ("long", 1340.0)}), calendar=cal) \
             .run_events(bars_from_ticks(ticks))
@@ -389,3 +390,12 @@ class TestReport:
                        "Lệnh bị risk từ chối", "không dùng để kết luận", "tick giả"):
             assert needle in html, needle
         assert html.lstrip().startswith("<!doctype html>")
+
+
+def test_data_gap_with_position_flattens(settings, cal):
+    """golive #9: dữ liệu thủng khi đang giữ vị thế ⇒ đóng (stop do bot giữ đang mù)."""
+    bars = flat("10:00", 3) + flat("10:05", 3)                # mất 10:03–10:04 (≈ 2 phút không tick)
+    res = run(settings, cal, Script({"10:00": ("long", 1300.0)}), bars)
+    t = res.trades[0]
+    assert t.exit_reason == "flatten"
+    assert t.exit_ts.time() >= datetime(2026, 11, 9, 10, 5).time()

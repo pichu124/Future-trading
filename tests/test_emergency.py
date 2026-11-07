@@ -50,7 +50,7 @@ class Rig:
         self.mclock = MarketClock(SessionSchedule.from_mapping(session_cfg), cal, self.clock)
         self.risk = RiskManager.from_settings(make_settings(session_cfg, **risk_over), self.mclock,
                                               kill_file=tmp_path / "KILL")
-        self.state = AccountState(trading_day=T0.date(), last_prices={SYM: 1350.0})
+        self.state = AccountState(trading_day=T0.date(), last_prices={SYM: 1350.0}, market_data_at=T0)
         cfg = PaperConfig(tick_size=0.1, slippage_ticks=0, fee_vnd_per_contract=0, latency_ms=0)
         self.dnse = PaperBroker(cfg, self.clock, name="dnse", session=self.mclock)
         self.ssi = FlakyBroker(cfg, self.clock, name="ssi", session=self.mclock, mode=backup_mode)
@@ -69,11 +69,14 @@ class Rig:
         for b in brokers:
             self.state.broker_last_seen[b] = self.clock.now()
 
-    def advance(self, seconds, alive=("dnse", "ssi")):
+    def advance(self, seconds, alive=("dnse", "ssi"), data=True):
         self.clock.advance(seconds=seconds)
         self.alive(*alive)
+        if data:
+            self.state.market_data_at = self.clock.now()
 
     def tick(self, broker, bid=1350.0, ask=1350.2, bid_qty=None, ask_qty=None):
+        self.state.market_data_at = self.clock.now()         # feed dữ liệu vẫn chạy
         b = self.dnse if broker == "dnse" else self.ssi
         b.on_tick(Tick(SYM, self.clock.now(), last=(bid + ask) / 2, bid=bid, ask=ask,
                        bid_qty=bid_qty, ask_qty=ask_qty))

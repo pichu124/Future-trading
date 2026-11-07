@@ -324,3 +324,19 @@ def test_main_paper_refuses_without_allowed_machine(monkeypatch):
     from live.runner import main
     monkeypatch.setenv("TRADING_MODE", "paper")
     assert main(["--assume-computed-contract"]) == 2        # settings.live.allowed_machine còn null
+
+
+def test_feed_silence_with_position_flattens(rig):
+    """golive #9: đang Long mà feed im > 30s trong phiên liên tục ⇒ đóng bằng MTL."""
+    rig.start()
+    rig.open_position()                                      # tick cuối 10:01:02
+    rig.at(T0 + timedelta(seconds=62 + 30))
+    rig.step()
+    assert not [o for o in rig.state.working_orders.values() if o.tag == "flatten"]
+    rig.at(T0 + timedelta(seconds=62 + 31))
+    rig.step()
+    assert [o.tag for o in rig.state.working_orders.values()] == ["flatten"]
+    rig.at(T0 + timedelta(seconds=62 + 40))
+    rig.trade(1349.0)                                        # dữ liệu trở lại ⇒ lệnh đóng khớp
+    rig.step()
+    assert rig.state.net_qty(SYM) == 0

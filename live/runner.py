@@ -172,6 +172,7 @@ class Runner:
             await self._say(f"⚠️ Khởi động thấy vị thế có sẵn trên broker: {', '.join(held)} — bot nhận "
                             "vị thế này; thiếu stop sẽ bị đóng sau stop_grace_seconds")
         self._last_heartbeat = now
+        self.state.market_data_at = now                  # mốc chờ dữ liệu đầu tiên sau khởi động
         self._save()
         await self._say(f"🤖 Runner {self.mode} khởi động {now:%Y-%m-%d %H:%M:%S}")
         return None
@@ -212,6 +213,7 @@ class Runner:
             mark = t.last if t.last is not None else t.mid
             if mark is not None:
                 self.state.last_prices[t.symbol] = mark
+                self.state.market_data_at = now          # luật mất dữ liệu khi có vị thế (golive #9)
             for b in self.brokers.values():
                 if isinstance(b, PaperBroker):
                     b.on_tick(t)

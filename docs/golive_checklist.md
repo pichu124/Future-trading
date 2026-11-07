@@ -5,8 +5,8 @@
 > tôi), các lỗi nặng đã được TÁI HIỆN bằng script rồi tôi chạy lại xác nhận.
 
 > **Cập nhật cùng ngày:** đã sửa #1–#8, #10–#12, #14 (mỗi lỗi có test tái hiện trong
-> `tests/test_golive_fixes.py`, thử phá từng bản sửa đều có test đỏ). Còn mở: #9 (cần bạn quyết
-> chính sách), #13 (chờ token SSI — P4.2), và mọi mục "chưa có" ở phần 2. Vẫn **không chạy live**.
+> `tests/test_golive_fixes.py`, thử phá từng bản sửa đều có test đỏ). #9 đã làm theo quyết định của
+> bạn (đóng khi mất dữ liệu > 30s). Còn mở: #13 (chờ token SSI — P4.2), và mọi mục "chưa có" ở phần 2. Vẫn **không chạy live**.
 
 ## Kết luận
 
@@ -51,10 +51,7 @@ Cột "Xác minh" là trạng thái lúc rà; trạng thái sửa ở bảng 1b.
 | 12 | Runner lưu bộ đếm ngay khi đổi (không đợi heartbeat 30s) |
 | 14 | File bar thiếu cột `volume_reliable` ⇒ coi là không tin được |
 
-**Cần bạn quyết (#9):** feed mất dữ liệu khi đang có vị thế — hiện chỉ chặn mở vị thế mới (đúng
-chữ CLAUDE.md §3). Với stop do bot giữ (broker không có lệnh stop qua API), mất feed = stop "mù".
-Đề xuất: feed im > N giây (vd 30s) khi đang có vị thế ⇒ đóng vị thế bằng MTL. Chưa làm vì đây là
-thay đổi luật rủi ro.
+| 9 | Luật mới `risk.flatten_on_feed_silence_seconds` (30s): đang có vị thế, trong phiên liên tục, không có dữ liệu thị trường quá ngưỡng ⇒ FLATTEN_ALL; mốc tính = muộn nhất của tick cuối / đầu đoạn phiên / lúc runner khởi động (nghỉ trưa và đầu phiên chiều không đóng oan). Engine backtest chạy vòng kiểm tại mốc ngưỡng khi dữ liệu thủng (live kiểm mỗi giây). Ghi vào CLAUDE.md §5 |
 
 ## 2. Đối chiếu CLAUDE.md
 

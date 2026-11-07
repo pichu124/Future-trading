@@ -34,6 +34,7 @@ def risk_cfg(**over) -> dict:
         "trade_on_expiry_day": False,
         "broker_timeout_seconds": 10,
         "stop_grace_seconds": 5,
+        "flatten_on_feed_silence_seconds": 30,
     }
     cfg.update(over)
     return cfg
@@ -58,19 +59,22 @@ class Env:
         self.kill_file = tmp_path / "KILL"
         self.rm = RiskManager.from_settings(make_settings(session_cfg, **risk_over), self.mclock,
                                             kill_file=self.kill_file)
-        self.state = AccountState(trading_day=start.date(), last_prices={SYM: MARK})
+        self.state = AccountState(trading_day=start.date(), last_prices={SYM: MARK},
+                                  market_data_at=start)
         self.touch_brokers()
 
     @property
     def now(self) -> datetime:
         return self.clock.now()
 
-    def at(self, ts: datetime, touch: bool = True) -> None:
+    def at(self, ts: datetime, touch: bool = True, data: bool = True) -> None:
         self.clock.set(ts)
         if ts.date() != self.state.trading_day:
             self.rm.new_day(self.state, ts.date())
         if touch:
             self.touch_brokers()
+        if data:
+            self.state.market_data_at = ts               # mặc định: dữ liệu thị trường luôn tươi
 
     def touch_brokers(self, *brokers: str) -> None:
         for b in brokers or ("dnse", "ssi"):
@@ -146,7 +150,8 @@ class TestConfig:
     @pytest.mark.parametrize("key", ["max_contracts", "max_daily_loss_points", "max_trades_per_day",
                                      "max_consecutive_losses", "no_entry_open_minutes",
                                      "last_entry_time", "flatten_time", "trade_on_expiry_day",
-                                     "broker_timeout_seconds", "stop_grace_seconds"])
+                                     "broker_timeout_seconds", "stop_grace_seconds",
+                                     "flatten_on_feed_silence_seconds"])
     def test_every_rule_key_is_required(self, session_cfg, key):
         with pytest.raises(MissingSetting):
             RiskLimits.from_settings(make_settings(session_cfg, **{key: None}))
@@ -161,6 +166,7 @@ class TestConfig:
         {"max_contracts": 0}, {"max_daily_loss_points": 0}, {"max_trades_per_day": 0},
         {"max_consecutive_losses": -1}, {"no_entry_open_minutes": -1},
         {"broker_timeout_seconds": 0}, {"stop_grace_seconds": -1},
+        {"flatten_on_feed_silence_seconds": 0},
         {"trade_on_expiry_day": "no"},
         {"last_entry_time": "14:25"},                  # phải TRƯỚC flatten_time
         {"flatten_time": "14:30"},                     # phải TRƯỚC ATC
@@ -654,3 +660,50 @@ class TestBookkeeping:
         env.approve(o)
         assert "NOREG" not in env.state.working_orders
         assert "NOREG" not in env.state.approved_order_ids
+
+
+# ------------------------------------------- luật: mất dữ liệu khi có vị thế (golive #9) ----
+
+class TestFeedSilenceFlatten:
+    """Đang có vị thế mà không có dữ liệu thị trường > N giây trong phiên liên tục ⇒ đóng hết.
+    (Stop do bot giữ thì mất feed = stop "mù".)"""
+
+    def test_silence_over_threshold_flattens(self, env):
+        env.open_position(Side.BUY, 1)
+        env.state.market_data_at = env.now
+        env.at(env.now + timedelta(seconds=30), data=False)
+        assert env.actions() == []                          # đúng 30s: chưa "> 30"
+        env.at(env.now + timedelta(seconds=1), data=False)
+        acts = env.actions()
+        assert kinds(acts) == [ActionKind.FLATTEN_ALL] and "dữ liệu" in acts[0].reason
+
+    def test_no_position_no_action(self, env):
+        env.state.market_data_at = env.now
+        env.at(env.now + timedelta(seconds=120), data=False)
+        assert env.actions() == []
+
+    def test_fresh_data_no_action(self, env):
+        env.open_position(Side.BUY, 1)
+        env.at(env.now + timedelta(seconds=120), data=False)
+        env.state.market_data_at = env.now - timedelta(seconds=2)
+        assert env.actions() == []
+
+    def test_lunch_silence_is_normal_and_afternoon_has_grace(self, env):
+        env.open_position(Side.BUY, 1)
+        env.state.market_data_at = env.now
+        env.at(datetime(2026, 11, 9, 11, 29, 50), data=False)
+        env.state.market_data_at = env.now                   # tick cuối buổi sáng
+        env.at(datetime(2026, 11, 9, 12, 30), data=False)
+        assert env.actions() == []                           # nghỉ trưa
+        env.at(datetime(2026, 11, 9, 13, 0, 20), data=False)
+        assert env.actions() == []                           # vừa vào phiên chiều, chưa có tick
+        env.at(datetime(2026, 11, 9, 13, 0, 31), data=False)
+        assert kinds(env.actions()) == [ActionKind.FLATTEN_ALL]
+
+    def test_never_any_data_counts_from_session_segment(self, make_env):
+        e = make_env(start=datetime(2026, 11, 9, 9, 0, 10))
+        e.state.market_data_at = None
+        e.open_position(Side.BUY, 1)
+        assert e.actions() == []
+        e.at(datetime(2026, 11, 9, 9, 0, 31), data=False)
+        assert kinds(e.actions()) == [ActionKind.FLATTEN_ALL]
