@@ -51,7 +51,8 @@ class _Recording:
 async def main_async(args) -> int:
     try:
         from dotenv import load_dotenv
-        load_dotenv()
+        from core.settings import REPO_ROOT
+        load_dotenv(REPO_ROOT / ".env")          # Task Scheduler không đặt cwd = repo
     except ImportError:
         pass
     key, secret = os.environ.get("DNSE_API_KEY"), os.environ.get("DNSE_API_SECRET")

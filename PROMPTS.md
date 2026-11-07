@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1, P1.2, P2.1, P2.2, P3.1, P3.2, P3.3 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE (để chốt ❓ của feed và làm **P1.6**). Làm tiếp được không cần key: P1.3, P1.4.
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1, P1.2, P1.4, P2.1, P2.2, P3.1, P3.2, P3.3 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Làm tiếp được không cần key: P1.3, P1.5.
 
 ---
 
@@ -34,7 +34,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 **P1.3 · Feed SSI**
 > Viết `feeds/data_feed_ssi.py` theo cùng interface `DataFeed`. Sau đó viết `feeds/composite.py`: chạy song song DNSE (chính) và SSI (dự phòng), phát cảnh báo khi lệch > `feed_divergence_ticks` hoặc một feed im > `feed_stale_seconds`, tự chuyển nguồn chính khi DNSE chết.
 
-**P1.4 · Recorder**
+**P1.4 · Recorder** ✅ (hướng dẫn Task Scheduler: `docs/recorder_windows.md`)
 > Viết `recorder/`: ghi tick và snapshot sổ lệnh từ composite feed ra Parquet theo ngày, flush mỗi N giây, không mất dữ liệu khi crash (ghi file tạm rồi rename). Script `scripts/record_today.py` chạy từ 8:30 đến 15:00 rồi tự thoát. Hướng dẫn tôi đặt Windows Task Scheduler chạy mỗi ngày giao dịch.
 
 **P1.5 · Kiểm định dữ liệu**

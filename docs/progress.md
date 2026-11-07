@@ -1,5 +1,33 @@
 # Tiến độ
 
+## 2026-11-08 — P1.4 Recorder
+
+**Đã xong**
+- `recorder/tick_recorder.py` — `TickRecorder`: nhận `Tick` từ bất kỳ `DataFeed` nào (hiện là DNSE; composite P1.3 cắm vào được ngay), ghi `data/raw/YYYY-MM-DD/`:
+  - mỗi `recorder.flush_seconds` (5 giây) hoặc khi đệm đủ `max_buffer_rows` ⇒ ghi MỘT file `part-<phiên>-<n>.parquet` MỚI bằng tmp-rồi-tráo; không bao giờ ghi đè/nối file cũ ⇒ crash chỉ mất ≤ 5 giây trong RAM, không có file hỏng; ghi lỗi ⇒ giữ nguyên đệm, lần sau thử lại;
+  - cuối ngày `compact_day` gộp part → `ticks.parquet` (ghi bản gộp xong mới xoá part; gộp lại nhiều lần không trùng; khử trùng theo id ghi `session`+`rx_seq`, không theo nội dung — hai lần khớp y hệt vẫn giữ cả hai);
+  - mỗi dòng: mọi trường `Tick` (gồm bid/ask/khối lượng mức 1 = snapshot sổ lệnh) + `recv_ts` (giờ bot nhận, đo độ trễ) + id ghi;
+  - `load_ticks(ngày)` đọc bản gộp + part chưa gộp, theo thời gian ⇒ dùng thẳng cho `backtest.engine.bars_from_ticks` / `run_events`;
+  - từ chối thư mục dữ liệu nằm trong Dropbox/OneDrive/Google Drive/iCloud (CLAUDE.md mục 3b).
+- `scripts/record_today.py`: bỏ qua ngày nghỉ; chờ tới 08:30; ghi tới 15:00, flush + gộp rồi thoát; feed chết ⇒ vẫn lưu phần đã nhận, thoát mã 1; `InstanceLock` riêng (`state/recorder.lock`) chặn hai recorder trên một máy; cảnh báo khi feed im lặng trong phiên; log ra `logs/record_YYYY-MM-DD.log`. Mã hợp đồng: `--krx` hoặc `--assume-computed-contract` (chưa có REST danh sách hợp đồng — P4.1).
+- `docs/recorder_windows.md`: hướng dẫn Task Scheduler (lệnh `schtasks`, thiết lập Conditions/Settings, ý nghĩa mã thoát, kiểm tra hằng ngày).
+- `settings.recorder`: `flush_seconds: 5`, `max_buffer_rows: 5000`, `start: "08:30"`, `stop: "15:00"`.
+- `tests/test_recorder.py` (viết trước): 31 test — roundtrip đủ trường, mỗi flush một file, đệm đầy, ghi lỗi giữ đệm, crash chỉ mất phần chưa flush, gộp idempotent, gộp bị ngắt không nhân đôi, ghi bản gộp lỗi thì part còn nguyên, khởi động lại cùng ngày, chặn thư mục đồng bộ, lịch chạy, phiên ghi khi feed chết. Thử phá từng cơ chế ⇒ đều có test đỏ (phát hiện thiếu test "ghi bản gộp lỗi" và đã bổ sung).
+- 422 test.
+
+**Giả định / rủi ro còn mở**
+- Ghi Parquet chạy đồng bộ trong event loop (file nhỏ mỗi 5 giây, ước vài ms); nếu đĩa chậm có thể trễ xử lý tick vài chục ms — đo khi chạy thật, cần thì chuyển sang thread.
+- Ghi tick theo ngày của đồng hồ bot (không theo `ts` của sàn) — đủ dùng vì phiên không qua nửa đêm.
+- Chỉ có sổ lệnh mức 1 (giới hạn của feed DNSE). Chưa ghi message thô — nếu cần soi lỗi chuẩn hoá thì dùng `scripts/dnse_feed_probe.py`.
+- `--assume-computed-contract` chưa đối chiếu danh sách broker (chấp nhận được vì chỉ ghi dữ liệu); sai mã ⇒ feed im lặng và log cảnh báo.
+- Backtest CLI (`python -m backtest.engine`) mới đọc bar; đọc tick đã ghi thì dùng `load_ticks` + `run_events` trong Python — thêm cờ `--ticks` khi cần.
+
+**Người dùng cần làm**
+- [ ] Đặt `paths.data_dir` / `paths.state_dir` ra ngoài Dropbox (ví dụ `C:/vnbot/data`).
+- [ ] Khi có khoá DNSE: chạy thử tay rồi tạo task theo `docs/recorder_windows.md` — càng sớm càng có dữ liệu tick thật cho backtest.
+
+**Bước tiếp theo:** P1.3 (feed SSI + composite: recorder ghi được cả hai nguồn để đối chiếu) hoặc P1.5 (kiểm định dữ liệu một ngày).
+
 ## 2026-11-08 — P1.2 Feed DNSE
 
 **Đã xong**
