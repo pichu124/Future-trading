@@ -23,7 +23,7 @@
 | Test trực tiếp `ExecutionManager` | ✅ `tests/test_execution.py` |
 | **Việc của bạn** | lịch nghỉ 2026–2027 (`check_calendar.py` báo thiếu), `fees.*`, `risk.*`, `live.allowed_machine`, `backtest.initial_capital_vnd`; khoá API + chạy hai script thăm dò; dữ liệu lịch sử (P1.6) + backtest ORB; paper ≥ vài tuần |
 | Feed tổng hợp cho paper | ✅ `paper.composite_feed: true` (mặc định false) |
-| Adapter TCBS (tuỳ chọn) | ✅ `brokers/tcbs.py` theo tài liệu chính thức; TẮT (`brokers.tcbs_enabled: false`, `api_verified: false`), chưa nối vào runner — CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định |
+| Adapter TCBS (tuỳ chọn) | ✅ `brokers/tcbs.py` theo tài liệu chính thức; TẮT (`brokers.tcbs_enabled: false`, `api_verified: false`), nối vào runner: chọn được làm chính/dự phòng (`brokers.primary`/`backup`) — CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định |
 
 ## Kết luận
 

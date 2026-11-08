@@ -1,5 +1,17 @@
 # Tiến độ
 
+## 2026-11-08 — Nối TCBS vào runner (chọn làm broker chính hoặc dự phòng)
+
+**Quyết định của người dùng:** `brokers.primary` / `brokers.backup` chọn được trong {dnse, ssi, tcbs}; giữ kiến trúc một-chính-một-dự-phòng; mặc định vẫn DNSE/SSI.
+
+**Đã xong**
+- `live/wiring.py` `build_live`: dựng đúng broker theo vai (khác nhau, tên không hỗ trợ ⇒ thoát 2). TCBS chỉ dựng khi `brokers.tcbs_enabled` + `api_verified` + đủ `TCBS_*`. Feed tổng hợp LUÔN DNSE + SSI (CLAUDE.md mục 3): DNSE không làm broker ⇒ chỉ cần khoá HMAC cho feed + `/instruments`; SSI không làm broker ⇒ chỉ cần API key/secret, token feed nằm trong `auth` (runner chờ `/otp ssi`). Stream lệnh cho broker SSI/TCBS chạy nền.
+- `main()` truyền `auth` vào Runner; startup chờ OTP của mọi broker + token feed (`/otp dnse|ssi|tcbs`).
+- Test viết trước (10 test mới trong `tests/test_live_wiring.py`): dnse+tcbs, tcbs+ssi, trùng/không hỗ trợ, TCBS chưa bật/chưa kiểm, thiếu env, feed vẫn cần khoá SSI, chờ ba OTP, `main` truyền đúng tham số. Thử phá 8 chốt ⇒ 1 sống (`main` không truyền `auth`) ⇒ thêm test ⇒ 8/8.
+- 974 test.
+
+**Lưu ý**: risk/quy trình khẩn cấp không giả định tên broker (đã kiểm) ⇒ đối ứng khẩn cấp chạy trên broker dự phòng bất kể là ssi hay tcbs. TCBS vẫn tắt mặc định.
+
 ## 2026-11-08 — Stream DE_ORDER cho TCBS (`TcbsOrderStream`)
 
 **Đã xong** (theo tài liệu 7.3 chính thức)

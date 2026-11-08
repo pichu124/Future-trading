@@ -662,7 +662,7 @@ def main(argv=None) -> int:
             log.error("Live cần Telegram (TELEGRAM_TRADING_BOT_TOKEN/_CHAT_ID): nhập OTP + /kill + cảnh báo")
             return 2
         broker, backup, feed, background = setup.primary, setup.backup, setup.feed, setup.background
-        preflight = setup.preflight
+        preflight, auth = setup.preflight, setup.auth
     else:
         key, secret = os.environ.get("DNSE_API_KEY"), os.environ.get("DNSE_API_SECRET")
         if not key or not secret:

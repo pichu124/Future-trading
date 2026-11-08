@@ -108,9 +108,16 @@ def test_unreadable_private_key_refused(live_settings, live_env, cal, tmp_path):
         build(live_settings, live_env, cal)
 
 
-def test_only_dnse_primary_ssi_backup_supported(live_settings, live_env, cal):
-    live_settings._data["brokers"]["primary"] = "ssi"
-    with pytest.raises(ValueError, match="dnse"):
+@pytest.mark.parametrize("primary,backup", [("ssi", "ssi"), ("dnse", "dnse"), ("tcbs", "tcbs")])
+def test_primary_and_backup_must_differ(live_settings, live_env, cal, primary, backup):
+    live_settings._data["brokers"].update(primary=primary, backup=backup, tcbs_enabled=True)
+    with pytest.raises(ValueError, match="khác nhau"):
+        build(live_settings, live_env, cal)
+
+
+def test_unknown_broker_refused(live_settings, live_env, cal):
+    live_settings._data["brokers"]["backup"] = "vps"
+    with pytest.raises(ValueError, match="dnse, ssi, tcbs"):
         build(live_settings, live_env, cal)
 
 
@@ -386,3 +393,120 @@ def test_live_preflight_checks_traded_contract_after_roll(live_settings, live_en
                        dnse_transport=dnse_transport)
     with pytest.raises(ContractNotListed):
         asyncio.run(setup.preflight[0]())
+
+
+
+# --------------------------------------------------------------------------- TCBS làm chính / dự phòng ----
+
+@pytest.fixture
+def tcbs_env(live_env):
+    e = dict(live_env)
+    e.update(TCBS_API_KEY="tcbs-key-x", TCBS_CUSTODY_CODE="105C334455", TCBS_DERIVATIVE_ACCOUNT="105C334455A")
+    return e
+
+
+def enable_tcbs(settings):
+    settings._data["brokers"]["tcbs_enabled"] = True
+    settings._data["brokers"].setdefault("tcbs", {})["api_verified"] = True
+
+
+def test_dnse_primary_tcbs_backup(live_settings, tcbs_env, cal):
+    from brokers.tcbs import TcbsBroker
+    enable_tcbs(live_settings)
+    live_settings._data["brokers"]["backup"] = "tcbs"
+    for k in ("SSI_ACCOUNT", "SSI_PRIVATE_KEY_PATH", "SSI_CLIENT_ID"):     # SSI chỉ còn làm feed: không cần
+        tcbs_env.pop(k)
+    setup = build(live_settings, tcbs_env, cal)
+    assert isinstance(setup.primary, DnseBroker) and isinstance(setup.backup, TcbsBroker)
+    assert setup.backup.name == "tcbs" and setup.backup.live_flag
+    assert setup.feed.primary.name == "dnse" and setup.feed.backup.name == "ssi"     # vẫn đối chiếu DNSE/SSI
+    assert [a.name for a in setup.auth] == ["ssi"]                          # token SSI cho feed: chờ /otp ssi
+    assert setup.feed.backup._tokens.__self__ is setup.auth[0]
+    assert len(setup.background) == 1 and setup.background[0].__self__.__class__.__name__ == "TcbsOrderStream"
+
+
+def test_tcbs_primary_ssi_backup(live_settings, tcbs_env, cal):
+    from brokers.tcbs import TcbsBroker
+    enable_tcbs(live_settings)
+    live_settings._data["brokers"]["primary"] = "tcbs"
+    tcbs_env.pop("DNSE_ACCOUNT_NO")                                          # DNSE chỉ làm feed: không cần tiểu khoản
+    live_settings._data["brokers"]["dnse"].update(loan_package_id=None, trading_token_ttl_seconds=None,
+                                                  api_verified=False)
+    setup = build(live_settings, tcbs_env, cal)
+    assert isinstance(setup.primary, TcbsBroker) and isinstance(setup.backup, SsiBroker)
+    assert setup.auth == []                                                  # token SSI do broker SSI giữ
+    assert setup.feed.backup._tokens.__self__ is setup.backup.tokens
+    names = sorted(f.__self__.__class__.__name__ for f in setup.background)
+    assert names == ["SsiOrderStream", "TcbsOrderStream"]
+
+
+def test_tcbs_refused_unless_enabled_and_verified(live_settings, tcbs_env, cal):
+    live_settings._data["brokers"]["backup"] = "tcbs"
+    live_settings._data["brokers"]["tcbs_enabled"] = False
+    with pytest.raises(LiveTradingNotAllowed, match="tcbs_enabled"):
+        build(live_settings, tcbs_env, cal)
+    live_settings._data["brokers"]["tcbs_enabled"] = True
+    live_settings._data["brokers"].setdefault("tcbs", {})["api_verified"] = False
+    with pytest.raises(LiveTradingNotAllowed, match="api_verified"):
+        build(live_settings, tcbs_env, cal)
+
+
+def test_tcbs_missing_env_refused(live_settings, tcbs_env, cal):
+    enable_tcbs(live_settings)
+    live_settings._data["brokers"]["backup"] = "tcbs"
+    del tcbs_env["TCBS_DERIVATIVE_ACCOUNT"]
+    with pytest.raises(MissingSetting, match="TCBS_DERIVATIVE_ACCOUNT"):
+        build(live_settings, tcbs_env, cal)
+
+
+def test_feed_still_needs_dnse_and_ssi_keys_when_tcbs(live_settings, tcbs_env, cal):
+    enable_tcbs(live_settings)
+    live_settings._data["brokers"]["backup"] = "tcbs"
+    del tcbs_env["SSI_API_SECRET"]
+    with pytest.raises(MissingSetting, match="SSI_API_SECRET"):
+        build(live_settings, tcbs_env, cal)
+
+
+def test_runner_waits_otp_for_tcbs_and_feed_token(session_cfg, cal, tmp_path):
+    """dnse chính + tcbs dự phòng: chờ /otp dnse, /otp tcbs VÀ /otp ssi (feed) trước khi giao dịch."""
+    from tests.test_paper_composite import AuthTarget
+    r = AuthRig(session_cfg, cal, tmp_path, [["otp dnse 1234"], ["otp tcbs 1234"], [], ["otp ssi 1234"]])
+    r.backup.name = "tcbs"
+    r.runner.brokers = {"dnse": r.primary, "tcbs": r.backup}
+    feed_tok = AuthTarget("ssi")
+    r.runner.auth = {"ssi": feed_tok}
+    assert asyncio.run(r.runner.startup()) is None
+    assert feed_tok.trading_ready and r.primary.trading_ready and r.backup.trading_ready
+
+
+def test_main_live_passes_auth_preflight_background_to_runner(monkeypatch, live_settings, tmp_path):
+    from live import runner as R
+    d = live_settings._data
+    d["risk"].update(max_daily_loss_points=20, max_trades_per_day=3, max_consecutive_losses=2)
+    d["paths"].update(data_dir=str(tmp_path / "data"), state_dir=str(tmp_path / "state"), log_dir=str(tmp_path / "logs"))
+    monkeypatch.setattr("core.settings.load_settings", lambda *a, **k: live_settings)
+    monkeypatch.setattr("live.instance_lock.check_allowed_machine", lambda allowed: "host")
+    monkeypatch.setenv("TRADING_MODE", "live")
+    monkeypatch.setenv("TELEGRAM_TRADING_BOT_TOKEN", "1:x")
+    monkeypatch.setenv("TELEGRAM_TRADING_CHAT_ID", "1")
+    sentinel_auth, sentinel_pre, sentinel_bg = [object()], [lambda: None], [lambda: None]
+
+    class Setup:
+        primary, backup, feed = AuthBroker("dnse"), AuthBroker("tcbs"), FakeFeed()
+        background, preflight, auth = sentinel_bg, sentinel_pre, sentinel_auth
+    monkeypatch.setattr("live.wiring.build_live", lambda *a, **k: Setup())
+    captured = {}
+
+    class FakeRunner:
+        def __init__(self, **kw):
+            captured.update(kw)
+
+        def queue_alert(self, t):
+            pass
+
+        async def run(self):
+            return 0
+    monkeypatch.setattr(R, "Runner", FakeRunner)
+    assert R.main(["--live", "--assume-computed-contract"]) == 0
+    assert captured["auth"] is sentinel_auth and captured["preflight"] is sentinel_pre
+    assert captured["background"] is sentinel_bg and captured["backup_broker"].name == "tcbs"

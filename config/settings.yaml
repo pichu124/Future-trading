@@ -97,6 +97,8 @@ feeds:
   switch_back_after_seconds: 30         # DNSE sống lại liên tục N giây mới chuyển về làm nguồn chính
 
 brokers:
+  # Live: broker chính + dự phòng, chọn trong dnse | ssi | tcbs (phải khác nhau). Dự phòng CHỈ đặt lệnh đối ứng
+  # khẩn cấp (CLAUDE.md mục 3). Feed tổng hợp luôn là DNSE + SSI dù broker là gì. tcbs ⇒ cần tcbs_enabled.
   primary: dnse
   backup: ssi
   # TCBS = broker THỨ 3, tuỳ chọn. CLAUDE.md: chỉ bật sau khi DNSE + SSI chạy ổn định.

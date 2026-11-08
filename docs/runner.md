@@ -6,8 +6,12 @@
 
 ## Live (đã nối, nhưng còn KHOÁ cho tới khi bạn mở từng chốt)
 
-Live = DNSE chính + SSI dự phòng (chỉ đặt lệnh đối ứng khẩn cấp khi DNSE mất kết nối) + feed tổng hợp
-DNSE/SSI (lệch giá / một feed im lặng ⇒ ngừng mở vị thế) + stream lệnh SSI. Lắp ở `live/wiring.py`.
+Live = broker chính + broker dự phòng (`brokers.primary` / `brokers.backup` ∈ dnse | ssi | tcbs, khác nhau; mặc định
+DNSE chính + SSI dự phòng — dự phòng chỉ đặt lệnh đối ứng khẩn cấp khi broker chính mất kết nối) + feed tổng hợp
+LUÔN là DNSE + SSI (lệch giá / một feed im lặng ⇒ ngừng mở vị thế) + stream lệnh của broker SSI/TCBS. Lắp ở
+`live/wiring.py`. Chọn TCBS ⇒ thêm `brokers.tcbs_enabled: true`, `brokers.tcbs.api_verified: true`,
+`TCBS_API_KEY/CUSTODY_CODE/DERIVATIVE_ACCOUNT`; SSI không làm broker vẫn cần `SSI_API_KEY/SECRET` cho feed
+(và `/otp ssi` lúc khởi động); DNSE không làm broker vẫn cần `DNSE_API_KEY/SECRET` cho feed + danh sách hợp đồng.
 
 Runner chỉ chạy live khi qua ĐỦ các chốt, thiếu một ⇒ thoát mã 2 trước khi kết nối gì:
 1. `TRADING_MODE=live` trong môi trường **và** cờ `--live`;
@@ -24,7 +28,7 @@ set TRADING_MODE=live
 .venv\Scripts\python.exe -m live.runner --live --assume-computed-contract
 ```
 Khởi động live: kết nối hai broker → DNSE gửi OTP email, SSI gửi OTP → bot nhắn "⏳ Chờ OTP" → bạn trả
-lời `/otp dnse <mã>` và `/otp ssi <mã>` (tối đa `live.otp_wait_seconds`, mặc định 600s; quá ⇒ thoát,
+lời `/otp dnse <mã>`, `/otp ssi <mã>` (và `/otp tcbs <mã>` — iOTP trong app TCInvest — nếu dùng TCBS) (tối đa `live.otp_wait_seconds`, mặc định 600s; quá ⇒ thoát,
 không giao dịch; `/kill` lúc này ⇒ thoát) → đối soát vị thế/lệnh chờ trên CẢ HAI broker → chạy.
 Khởi động lại giữa phiên ⇒ nhập OTP lại (token SSI không ghi đĩa).
 
