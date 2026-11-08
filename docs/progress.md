@@ -1,5 +1,14 @@
 # Tiến độ
 
+## 2026-11-08 — Báo cáo backtest theo % vốn (`backtest.initial_capital_vnd`)
+
+**Đã xong**
+- `backtest/report.py`: `compute_metrics(trades, initial_capital_vnd)` thêm `return_pct` (P&L sau phí / vốn) và `max_drawdown_pct` (so với giá trị tài khoản tại đỉnh = vốn + lãi luỹ kế tới đỉnh); áp cho toàn bộ / IS / OOS; HTML có hai dòng mới + vốn ở đầu trang. Vốn null ⇒ không tính %, có cảnh báo; vốn ≤ 0 / không phải số ⇒ `ValueError` (CLI thoát 2).
+- `backtest.engine` CLI đọc `backtest.initial_capital_vnd`. Sửa chú thích `synthetic_spread_ticks` trong settings cho đúng (±nửa spread từ golive #14).
+- Test viết trước `tests/test_report_capital.py` (11). Thử phá 8 cơ chế ⇒ 0 sống. 1176 test.
+
+**Việc của bạn**: điền `backtest.initial_capital_vnd` (vốn dự định cho bot).
+
 ## 2026-11-08 — Backtest trên tick thật (`backtest/ticks.py`, CLI `--ticks`)
 
 **Đã xong**
@@ -580,7 +589,7 @@
 - Lệnh đóng bị broker từ chối (vd MTL lúc nghỉ trưa) chỉ được ghi lại, không tự thử lại; FLATTEN của risk sẽ đặt lại ở lần `check()` sau.
 - `ExecutionManager` nằm ở `core/` nhưng phụ thuộc `risk/` và `brokers/` (chấp nhận để live và backtest dùng chung một chỗ).
 - `detect_lookahead` chỉ bắt rò rỉ qua dữ liệu đưa vào engine; vẫn phải đọc code chiến lược.
-- Chưa dùng `backtest.initial_capital_vnd` (báo cáo theo VNĐ tuyệt đối, chưa có % lợi nhuận/ký quỹ).
+- ~~Chưa dùng `backtest.initial_capital_vnd`~~ ⇒ báo cáo có % vốn (08/11).
 - ~~Định dạng Parquet tick chưa có loader~~ ⇒ `backtest/ticks.py` + `--ticks` (08/11).
 
 **Người dùng cần làm**

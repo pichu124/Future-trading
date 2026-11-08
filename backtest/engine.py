@@ -529,6 +529,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except MissingSetting as exc:
         print(f"❌ {exc.args[0]}\n   Chạy `python -m core.settings` để xem mọi khoá còn thiếu.")
         return 2
+    from backtest.report import check_capital
+    try:
+        capital = check_capital(settings.get("backtest.initial_capital_vnd"))
+    except ValueError as exc:
+        print(f"❌ {exc}")
+        return 2
     load_stats: dict = {}
     skipped = n_fake_quotes = 0
 
@@ -548,7 +554,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         bars, skipped = load_bars_parquet(args.bars, stats=load_stats)
         res = engine.run_bars([b for b in bars if in_range(b.start.date())])
     rep = build_report(res, split_date=date.fromisoformat(args.split) if args.split else None,
-                       n_trials=args.n_trials, title=args.strategy)
+                       n_trials=args.n_trials, title=args.strategy, initial_capital_vnd=capital)
     if skipped:
         rep["warnings"].append(f"Bỏ {skipped} dòng bar hỏng khi đọc Parquet")
     if n_fake_quotes:

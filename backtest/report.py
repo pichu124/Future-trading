@@ -117,16 +117,29 @@ def _mean(xs: Sequence[float]) -> Optional[float]:
     return sum(xs) / len(xs) if xs else None
 
 
-def compute_metrics(trades: Sequence[TradeRecord]) -> dict:
+def check_capital(capital) -> Optional[float]:
+    """`backtest.initial_capital_vnd`: None (chưa điền) hoặc số > 0."""
+    if capital is None:
+        return None
+    if isinstance(capital, bool) or not isinstance(capital, (int, float)) or not capital > 0:
+        raise ValueError(f"backtest.initial_capital_vnd phải là số > 0, nhận {capital!r}")
+    return float(capital)
+
+
+def compute_metrics(trades: Sequence[TradeRecord], initial_capital_vnd=None) -> dict:
+    capital = check_capital(initial_capital_vnd)
     pnls = [t.pnl_vnd for t in trades]
     wins = [p for p in pnls if p > 0]
     losses = [p for p in pnls if p < 0]
     ordered = sorted(trades, key=lambda t: (t.exit_ts or t.entry_ts, t.entry_ts))
     equity = peak = max_dd = 0.0
+    max_dd_pct = 0.0
     for t in ordered:
         equity += t.pnl_vnd
         peak = max(peak, equity)
         max_dd = max(max_dd, peak - equity)
+        if capital is not None:               # % so với giá trị tài khoản tại đỉnh (vốn + lãi tới đỉnh)
+            max_dd_pct = max(max_dd_pct, (peak - equity) / (capital + peak))
     by_hour: dict[int, dict] = {}
     by_weekday: dict[str, dict] = {}
     for t in sorted(trades, key=lambda t: t.entry_ts):
@@ -147,30 +160,33 @@ def compute_metrics(trades: Sequence[TradeRecord]) -> dict:
         "gross_points": sum(t.gross_points for t in trades),
         "fees_vnd": sum(t.fees_vnd for t in trades),
         "max_drawdown_vnd": max_dd,
+        "return_pct": sum(pnls) / capital if capital is not None else None,
+        "max_drawdown_pct": max_dd_pct if capital is not None else None,
         "by_hour": dict(sorted(by_hour.items())),
         "by_weekday": {k: by_weekday[k] for k in WEEKDAYS if k in by_weekday},
         "exit_reasons": dict(Counter(t.exit_reason for t in trades)),
     }
 
 
-def make_section(trades: list[TradeRecord], n_trials: int, th: Thresholds) -> dict:
+def make_section(trades: list[TradeRecord], n_trials: int, th: Thresholds, initial_capital_vnd=None) -> dict:
     v = validate_trades([{"pnl": t.pnl_vnd, "entry_ts": t.entry_ts} for t in trades], th)
-    return {"trades": trades, "metrics": compute_metrics(trades),
+    return {"trades": trades, "metrics": compute_metrics(trades, initial_capital_vnd),
             "validation": apply_selection_penalty(v, n_trials, th)}
 
 
 def build_report(result, split_date: Optional[date] = None, n_trials: int = 1, title: str = "",
-                 thresholds: Thresholds = DEFAULT) -> dict:
+                 thresholds: Thresholds = DEFAULT, initial_capital_vnd=None) -> dict:
     """Báo cáo dạng dict. `split_date` = ngày đầu out-of-sample; `n_trials` = số cấu hình đã thử."""
     # lệnh còn mở cuối dữ liệu VẪN vào số liệu (đánh dấu giá cuối, trừ ước phí đóng) — golive #14
     open_trades = list(result.open_trades)
     trades = sorted(list(result.trades) + open_trades, key=lambda t: t.entry_ts)
-    sections = {"all": make_section(trades, n_trials, thresholds)}
+    capital = check_capital(initial_capital_vnd)
+    sections = {"all": make_section(trades, n_trials, thresholds, capital)}
     if split_date is not None:
         sections["in_sample"] = make_section([t for t in trades if t.entry_ts.date() < split_date],
-                                         n_trials, thresholds)
+                                             n_trials, thresholds, capital)
         sections["out_of_sample"] = make_section([t for t in trades if t.entry_ts.date() >= split_date],
-                                             n_trials, thresholds)
+                                                 n_trials, thresholds, capital)
     q = result.data_quality
     warnings = list(result.warnings)
     if q.get("unreliable_volume_bars"):
@@ -180,6 +196,8 @@ def build_report(result, split_date: Optional[date] = None, n_trials: int = 1, t
     if open_trades:
         warnings.append(f"{len(open_trades)} lệnh còn mở cuối dữ liệu — đã tính vào số liệu theo giá cuối, "
                         "trừ ước phí đóng (chưa tính trượt giá khi đóng).")
+    if capital is None:
+        warnings.append("backtest.initial_capital_vnd chưa điền ⇒ không tính lợi nhuận / drawdown theo % vốn.")
     if q.get("synthetic_ticks"):
         warnings.append("Khớp lệnh trên tick giả dựng từ bar (bid/ask và thứ tự đỉnh/đáy là giả định "
                         "bi quan) — kết quả thật có thể khác.")
@@ -187,6 +205,7 @@ def build_report(result, split_date: Optional[date] = None, n_trials: int = 1, t
         "title": title or "Backtest",
         "split_date": split_date,
         "n_trials": n_trials,
+        "initial_capital_vnd": capital,
         "sections": sections,
         "data_quality": dict(q),
         "assumptions": dict(result.assumptions),
@@ -226,6 +245,8 @@ def render_section(key: str, sec: dict) -> str:
         ["Avg loss (VNĐ, sau phí)", _f(m["avg_loss_vnd"])],
         ["Profit factor", _f(m["profit_factor"], 2)],
         ["Max drawdown (VNĐ)", _f(m["max_drawdown_vnd"])],
+        ["Max drawdown (% giá trị tài khoản tại đỉnh)", _f(m.get("max_drawdown_pct"), pct=True)],
+        ["Lợi nhuận / vốn", _f(m.get("return_pct"), pct=True)],
         ["P&L sau phí (VNĐ)", _f(m["total_pnl_vnd"])],
         ["P&L sau phí (điểm)", _f(m["total_pnl_points"], 1)],
         ["Trước phí (điểm)", _f(m["gross_points"], 1)],
@@ -280,7 +301,8 @@ section{{border-top:2px solid #444;margin-top:24px}}
 </style></head><body>
 <h1>{html.escape(report['title'])}</h1>
 <p>P&amp;L sau phí. Out-of-sample từ: {html.escape(str(split)) if split else "— (không chia)"} ·
-n_trials = {report['n_trials']} (ghi mỗi cấu hình đã thử vào research/log.md)</p>
+n_trials = {report['n_trials']} (ghi mỗi cấu hình đã thử vào research/log.md) ·
+vốn ban đầu: {_f(report.get('initial_capital_vnd')) + ' VNĐ' if report.get('initial_capital_vnd') else '— (chưa điền)'}</p>
 {f'<ul class="warn">{warn}</ul>' if warn else ''}
 <h3>Giả định khớp lệnh</h3>{assumptions}<h3>Dữ liệu</h3>{quality}
 {sections}

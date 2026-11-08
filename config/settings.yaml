@@ -44,9 +44,9 @@ fees:
 
 backtest:
   slippage_ticks: 1                     # trượt giá tối thiểu mỗi lần khớp
-  initial_capital_vnd: null
-  # Dữ liệu chỉ có bar (không bid/ask): engine dựng tick giả với spread = N bước giá
-  # (bid = giá, ask = giá + N bước khi N = 1). Đo lại spread thật khi có dữ liệu tick.
+  initial_capital_vnd: null             # vốn tài khoản (VNĐ) ⇒ báo cáo thêm % lợi nhuận / % drawdown; null ⇒ chỉ VNĐ
+  # Dữ liệu không có bid/ask (bar, hoặc khớp lệnh tải từ DNSE): bid/ask giả = giá ∓ max(1, ⌈N/2⌉) bước
+  # (cả mua lẫn bán chịu nửa spread; N = 0 ⇒ bid = ask = giá). Đo lại spread thật khi có dữ liệu recorder.
   synthetic_spread_ticks: 1
 
 # Paper broker (dùng chung cho backtest và paper trading). Độ trễ từ lúc gửi lệnh tới lúc lệnh
