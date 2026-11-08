@@ -1,5 +1,18 @@
 # Tiến độ
 
+## 2026-11-08 — P1.6 bước 1: thăm dò REST lịch sử (downloader CHƯA viết)
+
+**Vì sao chưa viết `scripts/download_history.py`:** P1.6 yêu cầu gọi thử bằng tay để chốt các mục ❓ TRƯỚC khi viết code. Môi trường này không có khoá DNSE và không gọi được tới `openapi.dnse.com.vn` (proxy chặn). Đọc SDK `dnse` 0.5.0: `/price/ohlc` không có trong SDK (field hoàn toàn chưa biết); `/price/{symbol}/trades` có field nhưng đơn vị `from`/`to` và định dạng `time` chưa rõ; SDK ký đường dẫn KHÔNG kèm query, trái với ghi chú cũ. Viết downloader lúc này là đoán.
+
+**Đã xong**
+- `scripts/dnse_history_probe.py`: ký HMAC đúng như SDK; với hôm qua và 1/3/6/12 tháng trước (mỗi ngày đúng hợp đồng đang giao dịch ngày đó — trả lời "lịch sử hợp đồng đã đáo hạn lùi được bao xa"), thử `from`/`to` dạng epoch giây / mili-giây / ISO / ngày cho cả trades và OHLC; ký không-query trước, 401 thì thử kèm query; tôn trọng `Retry-After` khi 429; ghi response thô (không header/chữ ký) + `summary.json` vào `data/probe/dnse_history_<thời điểm>/`; tóm tắt nhận được list / `{"data": [...]}` / dạng cột.
+- `docs/broker_notes.md` §1.3: ghi kết quả đọc SDK cho REST lịch sử + mâu thuẫn về cách ký.
+- `tests/test_history_probe.py` (viết trước): 12 test — chữ ký khớp thuật toán SDK, các định dạng thời gian, tóm tắt các kiểu bọc, 401 ⇒ ký kèm query, 429 ⇒ chờ `Retry-After`, đúng hợp đồng theo ngày, không lộ khoá/chữ ký trong file hay màn hình. Thử phá 3 cơ chế chính ⇒ đều có test đỏ.
+- 581 test.
+
+**Người dùng cần làm**
+- [ ] Có khoá DNSE: chạy `python scripts/dnse_history_probe.py`, gửi lại thư mục `data/probe/dnse_history_*` (không chứa khoá). Có kết quả là viết được downloader (P1.6 bước 2) ngay.
+
 ## 2026-11-08 — Luật rủi ro mới: đóng vị thế khi mất dữ liệu (golive #9, theo quyết định của người dùng)
 
 - `risk.flatten_on_feed_silence_seconds: 30` (bắt buộc, null ⇒ từ chối chạy): đang có vị thế mà không có dữ liệu thị trường > 30s trong phiên liên tục ⇒ `FLATTEN_ALL`. Mốc tính = muộn nhất của tick cuối, đầu đoạn phiên (09:00/13:00), lúc runner khởi động ⇒ nghỉ trưa / vào phiên chiều không đóng oan. Chỉ áp cho IM LẶNG; lệch giá DNSE/SSI vẫn chỉ chặn mở vị thế.

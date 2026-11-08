@@ -79,6 +79,18 @@ lệnh đôi ⇒ adapter DNSE phải: không tự retry lệnh đặt; khi khôn
 ❓ Độ sâu lịch sử của `/price/{symbol}/trades` và `/price/ohlc` cho hợp đồng ĐÃ đáo hạn; đơn vị `from`/`to`
 (giây hay mili-giây); timezone của timestamp trả về.
 
+**Đối chiếu SDK `dnse` 0.5.0 cho REST lịch sử (08/11/2026):**
+- `/price/{symbol}/trades` có trong SDK (`resources/market.py`): tham số `boardId`, `from`, `to` (SDK chỉ ghi
+  "timestamp string" ⇒ đơn vị ❓), `limit`; không thấy tham số phân trang ❓. Model `Trade`: `market_id`,
+  `board_id`, `isin`, `symbol`, `match_price`, `match_qtty`, `side`, `avg_price`, `total_volume_traded`,
+  `gross_trade_amount`, `highest_price`, `lowest_price`, `open_price`, `time` (chuỗi, định dạng ❓); trên dây
+  nhiều khả năng camelCase (`matchPrice`…) ❓.
+- `/price/ohlc` **không có trong SDK** (chỉ có trong đặc tả OpenAPI) ⇒ tên field, kiểu bọc response ❓.
+- ⚠️ Chữ ký: SDK ký `(request-target)` bằng **đường dẫn KHÔNG kèm query** (tham số gửi riêng), trái với dòng
+  "path kèm query" ở §1.1 (lấy từ docstring SDK). Chưa biết server chấp nhận cách nào ❓.
+- Cả ba điểm trên được chốt bằng `scripts/dnse_history_probe.py` (thử 4 định dạng from/to, hôm qua + 1/3/6/12
+  tháng trước với đúng hợp đồng từng ngày, ký không-query rồi kèm-query khi 401, ghi response thô).
+
 ### 1.4 WebSocket stream
 - Xác thực ngay sau khi kết nối ✅:
   `{"action": "auth", "api_key": …, "signature": hex(HMAC-SHA256(secret, f"{api_key}:{timestamp}:{nonce}")), "timestamp": <giây>, "nonce": <micro-giây>}`.

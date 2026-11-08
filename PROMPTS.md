@@ -40,7 +40,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 **P1.5 · Kiểm định dữ liệu** ✅ (tự chạy cuối `record_today.py`)
 > Viết `scripts/validate_day.py`: với một ngày dữ liệu, báo cáo số tick, khoảng trống > 5 giây trong phiên liên tục, tick ngoài biên độ, chênh lệch DNSE vs SSI, và dựng bar 1 phút. So khớp OHLC 1 phút với dữ liệu vnstock của cùng ngày, liệt kê sai lệch.
 
-**P1.6 · Tải dữ liệu lịch sử thật**
+**P1.6 · Tải dữ liệu lịch sử thật** — bước 1 ✅ `scripts/dnse_history_probe.py` (chạy với khoá để chốt ❓); bước 2 downloader chờ kết quả thăm dò
 > Theo `docs/broker_notes.md` §1.3 và §2.5: viết `scripts/download_history.py` tải OHLC 1 phút (`GET /price/ohlc`, `type=DERIVATIVE`) và lịch sử khớp lệnh (`GET /price/{symbol}/trades`, `boardId=G1`) của DNSE cho từng hợp đồng VN30F (mã KRX từ `core.contracts`), ghi `data/history/<loại>/<hợp đồng>/<ngày>.parquet` (ghi nguyên tử, chạy lại không tải trùng). Trước khi viết code: gọi thử bằng tay để chốt các mục ❓ (đơn vị `from`/`to`, độ sâu lịch sử hợp đồng đã đáo hạn) và cập nhật broker_notes. Tôn trọng HTTP 429 `retry_after`. Viết test với response mẫu.
 
 ---
