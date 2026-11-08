@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.5, P2.1, P2.2, P3.1, P3.2, P3.3, P4.1, P4.2, P4.3, P5.1, P5.2 (P4.1/P4.2: adapter xong, live khoá tới khi kiểm API; P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Lỗi #1–#12, #14 trong `docs/golive_checklist.md` đã xử lý (#13: token SSI đã có ở P4.2, còn nối composite vào runner). Phần còn lại cần API key.
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.5, P2.1, P2.2, P3.1, P3.2, P3.3, P4.1, P4.2, P4.3, P5.1, P5.2 (P4.1/P4.2: adapter xong, live khoá tới khi kiểm API; P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Lỗi #1–#12, #14 trong `docs/golive_checklist.md` đã xử lý (#13 đã nối cho live). Phần còn lại cần API key.
 
 ---
 
@@ -83,7 +83,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 
 ## Giai đoạn 5 — Chạy live
 
-**P5.1 · Runner + giám sát** ✅ (paper; live chờ P4.1/P4.2 — `docs/runner.md`)
+**P5.1 · Runner + giám sát** ✅ (paper + live đã nối qua `live/wiring.py`; live còn khoá tới khi kiểm API — `docs/runner.md`)
 > Viết `live/runner.py`: khởi động (kiểm tra kết nối, lấy mã hợp đồng, đối soát vị thế thực tế với state), vòng lặp sự kiện, heartbeat mỗi 30 giây, kill-switch (file KILL và lệnh Telegram /kill /status /pnl). Cuối ngày gửi báo cáo Telegram: lệnh, P&L sau phí, lệnh bị risk từ chối và lý do.
 
 **P5.2 · Checklist trước live** ✅ (`docs/golive_checklist.md`)

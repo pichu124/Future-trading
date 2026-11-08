@@ -131,6 +131,8 @@ live:
   # ⇒ không bao giờ có hai máy cùng đặt lệnh. Xem CLAUDE.md mục 3b.
   allowed_machine: null
   lock_stale_after_seconds: 120
+  # Live: sau khi kết nối, chờ /otp <broker> <mã> cho DNSE + SSI tối đa N giây; quá ⇒ thoát, không giao dịch.
+  otp_wait_seconds: 600
 
 monitoring:
   heartbeat_seconds: 30

@@ -1,13 +1,32 @@
-# Chạy bot (paper) — `live/runner.py`
+# Chạy bot — `live/runner.py` (paper và live)
 
-> Live CHƯA chạy được: adapter DNSE (`brokers/dnse.py`, P4.1) và SSI (`brokers/ssi.py`, P4.2) đã có
-> nhưng phải kiểm API trước (`scripts/dnse_trading_probe.py`, `scripts/ssi_trading_probe.py` ⇒
-> `brokers.*.api_verified`) và runner chưa nối chế độ live.
-> `--live` hoặc `TRADING_MODE=live` hiện bị từ chối có chủ đích.
->
 > Lệnh Telegram: `/kill`, `/status`, `/pnl`, `/help`, và `/otp [dnse|ssi] <mã>` — chuyển OTP cho
 > adapter để lấy token. Không ghi tên broker thì gửi cho broker DUY NHẤT đang chờ OTP; hai broker cùng
 > chờ ⇒ bot hỏi lại (mỗi bên một mã). Bot không bao giờ nhắc lại mã; nên xoá tin nhắn chứa mã sau khi dùng.
+
+## Live (đã nối, nhưng còn KHOÁ cho tới khi bạn mở từng chốt)
+
+Live = DNSE chính + SSI dự phòng (chỉ đặt lệnh đối ứng khẩn cấp khi DNSE mất kết nối) + feed tổng hợp
+DNSE/SSI (lệch giá / một feed im lặng ⇒ ngừng mở vị thế) + stream lệnh SSI. Lắp ở `live/wiring.py`.
+
+Runner chỉ chạy live khi qua ĐỦ các chốt, thiếu một ⇒ thoát mã 2 trước khi kết nối gì:
+1. `TRADING_MODE=live` trong môi trường **và** cờ `--live`;
+2. hostname = `live.allowed_machine`, không có phiên khác giữ file khoá;
+3. `brokers.dnse.api_verified: true` và `brokers.ssi.api_verified: true` — chỉ đặt sau khi chạy
+   `scripts/dnse_trading_probe.py` / `scripts/ssi_trading_probe.py` và chốt các mục ❓ (broker_notes §1.5, §2.6);
+4. không còn null: `fees.*`, `risk.*`, `brokers.dnse.loan_package_id`, `brokers.dnse.trading_token_ttl_seconds`,
+   `brokers.ssi.order_symbol_format`, `brokers.ssi.market_order_type`;
+5. `.env`: `DNSE_API_KEY/SECRET/ACCOUNT_NO`, `SSI_CLIENT_ID/API_KEY/API_SECRET/ACCOUNT/PRIVATE_KEY_PATH`,
+   `TELEGRAM_TRADING_BOT_TOKEN/CHAT_ID` (live bắt buộc Telegram — nhập OTP, `/kill`, cảnh báo).
+
+```bat
+set TRADING_MODE=live
+.venv\Scripts\python.exe -m live.runner --live --assume-computed-contract
+```
+Khởi động live: kết nối hai broker → DNSE gửi OTP email, SSI gửi OTP → bot nhắn "⏳ Chờ OTP" → bạn trả
+lời `/otp dnse <mã>` và `/otp ssi <mã>` (tối đa `live.otp_wait_seconds`, mặc định 600s; quá ⇒ thoát,
+không giao dịch; `/kill` lúc này ⇒ thoát) → đối soát vị thế/lệnh chờ trên CẢ HAI broker → chạy.
+Khởi động lại giữa phiên ⇒ nhập OTP lại (token SSI không ghi đĩa).
 
 ## Điều kiện trước khi chạy paper
 - `config/settings.yaml`: đã điền `risk.*`, `fees.*`, `live.allowed_machine` (= hostname máy này,

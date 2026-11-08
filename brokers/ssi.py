@@ -597,6 +597,11 @@ class SsiBroker(BrokerAdapter):
         return None if t is None else t.order
 
     @property
+    def trading_ready(self) -> bool:
+        """Có access token còn hạn (hoặc dry-run). Runner chờ OTP tới khi True."""
+        return self.dry_run or self.tokens.valid()
+
+    @property
     def awaiting_otp(self) -> bool:
         return self.tokens.awaiting_otp
 

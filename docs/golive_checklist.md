@@ -6,7 +6,7 @@
 
 > **Cập nhật cùng ngày:** đã sửa #1–#8, #10–#12, #14 (mỗi lỗi có test tái hiện trong
 > `tests/test_golive_fixes.py`, thử phá từng bản sửa đều có test đỏ). #9 đã làm theo quyết định của
-> bạn (đóng khi mất dữ liệu > 30s). Còn mở: #13 (chờ token SSI — P4.2), và mọi mục "chưa có" ở phần 2. Vẫn **không chạy live**.
+> bạn (đóng khi mất dữ liệu > 30s). #13 đã nối cho live (08/11). Còn mở: mọi mục "chưa có" ở phần 2. Live đã nối nhưng còn KHOÁ (`api_verified`, giá trị null) — **chưa chạy live**.
 
 ## Kết luận
 
@@ -32,7 +32,7 @@ Cột "Xác minh" là trạng thái lúc rà; trạng thái sửa ở bảng 1b.
 | 10 | MEDIUM | `live/emergency.py` `_attempts` | Bộ đếm thử lại không bao giờ reset ⇒ chỉ 3 lần lỗi cho CẢ vòng đời tiến trình | Hai sự cố trong ngày | đọc code |
 | 11 | MEDIUM | `risk.record_fill` | Chuỗi thua tính theo điểm TRƯỚC phí ⇒ lệnh +0,1 điểm nhưng lỗ sau phí lại xoá chuỗi thua | — | đọc code (đã ghi là giả định ở P2.1) |
 | 12 | MEDIUM | `live/runner.py` | Bộ đếm ngày chỉ lưu mỗi 30s ⇒ mất điện ngay sau khi chạm ngưỡng lỗ ⇒ khởi động lại giao dịch tiếp | Mất điện | đọc code |
-| 13 | MEDIUM | `live/runner.py` `main` | Đối chiếu giá DNSE/SSI (CLAUDE.md §3) **chưa được áp** — runner chỉ dùng feed DNSE | — | đọc code (chờ token SSI P4.2) |
+| 13 | MEDIUM | `live/runner.py` `main` | Đối chiếu giá DNSE/SSI (CLAUDE.md §3) **chưa được áp** — runner chỉ dùng feed DNSE | ✅ live: `live/wiring.py` dùng `CompositeFeed` DNSE+SSI (token SSI chung). Paper vẫn chỉ feed DNSE | `tests/test_live_wiring.py` |
 | 14 | LOW | `backtest/engine.py`, `backtest/report.py` | Lạc quan backtest: file bar thiếu cột `volume_reliable` mặc định là tin được; lệnh còn mở cuối dữ liệu không vào số liệu; spread 1 bước ⇒ bán ở bid = last không mất nửa spread; tick lặp cực trị cách 1s ⇒ độ trễ ≥ 1s thì stop khớp ở cực trị kia | — | đọc code |
 
 ## 1b. Đã sửa
@@ -61,7 +61,7 @@ Cột "Xác minh" là trạng thái lúc rà; trạng thái sửa ở bảng 1b.
 | §2 Một code strategy cho backtest/paper/live | ✔ `ExecutionManager` + `RiskManager` dùng chung; chỉ đổi broker và nguồn dữ liệu |
 | §2 Giá trị null ⇒ từ chối chạy | ✔ (risk, paper, engine, runner); còn 10 khoá null — xem mục 5 |
 | §3 DNSE chính / SSI dự phòng, net tổng mọi broker | Feed: ✔ cả hai + composite. Broker: DNSE ✔ (`brokers/dnse.py`), SSI ✔ (`brokers/ssi.py`) — chưa nối live vào runner. Net tổng: ✔ (adapter DNSE theo dõi cả lệnh đặt tay) |
-| §3 Đối chiếu feed (lệch/im) ⇒ ngừng mở vị thế | Code ✔ (`feeds/composite.py`), **chưa nối vào runner** (#13) |
+| §3 Đối chiếu feed (lệch/im) ⇒ ngừng mở vị thế | ✔ live (`live/wiring.py` → `CompositeFeed`); paper chỉ DNSE |
 | §3b Hai chốt máy/khoá | ✔ runner + recorder. **Runner chưa kiểm `state_dir`/`data_dir` có nằm trong Dropbox** (chỉ recorder kiểm) |
 | §4 Đối chiếu mã hợp đồng với danh sách broker lúc khởi động | Feed có cơ chế, nhưng runner/recorder đang dùng `--assume-computed-contract`/`--krx` vì chưa có REST `/instruments` (P4.1) |
 | §4 Lịch nghỉ | `scripts/check_calendar.py`: 2026 và 2027 **thiếu ngày nghỉ** (Tết, Giỗ Tổ, nghỉ bù) |

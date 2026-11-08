@@ -1,5 +1,29 @@
 # Tiến độ
 
+## 2026-11-08 — Nối LIVE vào runner (`live/wiring.py`) — vẫn KHOÁ tới khi bạn mở từng chốt
+
+**Đã xong**
+- `live/wiring.py` `build_live`: DNSE chính (`DnseBroker`) + SSI dự phòng (`SsiBroker`, cho `EmergencyHandler`) + `CompositeFeed` DNSE/SSI (golive #13 — lệch giá / im lặng ⇒ ngừng mở vị thế) + `SsiOrderStream` (tác vụ nền). Feed SSI và broker SSI dùng chung một `SsiTokenManager`. Không gọi mạng; thiếu bất kỳ thứ gì (`api_verified`, giá trị null, biến .env, file khoá SSI, broker không phải dnse/ssi) ⇒ ném lỗi ⇒ runner thoát 2 trước khi kết nối.
+- `live/runner.py`:
+  - `main()` nhánh live: TRADING_MODE=live + `--live` ⇒ `build_live`; live bắt buộc Telegram. Paper giữ nguyên (PaperBroker + feed DNSE).
+  - `startup()`: kết nối mọi broker → **chờ `/otp`** cho broker có `trading_ready=False` (tối đa `live.otp_wait_seconds` = 600s; quá ⇒ thoát 2; `/kill` ⇒ thoát 0) → rồi mới đối soát vị thế/lệnh chờ trên cả hai broker.
+  - Tác vụ nền (`background`): chạy sau khởi động, dừng TRƯỚC khi đóng broker; tác vụ chết ⇒ cảnh báo đúng một lần (khớp lệnh vẫn đọc qua REST).
+  - `queue_alert`: cảnh báo của feed tổng hợp (callback đồng bộ) được gửi Telegram ở vòng kế tiếp.
+- `DnseBroker.trading_ready`, `SsiBroker.trading_ready`; settings `live.otp_wait_seconds: 600`.
+- Test viết trước `tests/test_live_wiring.py` (24 test): dựng đủ thành phần, từng chốt từ chối (api_verified mỗi bên, giá trị null, biến .env, file khoá, tên broker, live_flag), `main` từ chối, chờ OTP → đối soát sau, hết giờ, /kill, tác vụ nền. Thử phá 12 chốt ⇒ 11 bị bắt, 1 sống (dừng tác vụ nền) ⇒ thêm test thứ tự dừng ⇒ 12/12.
+- 805 test.
+
+**Vẫn chưa chạy live — các chốt còn đóng**
+- `brokers.dnse.api_verified` / `brokers.ssi.api_verified` = false; null: `fees.*`, `risk.*`, `brokers.dnse.loan_package_id`, `brokers.dnse.trading_token_ttl_seconds`, `brokers.ssi.order_symbol_format`, `brokers.ssi.market_order_type`, `live.allowed_machine`.
+- Chưa có kiểm thử đầu-cuối với broker thật (không có khoá). Paper trade ≥ vài tuần, so với backtest cùng kỳ trước khi cân nhắc live (golive checklist §6).
+
+**Rủi ro còn lại**
+- Token SSI/DNSE hết hạn giữa phiên ⇒ adapter tự xin OTP và nhắn Telegram; trong lúc chờ, broker đó bị coi là mất kết nối (DNSE: có vị thế quá `broker_timeout_seconds` ⇒ đối ứng khẩn cấp trên SSI).
+- Paper chưa dùng feed tổng hợp (cần OTP SSI kể cả khi paper — giữ paper đơn giản).
+- Khởi động lại giữa phiên ⇒ nhập lại hai OTP; stop do bot giữ bị mất cho tới khi risk đòi stop mới / đóng vị thế.
+
+**Người dùng cần làm**: như các mục P4.1/P4.2 (chạy hai script thăm dò, gửi kết quả), điền settings còn null; chỉ đổi `api_verified` khi mình đã chốt các ❓ cùng bạn.
+
 ## 2026-11-08 — P4.2 Adapter SSI (`brokers/ssi.py`) — broker dự phòng, live KHOÁ tới khi kiểm API
 
 **Đã xong**

@@ -442,6 +442,11 @@ class DnseBroker(BrokerAdapter):
     # ------------------------------------------------------------ token ----
 
     @property
+    def trading_ready(self) -> bool:
+        """Đặt/huỷ lệnh được chưa (có trading token còn hạn). Runner chờ OTP tới khi True."""
+        return self.dry_run or self.token_valid()
+
+    @property
     def awaiting_otp(self) -> bool:
         """Đã xin OTP và đang chờ người dùng gửi `/otp dnse <mã>`."""
         return self._otp_requested_at is not None and not self.token_valid()

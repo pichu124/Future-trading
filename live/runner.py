@@ -18,8 +18,11 @@ Mỗi vòng (`step`, mặc định mỗi giây):
 Báo cáo cuối ngày: lệnh, P&L sau phí, lệnh bị risk từ chối kèm lý do, cảnh báo — gửi Telegram và
 ghi `<report_dir>/daily_YYYY-MM-DD.txt`.
 
-Chạy: `python -m live.runner --assume-computed-contract` (paper). Live cần TRADING_MODE=live VÀ
-`--live`; adapter DNSE đã có (P4.1) nhưng runner chưa nối live (chờ kiểm API + P4.2) ⇒ từ chối.
+Chạy: `python -m live.runner --assume-computed-contract` (paper).
+Live: TRADING_MODE=live VÀ `--live` ⇒ `live/wiring.py` lắp DNSE chính + SSI dự phòng + feed tổng hợp
+DNSE/SSI + stream lệnh SSI; thiếu khoá/giá trị nào (settings null, `api_verified` false, .env) ⇒ thoát 2
+trước khi kết nối. Khởi động live chờ `/otp` cho từng broker (tối đa `live.otp_wait_seconds`) rồi mới
+đối soát vị thế và giao dịch.
 Lệnh Telegram `/otp [dnse|ssi] <mã>` chuyển mã OTP cho broker cần token, không nhắc lại mã.
 """
 from __future__ import annotations
@@ -34,7 +37,7 @@ from collections import Counter, deque
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional, Sequence
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -69,6 +72,7 @@ class RunnerConfig:
     kill_flat_timeout_s: float = 120.0
     bar_grace_s: float = 0.5
     max_consecutive_errors: int = 5
+    otp_wait_s: float = 600.0          # live: chờ /otp cho broker cần token trước khi đối soát
 
 
 class Runner:
@@ -78,7 +82,8 @@ class Runner:
                  notify: Optional[Callable[[str], Any]] = None,
                  fetch_commands: Optional[Callable[[], Awaitable[list[str]]]] = None,
                  state_path: Optional[Path] = None, report_dir: Optional[Path] = None,
-                 config: RunnerConfig = RunnerConfig(), mode: str = "paper"):
+                 config: RunnerConfig = RunnerConfig(), mode: str = "paper",
+                 background: Sequence[Callable[[], Awaitable[None]]] = ()):
         self.settings, self.strategy, self.feed = settings, strategy, feed
         self.broker, self.backup_broker = broker, backup_broker
         self.clock, self.risk, self.state = market_clock, risk, state
@@ -111,6 +116,10 @@ class Runner:
         self._halted = False
         self._reported = False
         self._saved_key: Optional[tuple] = None
+        self._background = list(background)            # vd stream lệnh SSI
+        self._bg_tasks: list[asyncio.Task] = []
+        self._bg_alerted: set[int] = set()
+        self._queued: deque[str] = deque()             # cảnh báo từ callback đồng bộ (feed tổng hợp)
 
     # ------------------------------------------------------------------ tiện ích ----
 
@@ -160,8 +169,13 @@ class Runner:
         if self.state_path is not None and load_daily_state(self.state_path, self.state):
             await self._say(f"Khôi phục bộ đếm hôm nay: {self.state.trades_today} lượt, "
                             f"lãi/lỗ {self.state.realized_points_today:+.1f} điểm")
-        for name, b in self.brokers.items():
+        for b in self.brokers.values():
             await b.connect()
+        code = await self._wait_for_tokens()
+        if code is not None:
+            return code
+        now = self.clock.now()
+        for name, b in self.brokers.items():
             for sym, pos in (await b.positions()).items():
                 if pos.qty != 0:
                     self.state.positions[f"{name}:{sym}"] = replace(pos, broker=name)
@@ -178,6 +192,60 @@ class Runner:
         self._save()
         await self._say(f"🤖 Runner {self.mode} khởi động {now:%Y-%m-%d %H:%M:%S}")
         return None
+
+    def _not_ready(self) -> list[str]:
+        return [n for n, b in self.brokers.items() if getattr(b, "trading_ready", True) is False]
+
+    async def _wait_for_tokens(self) -> Optional[int]:
+        """Broker thật cần token (OTP) mới đặt/huỷ lệnh được ⇒ chờ `/otp` TRƯỚC khi đối soát và giao dịch.
+
+        Quá `otp_wait_s` ⇒ thoát 2 (không giao dịch nửa vời); `/kill` trong lúc chờ ⇒ thoát 0.
+        """
+        pending = self._not_ready()
+        if not pending:
+            return None
+        start = self.clock.now()
+        await self._say(f"⏳ Chờ OTP cho {', '.join(pending)} — trả lời /otp <broker> <mã> "
+                        f"(tối đa {self.config.otp_wait_s:.0f}s)")
+        while True:
+            await self._commands(self.clock.now())
+            if self.state.kill_reason:
+                await self._say("🛑 Dừng theo /kill trước khi giao dịch")
+                return 0
+            pending = self._not_ready()
+            if not pending:
+                await self._say("✅ Đủ token cho mọi broker — bắt đầu đối soát vị thế")
+                return None
+            if (self.clock.now() - start).total_seconds() >= self.config.otp_wait_s:
+                await self._say(f"🚨 Không nhận được OTP cho {', '.join(pending)} sau "
+                                f"{self.config.otp_wait_s:.0f}s — thoát, KHÔNG giao dịch")
+                return 2
+            await asyncio.sleep(self.config.tick_s)
+
+    # ------------------------------------------------------------------ tác vụ nền ----
+
+    def queue_alert(self, text: str) -> None:
+        """Cho callback đồng bộ (vd cảnh báo feed tổng hợp) gửi tin; vòng step kế tiếp sẽ gửi."""
+        self._queued.append(str(text))
+
+    def start_background(self) -> None:
+        self._bg_tasks = [asyncio.create_task(f()) for f in self._background]
+
+    async def stop_background(self) -> None:
+        for t in self._bg_tasks:
+            if not t.done():
+                t.cancel()
+        await asyncio.gather(*self._bg_tasks, return_exceptions=True)
+        self._bg_tasks = []
+
+    async def _check_background(self) -> None:
+        while self._queued:
+            await self._say(self._queued.popleft())
+        for i, t in enumerate(self._bg_tasks):
+            if t.done() and i not in self._bg_alerted and not t.cancelled() and t.exception() is not None:
+                self._bg_alerted.add(i)
+                exc = t.exception()
+                await self._say(f"🚨 Tác vụ nền dừng: {type(exc).__name__}: {exc} — khớp lệnh vẫn đọc qua REST")
 
     async def _ping(self, b: BrokerAdapter) -> bool:
         try:
@@ -204,6 +272,7 @@ class Runner:
             self._last_heartbeat = now
             self._save()
 
+        await self._check_background()
         # trạng thái kết nối/feed cập nhật TRƯỚC khi ra quyết định trong vòng này
         for name, b in self.brokers.items():
             if await self._ping(b):
@@ -426,6 +495,7 @@ class Runner:
         if code is not None:
             return code
         feed_task = asyncio.create_task(self.feed.run())
+        self.start_background()
         errors = 0
         try:
             while True:
@@ -450,6 +520,7 @@ class Runner:
             if not feed_task.done():
                 feed_task.cancel()
             await asyncio.gather(feed_task, return_exceptions=True)
+            await self.stop_background()
             for b in self.brokers.values():
                 try:
                     await b.close()
@@ -482,15 +553,13 @@ def main(argv=None) -> int:
         pass
 
     mode = os.environ.get("TRADING_MODE", "paper").strip().lower()
-    if args.live or mode == "live":
+    live = bool(args.live or mode == "live")
+    if live:
         try:
             assert_live_trading_allowed(live_flag=args.live)
         except LiveTradingNotAllowed as exc:
             log.error("Từ chối: %s", exc)
             return 2
-        log.error("Live chưa được nối: adapter DNSE (brokers/dnse.py) cần kiểm API trước "
-                  "(scripts/dnse_trading_probe.py ⇒ brokers.dnse.api_verified) và broker dự phòng SSI (P4.2).")
-        return 2
 
     settings = load_settings()
     try:
@@ -498,33 +567,9 @@ def main(argv=None) -> int:
     except MachineNotAllowed as exc:
         log.error("%s", exc)
         return 2
-    key, secret = os.environ.get("DNSE_API_KEY"), os.environ.get("DNSE_API_SECRET")
-    if not key or not secret:
-        log.error("Thiếu DNSE_API_KEY / DNSE_API_SECRET trong .env (feed dữ liệu)")
-        return 2
-    try:
-        from core import contracts
-        from feeds.data_feed_dnse import DnseFeed
-        from monitoring import telegram
+    from core import contracts
+    from monitoring import telegram
 
-        mclock = MarketClock.from_settings(settings)
-        risk = RiskManager.from_settings(settings, mclock)
-        mod, _, cls = args.strategy.partition(":")
-        strat_cls = getattr(importlib.import_module(mod), cls)
-        strategy = strat_cls.from_settings(settings) if hasattr(strat_cls, "from_settings") else strat_cls()
-        broker = PaperBroker.from_settings(settings, mclock.clock, name=risk.limits.primary_broker,
-                                           session=mclock)
-    except MissingSetting as exc:
-        log.error("%s — chạy `python -m core.settings`", exc)
-        return 2
-
-    async def lister():
-        if args.krx:
-            return [s.strip().upper() for s in args.krx]
-        name = contracts.trading_contract(mclock.now().date(), mclock.calendar, mclock.roll_days_before_expiry)
-        return [contracts.krx_symbol(*contracts.contract_ym(name))]
-
-    feed = DnseFeed.from_settings(settings, key, secret, lister, mclock)
     tg_token, tg_chat = telegram.credentials("trading")
     offset: dict = {"v": None}
 
@@ -541,6 +586,56 @@ def main(argv=None) -> int:
             offset["v"] = nxt
         return cmds
 
+    try:
+        mclock = MarketClock.from_settings(settings)
+        risk = RiskManager.from_settings(settings, mclock)
+        mod, _, cls = args.strategy.partition(":")
+        strat_cls = getattr(importlib.import_module(mod), cls)
+        strategy = strat_cls.from_settings(settings) if hasattr(strat_cls, "from_settings") else strat_cls()
+    except MissingSetting as exc:
+        log.error("%s — chạy `python -m core.settings`", exc)
+        return 2
+
+    async def lister():
+        if args.krx:
+            return [s.strip().upper() for s in args.krx]
+        name = contracts.trading_contract(mclock.now().date(), mclock.calendar, mclock.roll_days_before_expiry)
+        return [contracts.krx_symbol(*contracts.contract_ym(name))]
+
+    pending_alerts: list[str] = []
+    alert_sink: dict = {"fn": pending_alerts.append}     # đổi đích sang runner khi runner đã tạo
+
+    def on_feed_alert(a) -> None:
+        alert_sink["fn"](f"⚠️ Feed: {getattr(a, 'message', a)}")
+
+    backup = None
+    background: list = []
+    if live:
+        from live.wiring import build_live
+        try:
+            setup = build_live(settings, os.environ, live_flag=True, market_clock=mclock, contract_lister=lister,
+                               notify=notify, on_feed_alert=on_feed_alert)
+        except (MissingSetting, LiveTradingNotAllowed, ValueError, OSError) as exc:
+            log.error("Từ chối live: %s", exc)
+            return 2
+        if not (tg_token and tg_chat):
+            log.error("Live cần Telegram (TELEGRAM_TRADING_BOT_TOKEN/_CHAT_ID): nhập OTP + /kill + cảnh báo")
+            return 2
+        broker, backup, feed, background = setup.primary, setup.backup, setup.feed, setup.background
+    else:
+        key, secret = os.environ.get("DNSE_API_KEY"), os.environ.get("DNSE_API_SECRET")
+        if not key or not secret:
+            log.error("Thiếu DNSE_API_KEY / DNSE_API_SECRET trong .env (feed dữ liệu)")
+            return 2
+        from feeds.data_feed_dnse import DnseFeed
+        try:
+            broker = PaperBroker.from_settings(settings, mclock.clock, name=risk.limits.primary_broker,
+                                               session=mclock)
+        except MissingSetting as exc:
+            log.error("%s — chạy `python -m core.settings`", exc)
+            return 2
+        feed = DnseFeed.from_settings(settings, key, secret, lister, mclock)
+
     lock = InstanceLock(settings.path("paths.state_dir") / "bot.lock", mode=mode,
                         stale_after_s=float(settings.get("live.lock_stale_after_seconds", 120)))
     try:
@@ -551,12 +646,16 @@ def main(argv=None) -> int:
     try:
         state_dir = settings.path("paths.state_dir")
         runner = Runner(settings=settings, strategy=strategy, feed=feed, broker=broker,
-                        market_clock=mclock, risk=risk, state=AccountState(), lock=lock,
+                        backup_broker=backup, market_clock=mclock, risk=risk, state=AccountState(), lock=lock,
                         notify=notify, fetch_commands=fetch_commands,
                         state_path=state_dir / "daily_state.json",
                         report_dir=settings.path("paths.data_dir") / "reports",
-                        config=RunnerConfig(heartbeat_s=float(settings.get("monitoring.heartbeat_seconds", 30))),
-                        mode=f"{mode}@{machine}")
+                        config=RunnerConfig(heartbeat_s=float(settings.get("monitoring.heartbeat_seconds", 30)),
+                                            otp_wait_s=float(settings.get("live.otp_wait_seconds", 600))),
+                        mode=f"{'live' if live else mode}@{machine}", background=background)
+        for text in pending_alerts:
+            runner.queue_alert(text)
+        alert_sink["fn"] = runner.queue_alert
         return asyncio.run(runner.run())
     finally:
         lock.release()
