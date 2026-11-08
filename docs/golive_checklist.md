@@ -23,7 +23,7 @@
 | Test trực tiếp `ExecutionManager` | ✅ `tests/test_execution.py` |
 | **Việc của bạn** | lịch nghỉ 2026–2027 (`check_calendar.py` báo thiếu), `fees.*`, `risk.*`, `live.allowed_machine`, `backtest.initial_capital_vnd`; khoá API + chạy hai script thăm dò; dữ liệu lịch sử (P1.6) + backtest ORB; paper ≥ vài tuần |
 | Feed tổng hợp cho paper | ✅ `paper.composite_feed: true` (mặc định false) |
-| Chưa làm (tuỳ chọn) | `brokers/tcbs.py` (CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định) |
+| Adapter TCBS (tuỳ chọn) | ✅ `brokers/tcbs.py` theo tài liệu chính thức; TẮT (`brokers.tcbs_enabled: false`, `api_verified: false`), chưa nối vào runner — CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định |
 
 ## Kết luận
 
@@ -74,7 +74,7 @@ Cột "Xác minh" là trạng thái lúc rà; trạng thái sửa ở bảng 1b.
 
 | Mục | Trạng thái |
 |---|---|
-| §2 Kiến trúc | Thiếu `brokers/tcbs.py` (tuỳ chọn). `brokers/dnse.py` (P4.1), `brokers/ssi.py` (P4.2) đã có — live khoá tới khi kiểm API; logger JSON có cấu trúc ✔ (`monitoring/logger.py`). Còn lại đủ |
+| §2 Kiến trúc | Đủ `brokers/` (TCBS có nhưng tắt). `brokers/dnse.py` (P4.1), `brokers/ssi.py` (P4.2) đã có — live khoá tới khi kiểm API; logger JSON có cấu trúc ✔ (`monitoring/logger.py`). Còn lại đủ |
 | §2 Một code strategy cho backtest/paper/live | ✔ `ExecutionManager` + `RiskManager` dùng chung; chỉ đổi broker và nguồn dữ liệu |
 | §2 Giá trị null ⇒ từ chối chạy | ✔ (risk, paper, engine, runner); còn 10 khoá null — xem mục 5 |
 | §3 DNSE chính / SSI dự phòng, net tổng mọi broker | Feed: ✔ cả hai + composite. Broker: DNSE ✔ (`brokers/dnse.py`), SSI ✔ (`brokers/ssi.py`) — chưa nối live vào runner. Net tổng: ✔ (adapter DNSE theo dõi cả lệnh đặt tay) |

@@ -1,5 +1,20 @@
 # Tiến độ
 
+## 2026-11-08 — Adapter TCBS (`brokers/tcbs.py`) — broker thứ 3, TẮT mặc định
+
+**Nguồn:** tài liệu chính thức `developers.tcbs.com.vn` v1.0.0 + đặc tả `openapi-v1.0.0.json` (cần mở host này: đã tạo môi trường cloud riêng "Future-trading" chỉ thêm `developers.tcbs.com.vn`, bạn đã duyệt). Gói PyPI `tcbs` không có provenance ⇒ không dùng. Ghi vào `docs/broker_notes.md` §2b (endpoint, field, mã trạng thái, mã lỗi, bảng ❓).
+
+**Đã xong**
+- `TcbsHttp`: Bearer, không retry; lỗi = HTTP ≥ 400 hoặc `rc < 1`; mã lỗi nghiệp vụ trong bảng của TCBS (kể cả kèm HTTP 500, vd -9999) ⇒ chắc chắn chưa tiếp nhận; 5xx/timeout không mã ⇒ "không rõ".
+- `TcbsTokenManager`: API Key + **iOTP người dùng đọc trong app TCInvest** (`/otp tcbs <mã>`); token hết hạn = min(8 giờ theo tài liệu, `exp` trong JWT); không refresh. Cảnh báo API Key còn < 7 ngày.
+- `TcbsBroker`: `refId` suy từ client id (TCBS KHÔNG chống trùng refId ⇒ không bao giờ gửi lại); lệnh "không rõ" tra sổ lệnh đúng theo `refId` (cách tài liệu chỉ), quá 15s ⇒ REJECTED. Lệnh thị trường = LO giá trần/sàn (API không mô tả MTL ❓). Sửa: giá và KL hai request (TCBS cấm sửa đồng thời), `nvol` là tổng, refId mới mỗi lần. Huỷ: -6004/-8004 (đã huỷ/đã khớp) an toàn, chỉ báo CANCELLED khi sổ lệnh xác nhận. Vị thế từ `data.detailData` (net/side lệch ⇒ lỗi). Khớp cộng dồn (`matchVolume`/`matchPriceBQ`), lệnh ngoài bot được theo dõi, stop do bot giữ.
+- Chốt trước MỌI lệnh thay đổi: TRADING_MODE=live + `--live` + `brokers.tcbs_enabled` + `brokers.tcbs.api_verified` + token.
+- `scripts/tcbs_trading_probe.py`: `--payload-only` hoặc iOTP → CHỈ ĐỌC (hạn API Key, tiểu khoản, trần/sàn + định dạng mã, vị thế, sổ lệnh trang 0/1/2); không đặt lệnh (không có môi trường thử).
+- Test viết trước: `tests/test_broker_tcbs.py` (70), `tests/test_tcbs_probe.py` (3). Thử phá 24 cơ chế ⇒ 1 sống (mã orderStatus 7 bị chuỗi trạng thái che) ⇒ thêm ca ⇒ 24/24.
+- 949 test.
+
+**Chưa làm / ❓**: chưa nối vào runner (CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định); stream `DE_ORDER` chưa dùng (REST đủ, tài liệu nói stream không phát lại); lệnh điều kiện SOU/SOL (stop phía broker) chưa dùng; các ❓ ở broker_notes §2b (MTL, pageNo 0/1, mã cũ trong ví dụ, rate limit).
+
 ## 2026-11-08 — Feed tổng hợp DNSE + SSI cho chế độ paper
 
 **Đã xong**

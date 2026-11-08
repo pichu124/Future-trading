@@ -99,7 +99,15 @@ feeds:
 brokers:
   primary: dnse
   backup: ssi
+  # TCBS = broker THỨ 3, tuỳ chọn. CLAUDE.md: chỉ bật sau khi DNSE + SSI chạy ổn định.
   tcbs_enabled: false
+  tcbs:                                 # brokers/tcbs.py — khoá + số tài khoản ở .env (TCBS_*)
+    base_url: https://openapi.tcbs.com.vn
+    # CHỈ đặt true sau khi chạy scripts/tcbs_trading_probe.py và đối chiếu ❓ ở docs/broker_notes.md §2b.
+    api_verified: false
+    request_timeout_seconds: 10
+    poll_seconds: 1
+    uncertain_resolve_seconds: 15       # tài liệu TCBS: không thấy theo refId ⇒ chờ 10–15s tra lại
   dnse:                                 # brokers/dnse.py — số tiểu khoản đặt ở .env (DNSE_ACCOUNT_NO)
     base_url: https://openapi.dnse.com.vn   # UAT: https://openapi-uat.dnse.com.vn
     # Gói vay phái sinh: GET /accounts/{tiểu khoản}/loan-packages?marketType=DERIVATIVE

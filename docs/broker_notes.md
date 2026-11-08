@@ -248,6 +248,58 @@ SignalR, `fc-tradeapi`) là thế hệ trước.
 | Đơn vị giá phái sinh (điểm) | gửi điểm, bước 0,1 | probe masterdata |
 | Token chỉ-dữ-liệu có cần OTP | feed dùng chung token có OTP | probe |
 
+## 2b. TCBS — iFlash Open API (broker thứ 3, tuỳ chọn, KHÔNG bật mặc định)
+
+**Nguồn:** cổng tài liệu chính thức `https://developers.tcbs.com.vn` (TCBS OpenAPI — Developer Portal, v1.0.0) và
+đặc tả `https://developers.tcbs.com.vn/specs/openapi-v1.0.0.json` (OpenAPI 3.0, server `https://openapi.tcbs.com.vn`),
+đọc 08/11/2026. Gói PyPI `tcbs` 0.1.0 KHÔNG có provenance, repo nguồn không truy cập được ⇒ không dùng.
+CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định ⇒ adapter có sẵn nhưng `brokers.tcbs_enabled: false`.
+
+### 2b.1 Xác thực
+- Đăng ký API Key trên TCInvest (Tiện ích → iFlash Open API) ✅.
+- `POST /gaia/v1/oauth2/openapi/token` body `{"apiKey","otp"}` — `otp` = **Smart OTP (iOTP) từ app TCInvest** (người dùng tự
+  mở app lấy mã; API không gửi mã) → `{"token": "<JWT>"}` ✅. Gắn `Authorization: Bearer <JWT>` mọi request ✅.
+- Token sống **tối đa 8 giờ** kể từ lúc xác thực iOTP; không có refresh ⇒ hết hạn phải lấy iOTP mới ✅.
+- API Key có hạn: `POST /gaia/v1/oauth2/openapi/apikey/info` `{"apiKey"}` → `{"expireDate"}`; gia hạn
+  `…/apikey/extend` `{"apiKey","otp"}` (hết hạn rồi thì không gia hạn được) ✅.
+- Hạn mức rate limit: không thấy trong tài liệu ❓.
+
+### 2b.2 Quy ước chung ✅
+- Giá phái sinh là `number` (điểm); field null không xuất hiện trong JSON; phân trang `page` 0-indexed (mục kiểu dữ liệu) — nhưng
+  sổ lệnh phái sinh dùng `pageNo` (ví dụ bắt đầu từ 1) ❓.
+- Lỗi: HTTP 400/500, body `{"status","code","message","traceId"}`; thành công HTTP 200 với `rc ≥ 1`. **Mã HTTP không phản ánh lệnh
+  đã lên sàn hay chưa — xem `code`.** Mã lỗi nghiệp vụ trong bảng (vd -6012 không đủ ký quỹ, -6033 mã hết hạn, -6035 ngoài trần/sàn,
+  -6036 sai bước giá, -8002 thị trường đóng, -9999 lỗi hệ thống "lệnh không được ghi nhận") ⇒ lệnh CHƯA được tiếp nhận.
+  Timeout / 5xx không có mã nghiệp vụ ⇒ có thể đã tiếp nhận ⇒ tra sổ lệnh theo `refId`, không thấy thì chờ 10–15s tra lại ✅.
+
+### 2b.3 Giao dịch phái sinh ✅
+| Việc | Method + path | Chính |
+|---|---|---|
+| Tiểu khoản | `GET /eros/v2/get-profile/by-username/{custodyCode}?fields=basicInfo,bankSubAccounts` | `bankSubAccounts[].accountNo`, `accountType` = NORMAL/MARGIN/**DERIVATIVE** |
+| Đặt lệnh | `POST /khronos/v1/order/place` | `accountId` (lưu ký), `subAccountId` (tiểu khoản PS), `side` B/S, `symbol` (mã KRX 9 ký tự, vd 41I1GB000), `price` (number, **bắt buộc, trong trần–sàn**), `volume`, `orderType` ("0" thường; "SLP=x,y" SL/TP; "ABI=…" đối ứng), `refId` (10–100 ký tự) → `{rc:"1", data:[{orderNo, pk_orderNo, showPrice}]}` |
+| Sửa | `POST /khronos/v1/order/change` | `accountId, subAccountId, orderNo, refId (mới, duy nhất), nvol, nprice` — **không sửa đồng thời giá và KL** (-8020), KL mới ≥ KL đã khớp (-8018) ⇒ `nvol` là TỔNG; không sửa được ATO/ATC/MTL/MOK/MAK |
+| Huỷ | `POST /khronos/v1/order/cancel` | `{accountId, orderNo, cmd:"Web.cancelOrder", pin:"F", refId}` → `status: PW`; huỷ lại lệnh đã huỷ ⇒ -6004 (an toàn) |
+| Sổ lệnh trong ngày | `GET /khronos/v1/order/in-day` | `accountId, pageNo, pageSize, symbol ("ALL,ALL"), orderType (""), status (0 = tất cả), refId (tra sau timeout)` → `data[]`: `orderNo, pk_orderNo, refId, side, symbol, volume, showPrice, matchVolume (CỘNG DỒN), matchPriceBQ (giá bình quân), status, orderStatus, isCancel, isAmend` |
+| Vị thế mở | `GET /khronos/v1/account/portfolio/status?accountId&subAccountId` | `data.detailData[]` (không có khi phẳng): `symbol, net (>0 Long), side L/S, avg_remain, lastPrice, netoffvol, duedate` |
+| Giá trần/sàn | `GET /tartarus/v1/derivatives` | `data[]`: `symbol, ceilPrice, floorPrice, refPrice, bid/offer 1–3, matchPrice, expiryDate` |
+| Lệnh điều kiện | `POST /khronos/v1/order/condition/place` (+ `/condition/cancel`, `/condition/detail`, `/v2/order/condition/change`) | `orderType` SOL (giá ≥ soPrice) / SOU (giá ≤ soPrice) / TSO trailing; `soPrice` |
+| Stream | `wss://openapi.tcbs.com.vn/ws/nesoi` | `authenticate|base64({"jwt":…})`, chờ `authenticate|{"success":true}`, `subscribe|base64({"topic":"DE_ORDER"})`; heartbeat TEXT `ping|1` mỗi 2s (tắt ping RFC 6455); data `message_proto|DE_ORDER|{…}` (matchVolume cộng dồn); không số thứ tự, không phát lại ⇒ reconnect thì đồng bộ REST |
+
+- **`refId` KHÔNG chống trùng**: gửi lại cùng refId tạo lệnh MỚI ✅ ⇒ không bao giờ gửi lại; refId chỉ để tra sổ lệnh.
+- `orderStatus` ✅: 1 chờ gửi/chờ sàn · 2 đã lên sàn (kể cả khớp một phần) · 3 chờ huỷ · 4 khớp hết, hoặc khớp một phần rồi huỷ phần
+  còn lại · 5 đã huỷ chưa khớp · 6 chờ sửa · 7 bị từ chối/hệ thống huỷ chưa khớp. `status` là chuỗi lịch sử (P, M, C, W, X, J — vd PJX bị từ chối).
+- Lệnh thường hiệu lực trong ngày; phần chưa khớp bị huỷ sau đóng cửa ✅.
+
+**Adapter `brokers/tcbs.py` quyết định gì khi tài liệu chưa nói (❓):**
+| ❓ | Adapter đang làm | Cách chốt |
+|---|---|---|
+| Đặt lệnh thị trường (MTL) qua API: tài liệu không mô tả, nhưng sổ lệnh/DE_ORDER có hiện `showPrice: "MTL"` | lệnh thị trường = **LO giá trần (mua) / giá sàn (bán)** lấy từ `/tartarus/v1/derivatives` — hợp lệ theo tài liệu (giá trong trần–sàn), khớp như lệnh thị trường; phần dư nằm ở trần/sàn | hỏi TCBS cách đặt MTL; probe |
+| Ví dụ trong tài liệu dùng mã cũ `VN30F2103` trong khi mô tả + FAQ nói mã KRX | gửi mã KRX (theo FAQ); đọc về nhận cả hai | probe sổ lệnh |
+| `pageNo` bắt đầu từ 0 hay 1 | 1 (theo ví dụ), đọc tới khi trang rỗng / ít hơn `pageSize` | probe |
+| ATO/ATC qua API | không hỗ trợ (từ chối trước khi gửi) | — |
+| Rate limit | `poll_seconds: 1` | header probe ghi lại |
+| Lệnh điều kiện SOU/SOL làm stop phía broker | chưa dùng — stop do bot giữ như DNSE/SSI (liên kết lệnh kích hoạt với client id chưa rõ) | thử trên tài khoản thật với KL nhỏ, sau khi bật |
+
 ## 3. Hệ quả cho thiết kế (đã/ sẽ áp vào code)
 
 1. `core/contracts.py`: bảng chữ năm A=2020 đã được hai nguồn độc lập xác nhận ⇒ giữ nguyên. Danh sách hợp đồng thật vẫn lấy từ `GET /instruments?marketId=DVX&securityGroupId=FU` (DNSE) / `masterdata` (SSI) lúc khởi động.
