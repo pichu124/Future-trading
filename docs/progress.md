@@ -17,7 +17,7 @@
 - Runner: lệnh Telegram `/otp <mã>` (không bao giờ nhắc lại mã), chuyển tick cho MỌI broker có `on_tick` (kể cả async). `telegram.parse_commands` giữ tham số chỉ cho `/otp`. Live vẫn bị từ chối (chưa nối, chờ kiểm API + P4.2).
 - `scripts/dnse_trading_probe.py`: `--payload-only` (không mạng), mặc định chỉ đọc (tài khoản, gói vay, sổ lệnh, lịch sử, vị thế, secdef), `--uat --order-test [--with-modify] --live` đặt-sửa-huỷ thử một lệnh LO giá sàn trên UAT qua chính adapter; ghi response thô đã xoá passcode/token + `summary.json` (chuỗi `orderStatus` thấy được).
 - `config/settings.yaml` thêm `brokers.dnse.*` (`loan_package_id`, `trading_token_ttl_seconds` = null; `api_verified: false`); `.env.example` thêm `DNSE_ACCOUNT_NO`, bỏ `DNSE_OTP_EMAIL`.
-- Test viết trước: `tests/test_broker_dnse.py` (95 test), `tests/test_trading_probe.py` (6), runner/parser (4). Thử phá 23 cơ chế an toàn của adapter ⇒ ban đầu 4 cơ chế sống sót ⇒ thêm test (lệnh có sẵn đã khớp một phần lúc khởi động, lệnh giống hệt đã khớp xong không được nhận nhầm, deal mâu thuẫn, trạng thái sau sửa lệnh) ⇒ 23/23 bị bắt.
+- Test viết trước: `tests/test_broker_dnse.py` (89 test), `tests/test_trading_probe.py` (6), runner/parser (4). Thử phá 23 cơ chế an toàn của adapter ⇒ ban đầu 4 cơ chế sống sót ⇒ thêm test (lệnh có sẵn đã khớp một phần lúc khởi động, lệnh giống hệt đã khớp xong không được nhận nhầm, deal mâu thuẫn, trạng thái sau sửa lệnh) ⇒ 23/23 bị bắt.
 - 680 test.
 
 **Rủi ro / giả định còn lại**
