@@ -1,5 +1,17 @@
 # Tiến độ
 
+## 2026-11-08 — Lịch nghỉ 2025–2026 (`config/holidays.yaml`)
+
+**Đã xong**
+- 2026 ĐỦ: 13 ngày thường (01–02/01, 16–20/02, 27/04, 30/04, 01/05, 31/08–02/09) theo thông báo HNX/HOSE (qua báo chí) và **kiểm chéo bằng dữ liệu ngày VN30** từ connector DNSE (10/11/2025–06/11/2026): đúng 13 ngày này không có phiên, mọi ngày thường khác có phiên. 02/01/2026: một bài báo ghi HNX vẫn giao dịch, nhưng VN30 không có phiên ⇒ ghi là nghỉ (❓, hướng an toàn).
+- 2025: 12 ngày theo thông báo HNX qua báo chí (CHƯA kiểm chéo bằng dữ liệu — connector chỉ có 1 năm) ⇒ backtest dữ liệu 2025 không còn coi ngày nghỉ là "thiếu dữ liệu".
+- `tests/test_holidays_config.py`: khoá danh sách 2026 theo dữ liệu đã quan sát; VN30F2602 đáo hạn 13/02.
+- `check_calendar.py`: chỉ còn cảnh báo 2027.
+
+**Việc của bạn**
+- [ ] Khi HNX công bố lịch nghỉ 2027 (thường cuối năm nay): bổ sung Tết Đinh Mùi (mùng 1 = 06/02/2027), Giỗ Tổ, ngày nghỉ bù, 02/09. Bắt buộc TRƯỚC 2027 — lịch sai làm lệch ngày đáo hạn/roll.
+- [ ] (tuỳ chọn) xem lại 02/01/2026 trên thông báo gốc của HNX.
+
 ## 2026-11-08 — Báo cáo backtest theo % vốn (`backtest.initial_capital_vnd`)
 
 **Đã xong**
