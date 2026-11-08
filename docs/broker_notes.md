@@ -123,6 +123,9 @@ Còn ❓ trên dây — downloader **tự kiểm, không đoán** (sai ⇒ báo 
 - **Đối chiếu mã nguồn SDK `dnse` 0.5.0 (`dnse/stream/*.py`, đọc 08/11/2026)** — áp vào `feeds/data_feed_dnse.py`:
   - sau khi mở kết nối, server gửi một lời chào (SDK đọc `session_id`) TRƯỚC khi xác thực ✅;
   - message đăng ký là `{"name": "tick.G1.json", "symbols": [<mã KRX>]}` — **không** có trường `action` ✅;
+    `symbols` là danh sách ✅ (SDK), nhưng server có nhận NHIỀU mã trong một message hay không ❓ — recorder chỉ
+    gửi hai mã (ngày trước roll) khi bật `recorder.record_next_contract_on_roll_eve`; kiểm bằng
+    `dnse_feed_probe.py --krx <chính> <kế tiếp> --extra-contract <tên kế tiếp>` trước khi bật;
     trade, quote, giá dự kiến, secdef đều đi chung kênh `tick.G1.json` ✅;
   - phản hồi xác thực thành công: SDK chỉ kiểm `action != "auth_error"` ⇒ định dạng bản thành công ❓;
   - model dùng `alias_generator=to_camel` + `populate_by_name` ⇒ field trên dây nhiều khả năng camelCase

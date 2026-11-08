@@ -5,6 +5,8 @@
 - Chạy feed + recorder tới `recorder.stop` (mặc định 15:00), flush lần cuối, gộp file ngày, rồi
   chạy `scripts/validate_day.py` (báo cáo chất lượng + `data/bars/<ngày>.parquet` cho backtest).
 - Feed chết bất thường ⇒ vẫn lưu phần đã nhận, thoát mã 1 (Task Scheduler ghi "Last Run Result").
+- Ngày trước roll + bật `recorder.record_next_contract_on_roll_eve`: ghi thêm HĐ kế tiếp trên CÙNG kết nối
+  (đo chênh lệch back-adjust cho chiến lược nhiều ngày); kiểm định chất lượng chỉ trên HĐ giao dịch.
 - Chặn hai tiến trình ghi cùng lúc trên một máy bằng `live.instance_lock.InstanceLock`
   (file `state/recorder.lock`, tách khỏi khoá của bot giao dịch).
 
@@ -52,6 +54,26 @@ def plan(now: datetime, cal: TradingCalendar, start: time, stop: time) -> tuple[
     if now.time() >= stop:
         return "done", 0.0
     return "run", 0.0
+
+
+def roll_eve_extras(d, cal: TradingCalendar, roll_days_before_expiry: int) -> list[str]:
+    """Ngày trước roll ⇒ [HĐ kế tiếp] (để đo chênh lệch back-adjust, core/continuous.py); ngày khác ⇒ []."""
+    tc = contracts.trading_contract(d, cal, roll_days_before_expiry)
+    nxt = contracts.trading_contract(cal.next_trading_day(d), cal, roll_days_before_expiry)
+    return [nxt] if nxt != tc else []
+
+
+def feed_kwargs(settings, d, cal: TradingCalendar, roll_days_before_expiry: int) -> dict:
+    """Tham số thêm cho DnseFeed. Ghi HĐ kế tiếp chỉ khi bật `recorder.record_next_contract_on_roll_eve`
+    (mặc định TẮT tới khi `dnse_feed_probe.py --extra-contract` xác nhận đăng ký nhiều mã — broker_notes §1.4)."""
+    on = settings.get("recorder.record_next_contract_on_roll_eve") is True
+    return {"extra_contracts": roll_eve_extras(d, cal, roll_days_before_expiry) if on else []}
+
+
+def computed_listing(d, cal: TradingCalendar, roll_days_before_expiry: int, extras) -> list[str]:
+    """Mã KRX TÍNH TOÁN (--assume-computed-contract) của HĐ giao dịch + HĐ ghi thêm."""
+    names = [contracts.trading_contract(d, cal, roll_days_before_expiry), *extras]
+    return [contracts.krx_symbol(*contracts.contract_ym(n)) for n in names]
 
 
 async def record_session(feed: DataFeed, recorder: TickRecorder, mclock: MarketClock, *,
@@ -128,14 +150,17 @@ def main(argv=None) -> int:
         log.error("Thiếu DNSE_API_KEY / DNSE_API_SECRET trong .env")
         return 2
 
+    today = mclock.now().date()
+    extra_kw = feed_kwargs(settings, today, mclock.calendar, mclock.roll_days_before_expiry)
+    if extra_kw["extra_contracts"]:
+        log.info("Ngày trước roll: ghi thêm %s (đo chênh lệch back-adjust)", ", ".join(extra_kw["extra_contracts"]))
+
     async def lister():
         if args.krx:
             return [s.strip().upper() for s in args.krx]
-        name = contracts.trading_contract(mclock.now().date(), mclock.calendar,
-                                          mclock.roll_days_before_expiry)
-        krx = contracts.krx_symbol(*contracts.contract_ym(name))
-        log.warning("Dùng mã hợp đồng TÍNH TOÁN %s (%s) — chưa đối chiếu danh sách broker", name, krx)
-        return [krx]
+        krx = computed_listing(today, mclock.calendar, mclock.roll_days_before_expiry, extra_kw["extra_contracts"])
+        log.warning("Dùng mã hợp đồng TÍNH TOÁN %s — chưa đối chiếu danh sách broker", ", ".join(krx))
+        return krx
 
     lock = InstanceLock(settings.path("paths.state_dir") / "recorder.lock", mode="recorder",
                         stale_after_s=float(settings.get("live.lock_stale_after_seconds", 120)))
@@ -149,7 +174,7 @@ def main(argv=None) -> int:
             if action == "wait":
                 log.info("Chờ %.0f giây tới %s", wait_s, start.strftime("%H:%M"))
                 await asyncio.sleep(wait_s)
-            feed = DnseFeed.from_settings(settings, key, secret, lister, mclock)
+            feed = DnseFeed.from_settings(settings, key, secret, lister, mclock, **extra_kw)
             rec = TickRecorder.from_settings(settings, mclock.clock)
             log.info("Ghi vào %s, dừng lúc %s", rec.day_dir(), stop.strftime("%H:%M"))
             return await record_session(feed, rec, mclock, stop_at=stop, heartbeat=lock.heartbeat)

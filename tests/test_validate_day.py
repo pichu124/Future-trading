@@ -225,7 +225,7 @@ def test_script_end_to_end(tmp_path, session_cfg):
     write_bars([Bar(SYM, at(10, 0), 1350, 1350.8, 1350, 1350.8, 0, 60, False)], ref_dir, DAY, "ref",
                filename=f"{DAY.isoformat()}.parquet")
     s = Settings({"paths": {"data_dir": str(data)}, "session": session_cfg,
-                  "contract": {"tick_size_points": 0.1, "daily_limit_pct": 7.0},
+                  "contract": {"tick_size_points": 0.1, "daily_limit_pct": 7.0, "roll_days_before_expiry": 1},
                   "feeds": {"primary": "dnse", "feed_divergence_ticks": 3, "feed_stale_seconds": 5}})
     code, rep = run(DAY, s, ref_price=None)
     assert code == 1                                     # có vấn đề (gap cả ngày ngoài 10:00–10:05, hụt SSI)

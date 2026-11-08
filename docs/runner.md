@@ -47,8 +47,10 @@ lúc khởi động, **trước khi kết nối broker**, dựng chuỗi back-ad
 
 Nghiêm ngặt: phải đủ đúng N phiên giao dịch gần nhất của hợp đồng giao dịch từng ngày; ngày trước roll phải có
 cả hợp đồng kế tiếp (đo chênh lệch). Thiếu ⇒ báo Telegram ngày/hợp đồng cần tải + lệnh `download_history.py`,
-thoát mã 2, KHÔNG giao dịch. Recorder chỉ ghi hợp đồng đang giao dịch ⇒ **ngày trước roll phải chạy downloader**
-(mặc định đã tải thêm hợp đồng kế tiếp hôm đó), vd sáng ngày roll:
+thoát mã 2, KHÔNG giao dịch. Hợp đồng kế tiếp ngày trước roll lấy từ một trong hai nguồn:
+- recorder, khi bật `recorder.record_next_contract_on_roll_eve` (TẮT mặc định — bật sau khi
+  `dnse_feed_probe.py --krx <chính> <kế tiếp> --extra-contract <tên>` báo ✅ nhận tick của cả hai mã);
+- hoặc downloader (mặc định tải thêm hợp đồng kế tiếp hôm đó), vd sáng ngày roll:
 
     python scripts/download_history.py --start <ngày trước roll> --end <ngày trước roll> --kinds ohlc
 

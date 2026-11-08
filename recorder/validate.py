@@ -54,6 +54,7 @@ class DayReport:
     divergence: Optional[dict] = None
     reference: Optional[dict] = None
     bars: dict[str, list[Bar]] = field(default_factory=dict)
+    extras: dict[str, dict] = field(default_factory=dict)     # HĐ ghi thêm (ngày trước roll): chỉ đếm
     issues: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
@@ -64,6 +65,7 @@ class DayReport:
                         for k, v in self.sources.items()},
             "divergence": self.divergence, "reference": self.reference,
             "bars": {k: len(v) for k, v in self.bars.items()},
+            "extras": self.extras,
             "issues": self.issues, "notes": self.notes,
         }
 
@@ -215,21 +217,43 @@ def validate_day(day_dir: Path, *, segments: Sequence[Segment], tick_size: float
                  gap_seconds: float, divergence_ticks: float, stale_seconds: float,
                  ref_price: Optional[float] = None, daily_limit_pct: float = 7.0,
                  jump_pct: float = 1.0, reference_bars: Optional[Sequence[Bar]] = None,
-                 bars_source: Optional[str] = None, tolerance_ticks: float = 2.0) -> DayReport:
-    ticks = load_ticks(Path(day_dir)) if Path(day_dir).exists() else []
-    day = ticks[0].ts.date() if ticks else None
+                 bars_source: Optional[str] = None, tolerance_ticks: float = 2.0,
+                 primary_symbol: Optional[str] = None) -> DayReport:
+    """`primary_symbol` = HĐ bot giao dịch ngày đó: mọi kiểm chất lượng chỉ trên HĐ này; HĐ khác (ghi thêm ngày
+    trước roll) chỉ được đếm và dựng bar. Không truyền mà dữ liệu có nhiều HĐ ⇒ báo lỗi (kiểm lẫn HĐ là sai)."""
+    all_ticks = load_ticks(Path(day_dir)) if Path(day_dir).exists() else []
+    day = all_ticks[0].ts.date() if all_ticks else None
     rep = DayReport(day)
-    if not ticks:
+    if not all_ticks:
         rep.issues.append(f"không có dữ liệu trong {day_dir}")
         return rep
+    symbols = {t.symbol for t in all_ticks}
+    if primary_symbol is None:
+        ticks = all_ticks
+        if len(symbols) > 1:
+            rep.issues.append(f"dữ liệu có nhiều hợp đồng ({', '.join(sorted(symbols))}) mà không chỉ định HĐ chính "
+                              "— kiểm chất lượng bị lẫn HĐ")
+    else:
+        ticks = [t for t in all_ticks if t.symbol == primary_symbol]
+        if not ticks:
+            rep.issues.append(f"không có tick nào của {primary_symbol} (HĐ giao dịch ngày này)")
+        for sym in sorted(symbols - {primary_symbol}):
+            mine = [t for t in all_ticks if t.symbol == sym]
+            n_tr = sum(1 for t in mine if t.last is not None)
+            rep.extras[sym] = {"ticks": len(mine), "trades": n_tr, "sources": sorted({t.source or "?" for t in mine})}
+            rep.notes.append(f"{sym}: {n_tr} lần khớp — HĐ ghi thêm (đo chênh lệch roll), không kiểm chất lượng")
     if ref_price is None:
         rep.notes.append("Chưa có giá tham chiếu (--ref-price) ⇒ bỏ qua kiểm tra biên độ ±%")
     lo = hi = None
     if ref_price is not None:
         lo, hi = ref_price * (1 - daily_limit_pct / 100), ref_price * (1 + daily_limit_pct / 100)
 
-    for src in sorted({t.source or "?" for t in ticks}):
+    for src in sorted({t.source or "?" for t in all_ticks}):
+        # bar: mọi HĐ của nguồn này (HĐ ghi thêm cần bar để đo chênh lệch); kiểm chất lượng: chỉ HĐ chính
+        rep.bars[src] = build_bars([t for t in all_ticks if (t.source or "?") == src and t.last is not None])
         mine = [t for t in ticks if (t.source or "?") == src]
+        if not mine:
+            continue
         trades = [t for t in mine if t.last is not None]
         s = SourceReport(n_ticks=len(mine), n_trades=len(trades), n_quotes=len(mine) - len(trades),
                          first_ts=mine[0].ts, last_ts=mine[-1].ts)
@@ -242,7 +266,6 @@ def validate_day(day_dir: Path, *, segments: Sequence[Segment], tick_size: float
                       if a.last and abs(b.last - a.last) / a.last * 100 > jump_pct)
         s.volume = volume_check(trades)
         rep.sources[src] = s
-        rep.bars[src] = build_bars(trades)
 
         if s.gaps:
             rep.issues.append(f"{src}: {len(s.gaps)} khoảng trống > {gap_seconds:g}s trong phiên "
@@ -263,7 +286,8 @@ def validate_day(day_dir: Path, *, segments: Sequence[Segment], tick_size: float
                           f"{rep.divergence['seconds_over_threshold']} giây")
     if reference_bars is not None:
         src = bars_source if bars_source in rep.bars else next(iter(sorted(rep.bars)))
-        rep.reference = compare_reference(rep.bars[src], reference_bars, tick_size, tolerance_ticks)
+        ours = [b for b in rep.bars[src] if primary_symbol is None or b.symbol == primary_symbol]
+        rep.reference = compare_reference(ours, reference_bars, tick_size, tolerance_ticks)
         if rep.reference["mismatches"]:
             rep.issues.append(f"{len(rep.reference['mismatches'])} sai lệch OHLC > {tolerance_ticks:g} "
                               f"bước so với tham chiếu (nguồn {src})")

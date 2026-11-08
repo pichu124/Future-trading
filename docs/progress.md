@@ -1,5 +1,22 @@
 # Tiến độ
 
+## 2026-11-08 — Recorder ghi thêm hợp đồng kế tiếp ngày trước roll
+
+**Đã xong**
+- `feeds/data_feed_dnse.py`: `DnseFeed(extra_contracts=[…])` đăng ký thêm trên CÙNG kết nối (một message `symbols: [chính, kế tiếp]`) — không mở kết nối thứ hai (giới hạn số kết nối/khoá ❓, kết nối thừa có thể làm rớt kết nối của runner). Độ "im lặng" chỉ tính tick HĐ chính. HĐ phụ không có trong danh sách broker ⇒ bỏ + cảnh báo, vẫn ghi HĐ chính. Không truyền ⇒ y hệt trước (runner không đổi).
+- `scripts/record_today.py`: `roll_eve_extras`, `feed_kwargs`, `computed_listing`; `main` truyền HĐ kế tiếp cho feed khi bật **`recorder.record_next_contract_on_roll_eve` (mặc định `false`)**.
+- Kiểm định cuối ngày tách theo HĐ (`validate_day(primary_symbol=…)`, `validate_day.run` truyền HĐ giao dịch của ngày): khoảng trống, giá nhảy, KL luỹ kế, lệch hai nguồn, so tham chiếu chỉ trên HĐ chính; HĐ phụ chỉ đếm (`extras`) + dựng bar vào cùng `data/bars/<ngày>.parquet`. Dữ liệu nhiều HĐ mà không chỉ định HĐ chính ⇒ báo lỗi (trước đây kiểm lẫn HĐ).
+- `scripts/dnse_feed_probe.py --extra-contract`: in số tick theo HĐ, báo ✅/❌ đã nhận tick của mọi mã.
+- Test viết trước `tests/test_recorder_roll_eve.py` (18), gồm đầu-cuối: ghi 18/11 có 2612 ⇒ `validate_day.run` ⇒ `load_live_history` ngày roll đo được chênh lệch. Thử phá 16 cơ chế ⇒ 1 sống (`main` không truyền HĐ phụ cho feed) ⇒ thêm test `main` ⇒ hết.
+- 1102 test.
+
+**Việc của bạn**
+- [ ] Có khoá DNSE, trong giờ giao dịch: `python scripts/dnse_feed_probe.py --krx <mã chính> <mã kế tiếp> --extra-contract <tên HĐ kế tiếp> --seconds 120` ⇒ thấy ✅ thì đặt `recorder.record_next_contract_on_roll_eve: true`. Chưa bật ⇒ ngày trước roll chạy downloader như cũ.
+
+**Rủi ro / giả định còn lại**
+- Nếu server chỉ nhận một mã (hoặc mã cuối thay mã trước), bật cờ sẽ làm recorder mất dữ liệu HĐ chính ngày trước roll ⇒ vì vậy cờ TẮT tới khi probe xác nhận. Runner không bị ảnh hưởng (kết nối riêng, không dùng HĐ phụ).
+- HĐ kế tiếp thanh khoản mỏng ⇒ phút chung cuối có thể sớm hơn giờ đóng cửa; vẫn là cùng một phút cho hai HĐ.
+
 ## 2026-11-08 — Nối lịch sử nhiều ngày vào runner live/paper
 
 **Đã xong**
@@ -12,7 +29,7 @@
 - 1084 test.
 
 **Rủi ro / giả định còn lại**
-- Recorder chỉ ghi HĐ đang giao dịch ⇒ ngày trước roll PHẢI chạy downloader (tải thêm HĐ kế tiếp), nếu không runner sẽ từ chối chạy chiến lược nhiều ngày trong N phiên sau roll. Có thể tự động hoá sau (recorder ghi thêm HĐ kế tiếp — cần sửa kiểm định để tách theo HĐ).
+- ~~Recorder chỉ ghi HĐ đang giao dịch~~ ⇒ đã thêm (mục bên trên), bật sau khi probe xác nhận.
 - Downloader chưa được chạy trên dây (P1.6) ⇒ đường này cũng chưa được thử với dữ liệu thật.
 - Lịch sử nạp một lần lúc khởi động, cố định trong ngày (bot intraday ⇒ đủ).
 

@@ -9,6 +9,12 @@ SDK chưa có endpoint danh sách hợp đồng ⇒ script bắt bạn khẳng �
 (xem trên app/bảng giá DNSE) thay cho bước đối chiếu tự động; runner thật sẽ lấy từ REST (P4.1).
 
     python scripts/dnse_feed_probe.py --krx 41I1GB000 --seconds 120
+
+Kiểm đăng ký NHIỀU mã trên một kết nối (cần trước khi bật `recorder.record_next_contract_on_roll_eve`):
+
+    python scripts/dnse_feed_probe.py --krx 41I1GB000 41I1GC000 --extra-contract VN30F2612 --seconds 120
+
+⇒ phải thấy tick của CẢ HAI hợp đồng (dòng in ra có tên HĐ) và `ticks_by_symbol` có hai mã.
 """
 from __future__ import annotations
 
@@ -71,7 +77,10 @@ async def main_async(args) -> int:
         async def lister():
             return [s.strip().upper() for s in args.krx]
 
-        feed = DnseFeed.from_settings(settings, key, secret, lister, mclock, connector=connector)
+        feed = DnseFeed.from_settings(settings, key, secret, lister, mclock, connector=connector,
+                                      extra_contracts=args.extra_contract or ())
+        by_symbol: dict = {}
+        feed.on_tick(lambda t: by_symbol.__setitem__(t.symbol, by_symbol.get(t.symbol, 0) + 1))
         feed.on_tick(lambda t: print(f"{t.ts:%H:%M:%S.%f} {t.symbol} last={t.last} x{t.last_qty} "
                                      f"bid={t.bid}/{t.bid_qty} ask={t.ask}/{t.ask_qty} tv={t.total_volume}"))
         task = asyncio.create_task(feed.run())
@@ -85,6 +94,10 @@ async def main_async(args) -> int:
                 task.cancel()
         s = feed.stats()
         print({k: v for k, v in s.items() if k != "per_minute"})
+        print(f"ticks_by_symbol: {by_symbol}")
+        if args.extra_contract:
+            missing = [c for c in [feed.symbol, *feed.extra_contracts] if not by_symbol.get(c)]
+            print("✅ nhận tick của mọi mã đã đăng ký" if not missing else f"❌ không có tick của {missing}")
     print(f"Message thô: {out_path}")
     return 0
 
@@ -94,6 +107,7 @@ def main() -> int:
     ap.add_argument("--krx", nargs="+", required=True, help="mã KRX hợp đồng đang niêm yết (đã kiểm tay)")
     ap.add_argument("--seconds", type=float, default=60)
     ap.add_argument("--raw", type=int, default=200, help="số message thô đầu tiên được ghi")
+    ap.add_argument("--extra-contract", nargs="+", help="tên HĐ ghi thêm (VN30FYYMM; mã KRX phải có trong --krx)")
     return asyncio.run(main_async(ap.parse_args()))
 
 

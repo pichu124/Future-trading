@@ -186,7 +186,8 @@ class DnseFeed(DataFeed):
                  backoff_base_s: float = 1.0, backoff_max_s: float = 60.0,
                  stale_seconds: float = 5.0,
                  backoff_sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
-                 epoch: Callable[[], float] = time.time):
+                 epoch: Callable[[], float] = time.time,
+                 extra_contracts: Iterable[str] = ()):
         super().__init__()
         if not api_key or not api_secret:
             raise ValueError("Thiếu DNSE api_key/api_secret (đặt trong .env)")
@@ -205,6 +206,10 @@ class DnseFeed(DataFeed):
         self._epoch = epoch
         self.symbol: Optional[str] = None
         self.krx_symbol: Optional[str] = None
+        # HĐ ghi thêm (recorder ngày trước roll): cùng kết nối; KHÔNG tính vào độ "im lặng" của feed
+        self._extra_wanted = [str(c).upper() for c in extra_contracts]
+        self.extra_contracts: list[str] = []
+        self.extra_krx: list[str] = []
         self._normalizer: Optional[DnseNormalizer] = None
         self._stopping = False
         self._conn_task: Optional[asyncio.Task] = None
@@ -231,8 +236,21 @@ class DnseFeed(DataFeed):
         today = self.clock.now().date()
         self.symbol, self.krx_symbol = resolve_contract(
             today, self.clock.calendar, self.clock.roll_days_before_expiry, listed)
-        self._normalizer = DnseNormalizer([self.krx_symbol])
-        log.info("dnse: theo dõi %s (KRX %s)", self.symbol, self.krx_symbol)
+        listed_set = {str(x).strip().upper() for x in listed}
+        self.extra_contracts, self.extra_krx = [], []
+        for name in self._extra_wanted:
+            if name == self.symbol or name in self.extra_contracts:
+                continue
+            krx = contracts.krx_symbol(*contracts.contract_ym(name))
+            if krx not in listed_set:
+                log.warning("dnse: HĐ ghi thêm %s (KRX %s) không có trong danh sách broker — bỏ, chỉ ghi %s",
+                            name, krx, self.symbol)
+                continue
+            self.extra_contracts.append(name)
+            self.extra_krx.append(krx)
+        self._normalizer = DnseNormalizer([self.krx_symbol, *self.extra_krx])
+        log.info("dnse: theo dõi %s (KRX %s)%s", self.symbol, self.krx_symbol,
+                 f" + ghi thêm {', '.join(self.extra_contracts)}" if self.extra_contracts else "")
         attempt = 0
         while not self._stopping:
             got_data = False
@@ -287,7 +305,7 @@ class DnseFeed(DataFeed):
             self._count_frame()
             if resp.get("action") == "auth_error":
                 raise FeedAuthError(f"DNSE từ chối xác thực: {resp.get('message', '')}")
-            await tr.send(json.dumps({"name": TICK_CHANNEL, "symbols": [self.krx_symbol]}))
+            await tr.send(json.dumps({"name": TICK_CHANNEL, "symbols": [self.krx_symbol, *self.extra_krx]}))
             self._counts["connects"] += 1
             log.info("dnse: đã kết nối và đăng ký %s", TICK_CHANNEL)
             hb = asyncio.create_task(self._heartbeat(tr))
@@ -375,7 +393,8 @@ class DnseFeed(DataFeed):
         tick = self._normalizer.normalize(msg, received=self.clock.now()) if self._normalizer else None
         if tick is None:
             return False
-        self._last_message_at = self.clock.now()
+        if tick.symbol == self.symbol:                 # HĐ ghi thêm không làm feed "còn sống"
+            self._last_message_at = self.clock.now()
         self._counts["ticks"] += 1
         for h in self._handlers:
             try:
@@ -397,7 +416,7 @@ class DnseFeed(DataFeed):
 
     def stats(self) -> dict:
         n = self._normalizer.counts if self._normalizer else Counter()
-        return {"symbol": self.symbol, "krx_symbol": self.krx_symbol,
+        return {"symbol": self.symbol, "krx_symbol": self.krx_symbol, "extra_contracts": list(self.extra_contracts),
                 "connects": self._counts["connects"], "disconnects": self._counts["disconnects"],
                 "frames": self._counts["frames"], "ticks": self._counts["ticks"],
                 "bad_frames": self._counts["bad_frames"],
