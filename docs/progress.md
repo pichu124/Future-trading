@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-08 — Phí sở + phí bù trừ VSDC (`fees.*`)
+
+- `fees.exchange_fee_vnd_per_contract: 2700` (phí HNX HĐTL chỉ số, mỗi lượt mở/đóng — biểu phí công bố của nhiều CTCK) và `fees.clearing_fee_vnd_per_contract: 2550` (phí bù trừ VSDC sau KRX, FAQ KRX của DNSE; phí qua đêm hệ thống mới = 0). Ghi nguồn trong `settings.yaml`.
+- Còn null (việc của bạn): `broker_fee_vnd_per_contract` (theo gói phí tài khoản), `tax_vnd_per_contract` (0,1% × giá trị chuyển nhượng, phụ thuộc giá + tỷ lệ ký quỹ) ⇒ backtest vẫn từ chối chạy tới khi điền.
+- Không tính phí quản lý tài sản ký quỹ (0,0024%/tháng) — không theo HĐ, nhỏ với intraday.
+
 ## 2026-11-08 — Lịch nghỉ 2025–2026 (`config/holidays.yaml`)
 
 **Đã xong**

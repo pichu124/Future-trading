@@ -21,7 +21,7 @@
 | data/state/logs ngoài Dropbox (§3b) | ✅ runner kiểm cả ba lúc khởi động |
 | Logger JSON có cấu trúc | ✅ `monitoring/logger.py`, không lộ token/OTP/khoá |
 | Test trực tiếp `ExecutionManager` | ✅ `tests/test_execution.py` |
-| **Việc của bạn** | lịch nghỉ 2027 (2025–2026 đã điền + kiểm chéo dữ liệu; `check_calendar.py` báo 2027), `fees.*`, `risk.*`, `live.allowed_machine`, `backtest.initial_capital_vnd`; khoá API + chạy hai script thăm dò; dữ liệu lịch sử (P1.6) + backtest ORB; paper ≥ vài tuần |
+| **Việc của bạn** | lịch nghỉ 2027 (2025–2026 đã điền + kiểm chéo dữ liệu; `check_calendar.py` báo 2027), `fees.broker_fee_vnd_per_contract` + `fees.tax_vnd_per_contract` (phí sở/VSDC đã điền), `risk.*`, `live.allowed_machine`, `backtest.initial_capital_vnd`; khoá API + chạy hai script thăm dò; dữ liệu lịch sử (P1.6) + backtest ORB; paper ≥ vài tuần |
 | Feed tổng hợp cho paper | ✅ `paper.composite_feed: true` (mặc định false) |
 | Adapter TCBS (tuỳ chọn) | ✅ `brokers/tcbs.py` theo tài liệu chính thức; TẮT (`brokers.tcbs_enabled: false`, `api_verified: false`), nối vào runner: chọn được làm chính/dự phòng (`brokers.primary`/`backup`) — CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định |
 

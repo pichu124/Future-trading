@@ -37,10 +37,16 @@ session:
 # Phí & thuế tính theo VNĐ / hợp đồng / MỘT CHIỀU (mở hoặc đóng).
 # Điền theo biểu phí của broker bạn dùng. Backtest từ chối chạy khi còn null.
 fees:
-  broker_fee_vnd_per_contract: null
-  exchange_fee_vnd_per_contract: null
-  clearing_fee_vnd_per_contract: null   # phí bù trừ VSDC — FAQ KRX của DNSE ghi 2.550đ/HĐ mỗi giao dịch; kiểm biểu phí hiện hành
-  tax_vnd_per_contract: null            # thuế TNCN theo quy định hiện hành (tính theo giá trị giao dịch nếu cần)
+  broker_fee_vnd_per_contract: null     # VIỆC CỦA BẠN: theo hợp đồng/gói phí tài khoản (DNSE/SSI…)
+  # Phí sở (HNX) HĐTL chỉ số: 2.700đ/HĐ mỗi lượt mở hoặc đóng — biểu phí công bố của nhiều CTCK (KBSV, DSC, PHS,
+  # SSI…), 08/11/2026. Kiểm lại biểu phí hiện hành của broker.
+  exchange_fee_vnd_per_contract: 2700
+  # Phí bù trừ VSDC sau KRX: 2.550đ/HĐ mỗi giao dịch (FAQ KRX của DNSE; tài liệu CTCK ghi "hệ thống mới": phí qua đêm
+  # 0đ, thay bằng phí bù trừ theo HĐ). Phí quản lý tài sản ký quỹ (0,0024%/tháng) KHÔNG tính ở đây.
+  clearing_fee_vnd_per_contract: 2550
+  # VIỆC CỦA BẠN: thuế TNCN = 0,1% × giá trị chuyển nhượng (= giá × 100.000 × tỷ lệ ký quỹ ban đầu / 2 mỗi chiều
+  # — kiểm lại quy định); phụ thuộc giá + tỷ lệ ký quỹ ⇒ điền ước lượng VNĐ/HĐ ở mức giá thường gặp.
+  tax_vnd_per_contract: null
 
 backtest:
   slippage_ticks: 1                     # trượt giá tối thiểu mỗi lần khớp
