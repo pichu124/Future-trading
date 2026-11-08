@@ -1,5 +1,26 @@
 # Tiến độ
 
+## 2026-11-08 — P1.6 bước 2: `scripts/download_history.py` (tải lịch sử DNSE) — code xong, CHƯA chạy trên dây
+
+**Cơ sở**: đặc tả OpenAPI chính thức DNSE (`dnseopenapi-en.yaml`) chốt được phần lớn ❓ của bước 1 (from/to epoch giây, OHLC dạng cột + `nextTime`, khuôn trades). Phần còn ❓ trên dây được downloader **tự kiểm** thay vì đoán (broker_notes §1.3, bảng mới).
+
+**Đã xong**
+- `HistoryClient`: ký HMAC path không kèm query (như SDK), 401 ⇒ thử kèm query một lần rồi nhớ; 429 ⇒ chờ `Retry-After` rồi thử lại (tối đa N lần); giãn cách request; lỗi khác ⇒ `HistoryError` kèm mã `OA-…`; secret không lọt vào lỗi/repr.
+- OHLC 1 phút mỗi ngày 08:30–15:00 VN, phân trang `nextTime` (không tăng ⇒ lỗi, vượt cửa sổ ⇒ dừng), lọc trùng/sắp xếp, bỏ giá ngoài khoảng hợp lý ⇒ `ohlc1m/<VN30FYYMM>/<ngày>.parquet` đúng schema `load_bars_parquet` (`volume_reliable=True`).
+- Khớp lệnh theo cửa sổ 30 phút, cửa sổ đầy `limit` ⇒ chia đôi; lọc trùng theo `totalVolumeTraded`; kiểm múi giờ `time` (UTC rồi VN, phải nằm trong cửa sổ) ⇒ `trades/<VN30FYYMM>/<ngày>.parquet` schema tick recorder (`source=dnse_history`); `volume_gap` ghi vào manifest để biết thiếu lệnh.
+- Kế hoạch theo lịch giao dịch + hợp đồng đang giao dịch (sau roll), `--all-listed` thêm F2M/F1Q/F2Q. Ghi nguyên tử, chạy lại không tải trùng (file có sẵn hoặc manifest ghi rỗng), `--force`, `--retry-empty`; lỗi một ngày không dừng các ngày khác; thư mục đích chặn nếu nằm trong Dropbox.
+- Test viết trước `tests/test_download_history.py` (21). Thử phá 16 cơ chế ⇒ 4 sống, trong đó 2 tương đương (thứ tự thử múi giờ — cửa sổ 30 phút không thể khớp cả UTC lẫn VN; giữ bản đầu/cuối khi trùng — hai bản giống nhau) ⇒ thêm 2 test cho 2 lỗ thật (`nextTime == from`, `nextTime` vượt cửa sổ) ⇒ hết.
+- 1019 test.
+
+**Rủi ro / giả định còn lại**
+- CHƯA gọi trên dây lần nào (môi trường này không có khoá và không tới được `openapi.dnse.com.vn`). Theo CLAUDE.md mục 8, phải chạy thử trước khi dựa vào dữ liệu: `dnse_history_probe.py`, rồi downloader 1–2 ngày, đối chiếu với tick recorder (`validate_day.py`).
+- `t` của OHLC được coi là giờ MỞ nến (ví dụ đặc tả) — nếu là giờ đóng, mọi bar lệch 1 phút (lookahead nhẹ trong backtest) ⇒ phải kiểm.
+- Độ sâu lịch sử của hợp đồng đã đáo hạn chưa biết: ngày rỗng ghi manifest.
+- `backtest.engine --bars <thư mục>` không đọc đệ quy ⇒ hiện trỏ từng thư mục hợp đồng; nối chuỗi liên tục qua roll là việc của module backtest.
+
+**Việc của bạn**
+- [ ] Có khoá DNSE: `python scripts/dnse_history_probe.py` rồi `python scripts/download_history.py --start <hôm qua> --end <hôm qua>`; gửi `_manifest.json` + log (không chứa khoá).
+
 ## 2026-11-08 — Stop điều kiện phía TCBS (SOU/SOL) — sau cờ `brokers.tcbs.broker_side_stops` (mặc định TẮT)
 
 **Đã xong** (tài liệu 6.5/6.7/6.9/6.11/7.3)

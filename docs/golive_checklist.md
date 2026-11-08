@@ -120,6 +120,6 @@ idempotency — cấm tự retry lệnh đặt, phải tra sổ lệnh trước 
 ## 6. Thứ tự đề xuất (cập nhật 08/11)
 
 1. ~~Sửa #1–#14~~ ✅. ~~P4.1/P4.2 adapter, stop do bot giữ, nối composite + broker dự phòng~~ ✅ (live còn khoá).
-2. Bạn: điền settings còn null, lịch nghỉ 2026–2027; có khoá ⇒ chạy `dnse_history_probe.py`, `dnse_trading_probe.py`, `ssi_trading_probe.py`, gửi kết quả ⇒ mình chốt các ❓ và viết P1.6 downloader.
+2. Bạn: điền settings còn null, lịch nghỉ 2026–2027; có khoá ⇒ chạy `dnse_history_probe.py`, `dnse_trading_probe.py`, `ssi_trading_probe.py`, gửi kết quả ⇒ mình chốt các ❓; chạy `download_history.py` (P1.6, code đã có) 1–2 ngày rồi cả dải.
 3. Tải lịch sử thật ⇒ `backtest.robustness` cho ORB (kết luận theo luật đã đăng ký trước).
 4. Paper trade ≥ vài tuần, so với backtest cùng kỳ; rồi mới cân nhắc live (hỏi người dùng trước khi bật).

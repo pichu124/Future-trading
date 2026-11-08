@@ -76,8 +76,24 @@ Trang hướng dẫn: hdsd.dnse.com.vn → "DNSE LightSpeed API V2"; đăng ký 
 lệnh đôi ⇒ adapter DNSE phải: không tự retry lệnh đặt; khi không chắc lệnh đã tới sàn thì tra sổ lệnh
 (khớp `symbol`, `side`, `quantity`, `price`, thời điểm) trước khi gửi lại.
 
-❓ Độ sâu lịch sử của `/price/{symbol}/trades` và `/price/ohlc` cho hợp đồng ĐÃ đáo hạn; đơn vị `from`/`to`
-(giây hay mili-giây); timezone của timestamp trả về.
+**Đặc tả OpenAPI chính thức (`docs/dnseopenapi-en.yaml`, repo `dnse-tech/dnse-py`, đọc 08/11/2026) cho REST lịch sử** — dùng trong `scripts/download_history.py`:
+- `/price/ohlc` ✅ (đặc tả): `from`/`to` = epoch **giây** (ví dụ `'1773657310'`); response dạng cột
+  `{t[], o[], h[], l[], c[], v[], nextTime}`, `nextTime` ≠ 0 ⇒ còn trang, gọi tiếp với `from = nextTime`.
+- `/price/{symbol}/trades` ✅ (đặc tả): `{trades: [{marketId, boardId, isin, symbol, matchPrice, matchQtty, side,
+  avgPrice, totalVolumeTraded, grossTradeAmount, highestPrice, lowestPrice, openPrice, time}], nextPageToken}`,
+  mới nhất trước; `time` dạng `"2026-03-12 04:29:57"`.
+- Lỗi: `{status, code ("OA-003", "OA-009"…), message}`.
+
+Còn ❓ trên dây — downloader **tự kiểm, không đoán** (sai ⇒ báo lỗi ngày đó, không ghi file):
+| Mục | Cách downloader xử lý |
+|---|---|
+| ❓ `t` của OHLC là giờ MỞ nến | coi là giờ mở (theo ví dụ đặc tả); kiểm bằng `scripts/validate_day.py` so với tick recorder khi có |
+| ❓ `time` của trades là UTC (ví dụ đặc tả 04:29 ⇒ 11:29 VN) | thử UTC rồi giờ VN, phải nằm trong cửa sổ đã hỏi; không khớp cách nào ⇒ lỗi |
+| ❓ tên tham số gửi `nextPageToken` (đặc tả không ghi) | không dùng: cửa sổ 30 phút trả đủ `limit` dòng ⇒ chia đôi tới khi hết đầy; trùng lọc theo `totalVolumeTraded` |
+| ❓ ký path có/không kèm query | ký không kèm (như SDK); 401 ⇒ thử kèm query, nhớ cách được nhận |
+| ❓ độ sâu lịch sử hợp đồng ĐÃ đáo hạn | ngày rỗng ghi vào `_manifest.json`, không thử lại trừ khi `--retry-empty` |
+| ❓ đơn vị giá (điểm) | giá ngoài `PRICE_MIN..PRICE_MAX` của feed ⇒ bỏ dòng, không tự chia |
+| ❓ đủ khối lượng | `volume_gap` (luỹ kế `totalVolumeTraded` − tổng `matchQtty`) ghi vào manifest; ≠ 0 ⇒ thiếu lệnh |
 
 **Đối chiếu SDK `dnse` 0.5.0 cho REST lịch sử (08/11/2026):**
 - `/price/{symbol}/trades` có trong SDK (`resources/market.py`): tham số `boardId`, `from`, `to` (SDK chỉ ghi
