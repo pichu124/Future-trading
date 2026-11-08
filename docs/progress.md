@@ -1,5 +1,21 @@
 # Tiến độ
 
+## 2026-11-08 — Nối lịch sử nhiều ngày vào runner live/paper
+
+**Đã xong**
+- `core/continuous.py` `HistoryBuilder` (`observe` mọi bar, `close_day` ⇒ `DayClose` có gap/ngày trước roll): logic theo ngày DÙNG CHUNG; backtest đã chuyển sang dùng (hành vi không đổi, test cũ vẫn qua).
+- `live/history.py` `load_live_history(dirs, hôm nay, N, lịch, trading_contract)`: đọc bar đã lưu, chỉ phiên trước hôm nay, dựng chuỗi như backtest. **Nghiêm ngặt**: đủ đúng N phiên giao dịch gần nhất + mọi roll trong khoảng đo được chênh lệch; thiếu ⇒ `HistoryUnavailable` nêu ngày/HĐ + lệnh downloader. Test: cùng dữ liệu ⇒ `ctx.history` live GIỐNG HỆT backtest.
+- `live/runner.py`: `Runner(history_loader=…)`; `startup` gọi sau kiểm ngày giao dịch, TRƯỚC khi kết nối broker; lỗi bất kỳ ⇒ báo + thoát 2. Cấp `ctx.history` (cache theo HĐ trong ngày). Chiến lược không cần lịch sử ⇒ không gọi loader. Không có loader mà cần lịch sử ⇒ vẫn từ chối.
+- `main()`: chiến lược có `history_days > 0` ⇒ đọc `live.history_bar_dirs` (null ⇒ thoát 2; thư mục trong Dropbox ⇒ thoát 2) và truyền loader.
+- `config/settings.yaml`: `live.history_bar_dirs: [data/history/ohlc1m, data/bars]` (downloader trước — dữ liệu sở, đủ hơn recorder).
+- Test viết trước `tests/test_live_history.py` (22). Thử phá 20 cơ chế ⇒ 6 sống: 4 tương đương (điều kiện thừa ⇒ đã bỏ khỏi code) + 2 lỗ thật (thông báo thiếu ngày phải nêu HĐ; thư mục có nhưng rỗng/sai loại) ⇒ thêm test ⇒ hết.
+- 1084 test.
+
+**Rủi ro / giả định còn lại**
+- Recorder chỉ ghi HĐ đang giao dịch ⇒ ngày trước roll PHẢI chạy downloader (tải thêm HĐ kế tiếp), nếu không runner sẽ từ chối chạy chiến lược nhiều ngày trong N phiên sau roll. Có thể tự động hoá sau (recorder ghi thêm HĐ kế tiếp — cần sửa kiểm định để tách theo HĐ).
+- Downloader chưa được chạy trên dây (P1.6) ⇒ đường này cũng chưa được thử với dữ liệu thật.
+- Lịch sử nạp một lần lúc khởi động, cố định trong ngày (bot intraday ⇒ đủ).
+
 ## 2026-11-08 — Chuỗi back-adjust cho chiến lược nhiều ngày (`core/continuous.py` + backtest)
 
 **Quyết định của người dùng:** làm module + backtest trước, live/paper TỪ CHỐI chiến lược cần lịch sử tới khi nối riêng; dịch giá bằng CỘNG/TRỪ điểm.
@@ -17,7 +33,7 @@
 **Rủi ro / giả định còn lại**
 - Chênh lệch đo ở MỘT phút (phút chung cuối) ⇒ nhạy với nhiễu phút đó; ATC/khớp cuối ngày có thể méo. Nếu dùng nhiều, cân nhắc trung vị nhiều phút cuối (đổi phải ghi `research/log.md`).
 - Dữ liệu đã tải trước thay đổi này thiếu HĐ kế tiếp ngày trước roll ⇒ chạy lại downloader (mục đã có bị bỏ qua, chỉ tải phần thiếu).
-- Live/paper chưa cấp lịch sử: muốn chạy chiến lược nhiều ngày thật cần bước riêng (runner nạp lịch sử từ `data/` lúc khởi động; recorder ghi thêm HĐ kế tiếp ngày trước roll).
+- ~~Live/paper chưa cấp lịch sử~~ ⇒ đã nối (mục bên trên); recorder vẫn chỉ ghi HĐ đang giao dịch.
 
 ## 2026-11-08 — Backtest nối chuỗi qua roll (`backtest/engine.py`)
 

@@ -150,6 +150,10 @@ live:
   lock_stale_after_seconds: 120
   # Live: sau khi kết nối, chờ /otp <broker> <mã> cho DNSE + SSI tối đa N giây; quá ⇒ thoát, không giao dịch.
   otp_wait_seconds: 600
+  # Chiến lược cần lịch sử nhiều ngày (`history_days > 0`): runner nạp bar 1 phút các phiên trước từ các thư mục
+  # này (tương đối gốc repo; trùng ⇒ thư mục đứng trước thắng). Thiếu phiên / thiếu HĐ kế tiếp ngày trước roll
+  # ⇒ runner KHÔNG giao dịch (live/history.py). null ⇒ từ chối chiến lược cần lịch sử.
+  history_bar_dirs: [data/history/ohlc1m, data/bars]
 
 monitoring:
   heartbeat_seconds: 30

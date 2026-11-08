@@ -35,7 +35,7 @@ import os
 import sys
 from collections import Counter, deque
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional, Sequence
 
@@ -86,8 +86,13 @@ class Runner:
                  config: RunnerConfig = RunnerConfig(), mode: str = "paper",
                  background: Sequence[Callable[[], Awaitable[None]]] = (),
                  preflight: Sequence[Callable[[], Awaitable[None]]] = (),
-                 auth: Sequence[Any] = ()):
+                 auth: Sequence[Any] = (),
+                 history_loader: Optional[Callable[[date], Any]] = None):
         self.settings, self.strategy, self.feed = settings, strategy, feed
+        # history_loader(hôm nay) → đối tượng có `.view(hđ)` (live/history.py); chỉ gọi khi chiến lược cần
+        self.history_loader = history_loader
+        self._history = None
+        self._history_views: dict[str, tuple[Bar, ...]] = {}
         self.broker, self.backup_broker = broker, backup_broker
         self.clock, self.risk, self.state = market_clock, risk, state
         self.lock, self.notify, self.fetch_commands = lock, notify, fetch_commands
@@ -168,15 +173,25 @@ class Runner:
 
     async def startup(self) -> Optional[int]:
         n_hist = history_days(self.strategy)
-        if n_hist:
-            # backtest cấp `ctx.history` còn runner thì chưa ⇒ chạy sẽ lệch backtest (CLAUDE.md mục 2)
-            await self._say(f"🚨 Chiến lược cần lịch sử {n_hist} phiên (ctx.history) nhưng runner live/paper "
-                            "chưa cấp lịch sử — thoát, KHÔNG giao dịch")
+        if n_hist and self.history_loader is None:
+            # backtest cấp `ctx.history` mà runner không có nguồn ⇒ chạy sẽ lệch backtest (CLAUDE.md mục 2)
+            await self._say(f"🚨 Chiến lược cần lịch sử {n_hist} phiên (ctx.history) nhưng runner chưa có nguồn "
+                            "lịch sử — thoát, KHÔNG giao dịch")
             return 2
         now = self.clock.now()
         if not self.clock.is_trading_day(now.date()):
             log.info("runner: %s không phải ngày giao dịch", now.date())
             return 0
+        self._history = None
+        self._history_views = {}
+        if n_hist:
+            # TRƯỚC khi kết nối broker: thiếu lịch sử ⇒ không giao dịch (live/history.py — nghiêm ngặt)
+            try:
+                self._history = self.history_loader(now.date())
+            except Exception as exc:
+                await self._say(f"🚨 Lịch sử {n_hist} phiên cho chiến lược không dùng được: "
+                                f"{type(exc).__name__}: {exc} — thoát, KHÔNG giao dịch")
+                return 2
         self.risk.new_day(self.state, now.date())
         if self.state_path is not None and load_daily_state(self.state_path, self.state):
             await self._say(f"Khôi phục bộ đếm hôm nay: {self.state.trades_today} lượt, "
@@ -366,7 +381,12 @@ class Runner:
         net = self.state.net_qty(bar.symbol)
         pos = next((p for p in self.state.positions.values()
                     if p.symbol == bar.symbol and p.broker == self.broker.name and p.qty), None)
-        ctx = StrategyContext(net, pos.avg_price if pos else None, tuple(hist))
+        past = ()
+        if self._history is not None:
+            if bar.symbol not in self._history_views:
+                self._history_views[bar.symbol] = self._history.view(bar.symbol)
+            past = self._history_views[bar.symbol]
+        ctx = StrategyContext(net, pos.avg_price if pos else None, tuple(hist), past)
         try:
             signals = list(self.strategy.on_bar(bar, ctx) or ())
         except Exception:
@@ -691,6 +711,26 @@ def main(argv=None) -> int:
             log.error("paper.composite_feed cần Telegram để nhập /otp ssi <mã> cho feed SSI")
             return 2
 
+    history_loader = None
+    n_hist = history_days(strategy)
+    if n_hist:
+        dirs = settings.get("live.history_bar_dirs")
+        if not dirs:
+            log.error("Chiến lược cần lịch sử %d phiên nhưng live.history_bar_dirs còn trống", n_hist)
+            return 2
+        from core.settings import REPO_ROOT as _ROOT
+        from live.history import load_live_history
+        hist_dirs = [Path(p) if Path(p).is_absolute() else _ROOT / p for p in dirs]
+        for p in hist_dirs:
+            try:
+                assert_not_in_sync_folder(p)
+            except ValueError as exc:
+                log.error("%s", exc)
+                return 2
+
+        def history_loader(today, _dirs=hist_dirs, _n=n_hist):
+            return load_live_history(_dirs, today, _n, mclock.calendar, mclock.trading_contract)
+
     lock = InstanceLock(settings.path("paths.state_dir") / "bot.lock", mode=mode,
                         stale_after_s=float(settings.get("live.lock_stale_after_seconds", 120)))
     try:
@@ -708,7 +748,7 @@ def main(argv=None) -> int:
                         config=RunnerConfig(heartbeat_s=float(settings.get("monitoring.heartbeat_seconds", 30)),
                                             otp_wait_s=float(settings.get("live.otp_wait_seconds", 600))),
                         mode=f"{'live' if live else mode}@{machine}", background=background, preflight=preflight,
-                        auth=auth)
+                        auth=auth, history_loader=history_loader)
         for text in pending_alerts:
             runner.queue_alert(text)
         alert_sink["fn"] = runner.queue_alert

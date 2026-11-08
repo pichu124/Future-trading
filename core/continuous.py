@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import date, datetime
-from typing import Iterable, Optional, Sequence
+from typing import Callable, Iterable, Optional, Sequence
 
 from core.models import Bar
 
@@ -89,3 +89,52 @@ class ContinuousHistory:
                 current = c
             out.append(bs if c == contract else tuple(shift_bar(b, offset, contract) for b in bs))
         return tuple(b for day in reversed(out) for b in day)
+
+
+@dataclass(frozen=True)
+class DayClose:
+    day: date
+    contract: str                    # HĐ bot giao dịch ngày đó
+    next_contract: str               # HĐ phiên kế tiếp
+    n_bars: int                      # số bar HĐ giao dịch đã lưu
+    gap: Optional[RollGap]           # chỉ có ở ngày trước roll, khi đo được
+
+    @property
+    def is_roll_eve(self) -> bool:
+        return self.next_contract != self.contract
+
+
+class HistoryBuilder:
+    """Logic theo ngày dùng CHUNG cho backtest và live: `observe` mọi bar đã đóng (mọi HĐ), `close_day` lúc
+    hết phiên ⇒ lưu bar HĐ giao dịch; ngày trước roll đo chênh lệch với HĐ kế tiếp (dùng từ phiên sau)."""
+
+    def __init__(self, max_days: int, trading_contract: Callable[[date], str],
+                 next_trading_day: Callable[[date], date]):
+        self.history = ContinuousHistory(max_days)
+        self._tc, self._next_day = trading_contract, next_trading_day
+        self._today: dict[date, list[Bar]] = {}
+        self._eve: dict[date, list[Bar]] = {}
+
+    def next_contract(self, d: date) -> str:
+        return self._tc(self._next_day(d))
+
+    def observe(self, bar: Bar) -> None:
+        d = bar.start.date()
+        tc = self._tc(d)
+        if bar.symbol == tc:
+            self._today.setdefault(d, []).append(bar)
+        elif bar.symbol == self.next_contract(d):           # ≠ tc ⇒ chỉ xảy ra ở ngày trước roll
+            self._eve.setdefault(d, []).append(bar)
+
+    def close_day(self, d: date) -> DayClose:
+        tc, nxt = self._tc(d), self.next_contract(d)
+        today, eve = self._today.pop(d, []), self._eve.pop(d, [])
+        if today:
+            self.history.add_day(d, tc, today)
+        gap = measure_gap(today, eve)                       # eve chỉ có bar ở ngày trước roll
+        if gap is not None:
+            self.history.add_gap(gap)
+        return DayClose(d, tc, nxt, len(today), gap)
+
+    def view(self, contract: str) -> tuple[Bar, ...]:
+        return self.history.view(contract)

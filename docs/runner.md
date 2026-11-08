@@ -39,6 +39,19 @@ vị thế, cảnh báo Telegram). Cần thêm `SSI_API_KEY`/`SSI_API_SECRET` v�
 bot nhắn "⏳ Chờ OTP cho ssi", trả lời `/otp ssi <mã>` (hoặc `/otp <mã>` nếu chỉ SSI đang chờ). Quá
 `live.otp_wait_seconds` ⇒ thoát, không chạy. Mặc định `false` = chỉ feed DNSE như trước.
 
+## Chiến lược cần lịch sử nhiều ngày (`history_days > 0`)
+
+Runner nạp bar 1 phút các phiên trước từ `live.history_bar_dirs` (mặc định `data/history/ohlc1m` rồi `data/bars`)
+lúc khởi động, **trước khi kết nối broker**, dựng chuỗi back-adjust bằng đúng code của backtest
+(`core.continuous.HistoryBuilder`) ⇒ `ctx.history` live = backtest với cùng dữ liệu.
+
+Nghiêm ngặt: phải đủ đúng N phiên giao dịch gần nhất của hợp đồng giao dịch từng ngày; ngày trước roll phải có
+cả hợp đồng kế tiếp (đo chênh lệch). Thiếu ⇒ báo Telegram ngày/hợp đồng cần tải + lệnh `download_history.py`,
+thoát mã 2, KHÔNG giao dịch. Recorder chỉ ghi hợp đồng đang giao dịch ⇒ **ngày trước roll phải chạy downloader**
+(mặc định đã tải thêm hợp đồng kế tiếp hôm đó), vd sáng ngày roll:
+
+    python scripts/download_history.py --start <ngày trước roll> --end <ngày trước roll> --kinds ohlc
+
 ## Điều kiện trước khi chạy paper
 - `config/settings.yaml`: đã điền `risk.*`, `fees.*`, `live.allowed_machine` (= hostname máy này,
   xem bằng `hostname`), `paths.*` ngoài Dropbox. `python -m core.settings` phải không còn khoá rỗng
