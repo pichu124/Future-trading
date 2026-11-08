@@ -22,6 +22,18 @@ class StrategyContext:
     position_qty: int                    # net cộng mọi broker; dương = Long
     avg_price: Optional[float]           # giá vốn vị thế đang giữ (None khi phẳng)
     bars_today: tuple[Bar, ...]          # bar đã đóng hôm nay của hợp đồng này, gồm bar hiện tại
+    # `history_days` phiên TRƯỚC hôm nay, back-adjust (cộng điểm) về giá HĐ hiện tại, cũ nhất trước
+    # (`core/continuous.py`). Chỉ có khi chiến lược khai báo `history_days > 0`; có thể ngắn hơn N
+    # (thiếu dữ liệu / không đo được chênh lệch roll). Live/paper CHƯA cấp ⇒ runner từ chối chiến lược đó.
+    history: tuple[Bar, ...] = ()
+
+
+def history_days(strategy) -> int:
+    """Số phiên lịch sử chiến lược cần (thuộc tính `history_days`, mặc định 0)."""
+    n = int(getattr(strategy, "history_days", 0) or 0)
+    if n < 0:
+        raise ValueError("history_days phải ≥ 0")
+    return n
 
 
 class Strategy(Protocol):

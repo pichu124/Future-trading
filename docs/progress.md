@@ -1,5 +1,24 @@
 # Tiến độ
 
+## 2026-11-08 — Chuỗi back-adjust cho chiến lược nhiều ngày (`core/continuous.py` + backtest)
+
+**Quyết định của người dùng:** làm module + backtest trước, live/paper TỪ CHỐI chiến lược cần lịch sử tới khi nối riêng; dịch giá bằng CỘNG/TRỪ điểm.
+
+**Đã xong**
+- `core/continuous.py` (thuần, dùng chung): `measure_gap` = giá đóng HĐ mới − HĐ cũ ở phút chung CUỐI CÙNG của ngày trước roll; `ContinuousHistory(max_days)` lưu bar thô theo ngày + chênh lệch; `view(hđ hiện tại)` cộng dồn chênh lệch qua các roll, quy về giá HĐ hiện tại (bar mang `symbol` HĐ hiện tại, volume giữ nguyên). Thiếu chênh lệch ⇒ lịch sử DỪNG tại roll đó (không đoán).
+- **Không look-ahead:** chênh lệch đo lúc HẾT ngày trước roll, chỉ dùng từ phiên sau; lịch sử ngày X chỉ chịu các roll tới X (có test: chạy dữ liệu cắt tại X cho đúng cùng lịch sử như chạy đủ).
+- `StrategyContext.history` (mặc định `()`): chiến lược khai báo `history_days = N` ⇒ engine cấp N phiên gần nhất trước hôm nay. `data_quality`: `roll_gaps` (vd `2026-11-18: VN30F2611 → VN30F2612 +50.0 điểm`), `roll_gaps_missing` + cảnh báo nói cần tải HĐ nào ngày nào; `assumptions["history"]` ghi rõ cách điều chỉnh. Cần `trading_contract_only=True`.
+- `live/runner.py`: chiến lược có `history_days > 0` ⇒ `startup` thoát mã 2 trước khi kết nối broker (backtest có lịch sử còn live chưa ⇒ không cho chạy lệch).
+- `scripts/download_history.py`: ngày trước roll tải thêm HĐ kế tiếp (cần để đo chênh lệch).
+- ORB hiện tại không dùng lịch sử ⇒ kết quả backtest cũ không đổi.
+- Test viết trước `tests/test_continuous.py` (15) + `tests/test_backtest_history.py` (13). Thử phá 22 cơ chế ⇒ 2 sống (cắt-tại-roll vs bỏ-qua-roll; dữ liệu `--all-listed` ngày trước roll làm lẫn HĐ) ⇒ thêm 2 test ⇒ hết.
+- 1062 test.
+
+**Rủi ro / giả định còn lại**
+- Chênh lệch đo ở MỘT phút (phút chung cuối) ⇒ nhạy với nhiễu phút đó; ATC/khớp cuối ngày có thể méo. Nếu dùng nhiều, cân nhắc trung vị nhiều phút cuối (đổi phải ghi `research/log.md`).
+- Dữ liệu đã tải trước thay đổi này thiếu HĐ kế tiếp ngày trước roll ⇒ chạy lại downloader (mục đã có bị bỏ qua, chỉ tải phần thiếu).
+- Live/paper chưa cấp lịch sử: muốn chạy chiến lược nhiều ngày thật cần bước riêng (runner nạp lịch sử từ `data/` lúc khởi động; recorder ghi thêm HĐ kế tiếp ngày trước roll).
+
 ## 2026-11-08 — Backtest nối chuỗi qua roll (`backtest/engine.py`)
 
 **Thiết kế**: bot intraday, phẳng mỗi đêm ⇒ chuỗi liên tục = mỗi ngày đưa vào pipeline ĐÚNG hợp đồng bot giao dịch (`trading_contract`, cùng hàm live dùng, theo `roll_days_before_expiry`). **Không back-adjust** giá: P&L tính trên giá thật của từng hợp đồng, khoảng chênh giữa hai hợp đồng không bao giờ lọt vào lệnh vì không có vị thế qua roll.
@@ -16,7 +35,7 @@
 **Rủi ro / giả định còn lại**
 - Ngày đáo hạn (`roll_days_before_expiry = 1`): bot đã ở hợp đồng tháng sau, và risk vẫn chặn mở vị thế trong ngày đáo hạn (`trade_on_expiry_day = false`) — đúng như live, nhưng nghĩa là ngày đó không có lệnh.
 - Chế độ `trading_contract_only=False` với bar nhiều hợp đồng cùng phút vẫn không chạy được trên tick giả (giới hạn cũ: tick giả của hai hợp đồng không xen kẽ theo thời gian). Không dùng cho bot hiện tại.
-- Chiến lược cần lịch sử nhiều ngày (hiện không có — `StrategyContext` chỉ có bar hôm nay) sẽ cần chuỗi back-adjust riêng; chưa làm.
+- ~~Chuỗi back-adjust cho chiến lược nhiều ngày~~ ⇒ đã làm (mục bên trên), live/paper chưa cấp.
 
 ## 2026-11-08 — P1.6 bước 2: `scripts/download_history.py` (tải lịch sử DNSE) — code xong, CHƯA chạy trên dây
 

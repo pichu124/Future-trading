@@ -55,7 +55,7 @@ from live.emergency import EmergencyHandler  # noqa: E402
 from live.instance_lock import LockHeld  # noqa: E402
 from live.state_store import load_daily_state, save_daily_state  # noqa: E402
 from risk.risk_manager import RiskManager  # noqa: E402
-from strategy.base import Strategy, StrategyContext  # noqa: E402
+from strategy.base import Strategy, StrategyContext, history_days  # noqa: E402
 from utils.atomic_io import write_text_atomic  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -167,6 +167,12 @@ class Runner:
     # ------------------------------------------------------------------ khởi động ----
 
     async def startup(self) -> Optional[int]:
+        n_hist = history_days(self.strategy)
+        if n_hist:
+            # backtest cấp `ctx.history` còn runner thì chưa ⇒ chạy sẽ lệch backtest (CLAUDE.md mục 2)
+            await self._say(f"🚨 Chiến lược cần lịch sử {n_hist} phiên (ctx.history) nhưng runner live/paper "
+                            "chưa cấp lịch sử — thoát, KHÔNG giao dịch")
+            return 2
         now = self.clock.now()
         if not self.clock.is_trading_day(now.date()):
             log.info("runner: %s không phải ngày giao dịch", now.date())

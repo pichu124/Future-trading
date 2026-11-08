@@ -17,6 +17,9 @@ docs/broker_notes.md §1.3):
 - `<out>/trades/<VN30FYYMM>/<YYYY-MM-DD>.parquet` — schema tick của recorder (`source = "dnse_history"`);
 - `<out>/_manifest.json` — số dòng từng mục, mục rỗng (vd hợp đồng đã đáo hạn quá xa), khối lượng thiếu (trades).
 
+Mặc định mỗi ngày tải hợp đồng bot giao dịch; ngày trước roll tải thêm hợp đồng kế tiếp (đo chênh lệch
+back-adjust, `core/continuous.py`). `--all-listed` tải mọi hợp đồng đang niêm yết.
+
     python scripts/download_history.py --start 2026-10-01 --end 2026-11-06
     python scripts/download_history.py --start 2026-01-01 --end 2026-11-06 --kinds ohlc --all-listed
 """
@@ -264,6 +267,10 @@ def plan_days(start: date, end: date, calendar: TradingCalendar, roll_days_befor
     while d <= end:
         if calendar.is_trading_day(d):
             names = [contracts.trading_contract(d, calendar, roll_days_before_expiry)]
+            # ngày trước roll: cần cả HĐ kế tiếp để đo chênh lệch back-adjust (core/continuous.py)
+            nxt = contracts.trading_contract(calendar.next_trading_day(d), calendar, roll_days_before_expiry)
+            if nxt not in names:
+                names.append(nxt)
             if all_listed:
                 names += [n for n in contracts.listed_contracts(d, calendar).values() if n not in names]
             for n in names:

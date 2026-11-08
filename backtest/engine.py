@@ -42,7 +42,8 @@ from core.execution import ExecEvent, ExecutionManager  # noqa: E402
 from core.models import AccountState, Bar, Fill, Order, Signal, SignalAction, Tick  # noqa: E402
 from core.settings import MissingSetting, Settings, load_settings  # noqa: E402
 from risk.risk_manager import Rejected, RiskManager  # noqa: E402
-from strategy.base import Strategy, StrategyContext  # noqa: E402
+from core.continuous import ContinuousHistory, measure_gap  # noqa: E402
+from strategy.base import Strategy, StrategyContext, history_days  # noqa: E402
 
 Event = Union[Tick, Bar]
 
@@ -209,6 +210,9 @@ class BacktestEngine:
         self.strategy = strategy
         self.calendar = calendar or TradingCalendar.default()
         self.trading_contract_only = trading_contract_only
+        self.history_days = history_days(strategy)
+        if self.history_days and not trading_contract_only:
+            raise ValueError("Chiến lược cần lịch sử nhiều ngày ⇒ phải chạy với trading_contract_only=True")
         # kiểm cấu hình NGAY (null ⇒ MissingSetting), không đợi tới lúc chạy
         self.paper_config = PaperConfig.from_settings(settings)
         # giữ cực trị lâu hơn độ trễ tối đa của paper (golive #14)
@@ -253,6 +257,13 @@ class BacktestEngine:
         quality.update(rolls=[], other_contract_bars=0, days_missing_trading_contract=0, missing_trading_days=0)
         seen_days: dict[date, set[str]] = {}       # mọi hợp đồng có trong dữ liệu, theo ngày
         kept_days: dict[date, str] = {}            # hợp đồng thực sự đưa vào pipeline
+        history = ContinuousHistory(self.history_days) if self.history_days else None
+        eve_bars: dict[date, list[Bar]] = {}       # ngày trước roll: bar HĐ kế tiếp (chỉ để đo chênh lệch)
+        if history is not None:
+            quality.update(roll_gaps=[], roll_gaps_missing=0)
+
+        def next_contract(d: date) -> str:
+            return mclock.trading_contract(self.calendar.next_trading_day(d))
 
         def keep(ev: Event) -> bool:
             d = (ev.ts if isinstance(ev, Tick) else ev.start).date()
@@ -260,9 +271,28 @@ class BacktestEngine:
             if self.trading_contract_only and ev.symbol != mclock.trading_contract(d):
                 if isinstance(ev, Bar):
                     quality["other_contract_bars"] += 1
+                    if history is not None and ev.symbol == next_contract(d):
+                        eve_bars.setdefault(d, []).append(ev)
                 return False
             kept_days.setdefault(d, ev.symbol)
             return True
+
+        def close_day(d: date, today_bars: list[Bar]) -> None:
+            """Hết phiên d: lưu bar HĐ giao dịch; ngày trước roll ⇒ đo chênh lệch (dùng từ phiên sau)."""
+            tc, nxt = mclock.trading_contract(d), next_contract(d)
+            if today_bars:
+                history.add_day(d, tc, today_bars)
+            if nxt == tc:
+                return
+            gap = measure_gap(today_bars, eve_bars.pop(d, []))
+            if gap is None:
+                quality["roll_gaps_missing"] += 1
+                warnings.append(f"{d}: không đo được chênh lệch roll {tc} → {nxt} (thiếu bar {nxt} cùng phút "
+                                f"với {tc}) — lịch sử nhiều ngày bị cắt tại roll này; tải thêm {nxt} ngày {d}")
+            else:
+                history.add_gap(gap)
+                quality["roll_gaps"].append(f"{d}: {tc} → {nxt} {gap.gap:+.1f} điểm")
+        history_view: dict[str, tuple[Bar, ...]] = {}
 
         def expand() -> Iterator[Event]:
             for ev in source:
@@ -303,8 +333,11 @@ class BacktestEngine:
             if state.trading_day != ts.date():
                 if state.trading_day is not None:
                     self._end_day(state, warnings)
+                    if history is not None:
+                        close_day(state.trading_day, bars_today.get(mclock.trading_contract(state.trading_day), []))
                 risk.new_day(state, ts.date())
                 bars_today.clear()
+                history_view.clear()
                 quality["days"] += 1
             clock.set(ts)
             state.broker_last_seen[broker.name] = ts
@@ -328,7 +361,12 @@ class BacktestEngine:
                 key = f"{broker.name}:{ev.symbol}"
                 pos = state.positions.get(key)
                 net = state.net_qty(ev.symbol)
-                ctx = StrategyContext(net, pos.avg_price if pos and pos.qty else None, tuple(hist))
+                past = ()
+                if history is not None:
+                    if ev.symbol not in history_view:
+                        history_view[ev.symbol] = history.view(ev.symbol)
+                    past = history_view[ev.symbol]
+                ctx = StrategyContext(net, pos.avg_price if pos and pos.qty else None, tuple(hist), past)
                 for sig in self.strategy.on_bar(ev, ctx) or ():
                     if sig.symbol != ev.symbol:
                         raise ValueError(f"Tín hiệu cho {sig.symbol} từ bar {ev.symbol}")
@@ -397,6 +435,9 @@ class BacktestEngine:
         }
         if synthetic:
             out["synthetic_spread_ticks"] = self.spread_ticks
+        if self.history_days:
+            out["history"] = (f"{self.history_days} phiên trước, back-adjust cộng điểm tại thời điểm (chênh lệch "
+                              "đo ở phút chung cuối của ngày trước roll, không dùng roll tương lai)")
         return out
 
 
