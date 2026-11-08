@@ -81,6 +81,14 @@ strategy:
     reward_risk: 1.5                    # chốt lời = 1.5 × khoảng cách tới stop (cạnh đối diện)
     max_trades_per_day: 2
     qty: 1
+    # Cấu hình #2 (research/orb_range_filter.md): chỉ giao dịch ngày có (đỉnh − đáy biên) / ADR trong
+    # [min_ratio, max_ratio]; ADR = biên độ ngày trung bình `adr_days` phiên trước (cần lịch sử nhiều ngày:
+    # backtest tự cấp; live/paper nạp từ live.history_bar_dirs). Giá trị CHỐT TRƯỚC khi xem dữ liệu.
+    range_filter:
+      enabled: false
+      adr_days: 10
+      min_ratio: 0.10
+      max_ratio: 0.60
 
 # Ghi tick ra data/raw/YYYY-MM-DD/ (recorder/, scripts/record_today.py).
 recorder:

@@ -15,6 +15,11 @@
 
 Hàm thuần theo nghĩa CLAUDE.md: chỉ dùng bar + ctx; trạng thái nội bộ duy nhất là số tín hiệu
 đã phát trong ngày (xác định hoàn toàn bởi chuỗi bar đã thấy).
+
+Cấu hình #2 (tuỳ chọn, `strategy.orb.range_filter`, mặc định TẮT — research/orb_range_filter.md):
+6. ADR = trung bình (đỉnh − đáy) của đúng `adr_days` phiên gần nhất trong `ctx.history` (back-adjust cộng
+   điểm ⇒ đỉnh − đáy không đổi qua roll). Biên hoàn tất ⇒ tỉ lệ = (đỉnh − đáy biên) / ADR; chỉ giao dịch hôm
+   đó khi `min_ratio ≤ tỉ lệ ≤ max_ratio`. Thiếu lịch sử hoặc ADR = 0 ⇒ không giao dịch.
 """
 from __future__ import annotations
 
@@ -40,6 +45,33 @@ def _positive(name: str, value, integer: bool):
     return int(value) if integer else float(value)
 
 
+@dataclass(frozen=True)
+class RangeFilter:
+    adr_days: int
+    min_ratio: float
+    max_ratio: float
+
+    @classmethod
+    def from_settings(cls, s: Settings) -> Optional["RangeFilter"]:
+        rf = s.get("strategy.orb.range_filter")
+        if rf is None:
+            return None
+        enabled = rf.get("enabled") if isinstance(rf, dict) else None
+        if not isinstance(enabled, bool):
+            raise ValueError(f"strategy.orb.range_filter.enabled phải là true/false, nhận {enabled!r}")
+        if not enabled:
+            return None
+        r = lambda k: s.require(f"strategy.orb.range_filter.{k}")   # noqa: E731
+        adr_days = _positive("range_filter.adr_days", r("adr_days"), True)
+        lo, hi = r("min_ratio"), r("max_ratio")
+        if isinstance(lo, bool) or not isinstance(lo, (int, float)) or lo < 0:
+            raise ValueError(f"strategy.orb.range_filter.min_ratio phải ≥ 0, nhận {lo!r}")
+        hi = _positive("range_filter.max_ratio", hi, False)
+        if not float(lo) < hi:
+            raise ValueError(f"strategy.orb.range_filter: min_ratio ({lo}) phải < max_ratio ({hi})")
+        return cls(adr_days, float(lo), hi)
+
+
 @dataclass
 class OpeningRangeBreakout:
     range_minutes: int
@@ -48,7 +80,14 @@ class OpeningRangeBreakout:
     qty: int
     session_start: time
     tick_size: float
+    range_filter: Optional[RangeFilter] = None
     _entries: dict[date, int] = field(default_factory=dict, repr=False)
+    _ratio_cache: dict[date, Optional[tuple[float, float]]] = field(default_factory=dict, repr=False)
+
+    @property
+    def history_days(self) -> int:
+        """Số phiên lịch sử cần (`ctx.history`); 0 ⇒ baseline, không cần lịch sử."""
+        return self.range_filter.adr_days if self.range_filter else 0
 
     @classmethod
     def from_settings(cls, s: Settings) -> "OpeningRangeBreakout":
@@ -60,6 +99,7 @@ class OpeningRangeBreakout:
             qty=_positive("qty", r("qty"), True),
             session_start=_parse_hhmm(s.require("session.continuous_am_start")),
             tick_size=float(s.require("contract.tick_size_points")),
+            range_filter=RangeFilter.from_settings(s),
         )
 
     # ------------------------------------------------------------------ API ----
@@ -72,6 +112,15 @@ class OpeningRangeBreakout:
         if self._entries.get(day, 0) >= self.max_trades_per_day:
             return []
         low, high = rng
+        note = ""
+        if self.range_filter is not None:
+            ra = self._range_vs_adr(day, high - low, ctx.history)
+            if ra is None:
+                return []
+            ratio, adr = ra
+            if not self.range_filter.min_ratio <= ratio <= self.range_filter.max_ratio:
+                return []                                     # cả ngày không giao dịch
+            note = f", biên/ADR {ratio:.2f} (ADR{self.range_filter.adr_days} {adr:.1f})"
         if bar.close > high:
             action, stop = SignalAction.ENTER_LONG, low
         elif bar.close < low:
@@ -85,7 +134,7 @@ class OpeningRangeBreakout:
         return [Signal(action, bar.start + timedelta(seconds=bar.interval_s), bar.symbol,
                        stop_loss=stop, take_profit=take_profit, qty=self.qty,
                        reason=(f"ORB{self.range_minutes}: đóng {bar.close:g} ngoài biên "
-                               f"[{low:g}, {high:g}], R={risk:.1f}, TP {self.reward_risk:g}R"))]
+                               f"[{low:g}, {high:g}], R={risk:.1f}, TP {self.reward_risk:g}R{note}"))]
 
     # ---------------------------------------------------------------- nội bộ ----
 
@@ -100,6 +149,26 @@ class OpeningRangeBreakout:
         if len(in_range) != expected or len({b.start for b in in_range}) != expected:
             return None                                   # dữ liệu hổng ⇒ không giao dịch hôm nay
         return min(b.low for b in in_range), max(b.high for b in in_range)
+
+    def _range_vs_adr(self, day: date, width: float, history: Sequence[Bar]) -> Optional[tuple[float, float]]:
+        """(tỉ lệ biên/ADR, ADR) — tính một lần mỗi ngày; thiếu lịch sử / ADR = 0 ⇒ None."""
+        if day not in self._ratio_cache:
+            n = self.range_filter.adr_days
+            by_day: dict[date, tuple[float, float]] = {}
+            for b in history:
+                d = b.start.date()
+                if d >= day:
+                    continue                                  # chỉ phiên TRƯỚC hôm nay
+                lo, hi = by_day.get(d, (b.low, b.high))
+                by_day[d] = (min(lo, b.low), max(hi, b.high))
+            last = sorted(by_day)[-n:]
+            out = None
+            if len(last) == n:
+                adr = sum(by_day[d][1] - by_day[d][0] for d in last) / n
+                if adr > 0:
+                    out = (round(width / adr, 9), adr)
+            self._ratio_cache[day] = out
+        return self._ratio_cache[day]
 
     def _round(self, price: float) -> float:
         return round(round(price / self.tick_size) * self.tick_size, 6)

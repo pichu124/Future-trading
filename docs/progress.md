@@ -1,5 +1,23 @@
 # Tiến độ
 
+## 2026-11-08 — ORB cấu hình #2: lọc theo độ rộng biên / ADR (dùng lịch sử nhiều ngày)
+
+**Quyết định của người dùng:** dùng lịch sử để lọc ngày theo độ rộng biên; biến thể MỚI, baseline giữ nguyên.
+
+**Đã xong**
+- `strategy/baseline_orb.py`: `RangeFilter` (`strategy.orb.range_filter`: `enabled`, `adr_days`, `min_ratio`, `max_ratio`). Tắt / không có khoá ⇒ y hệt baseline, `history_days = 0`. Bật ⇒ `history_days = adr_days`; ADR = trung bình (đỉnh − đáy) của đúng `adr_days` phiên gần nhất trong `ctx.history` (bỏ bar hôm nay nếu lẫn vào); chỉ giao dịch khi `min_ratio ≤ biên/ADR ≤ max_ratio`; thiếu lịch sử / ADR = 0 ⇒ không giao dịch; lý do tín hiệu ghi tỉ lệ + ADR. Cấu hình sai ⇒ `ValueError`, null ⇒ `MissingSetting`.
+- `config/settings.yaml`: `range_filter.enabled: false`, `adr_days: 10`, `min_ratio: 0.10`, `max_ratio: 0.60` — chốt trước khi xem dữ liệu.
+- `backtest/robustness.py`: `params_for(settings)` — khi bật, độ nhạy ±20% gồm cả ba tham số lọc; CLI dùng nó.
+- `research/orb_range_filter.md` (giả thuyết + đặc tả + cách chạy), `research/log.md` dòng #2 ⇒ `n_trials = 2` (p-value của CẢ HAI cấu hình bị phạt chọn lọc).
+- Test viết trước `tests/test_strategy_orb_filter.py` (26), gồm qua `BacktestEngine` (ngày chưa đủ lịch sử không vào lệnh). Thử phá 18 cơ chế ⇒ 2 sống (bỏ bar hôm nay khỏi ADR; CLI robustness dùng tham số lọc) ⇒ thêm 2 test ⇒ hết.
+- 1127 test.
+
+**Rủi ro / giả định còn lại**
+- CHƯA chạy trên dữ liệu thật — không có bằng chứng edge cho cả #1 lẫn #2.
+- ADR tính trên mọi bar của phiên (gồm ATO/ATC); dữ liệu recorder và downloader có thể khác nhau ở bar ATO ⇒ lệch nhỏ.
+- `adr_days` phiên đầu dữ liệu không có lệnh ⇒ ít lệnh hơn baseline, dễ rơi vào "CHƯA ĐỦ BẰNG CHỨNG".
+- Bật trong live/paper ⇒ runner cần đủ 10 phiên trong `live.history_bar_dirs` (và HĐ kế tiếp ngày trước roll), không thì từ chối chạy.
+
 ## 2026-11-08 — Recorder ghi thêm hợp đồng kế tiếp ngày trước roll
 
 **Đã xong**

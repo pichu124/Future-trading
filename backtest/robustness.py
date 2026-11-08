@@ -46,6 +46,17 @@ ORB_PARAMS = ("strategy.orb.range_minutes", "strategy.orb.reward_risk",
               "strategy.orb.max_trades_per_day")
 
 
+FILTER_PARAMS = ("strategy.orb.range_filter.adr_days", "strategy.orb.range_filter.min_ratio",
+                 "strategy.orb.range_filter.max_ratio")
+
+
+def params_for(settings: Settings) -> tuple[str, ...]:
+    """Tham số kiểm độ nhạy: baseline + bộ lọc độ rộng biên (cấu hình #2) khi đang bật."""
+    rf = settings.get("strategy.orb.range_filter")
+    on = isinstance(rf, dict) and rf.get("enabled") is True
+    return ORB_PARAMS + (FILTER_PARAMS if on else ())
+
+
 @dataclass(frozen=True)
 class VerdictRules:
     min_oos_trades: int = DEFAULT.min_trades          # 30 — dưới mức này không kết luận gì
@@ -284,7 +295,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     bars, skipped = load_bars_parquet(args.bars)
     n_trials = args.n_trials or count_logged_trials()
     rob = run_robustness(settings, OpeningRangeBreakout.from_settings, bars,
-                         date.fromisoformat(args.split), ORB_PARAMS, folds=args.folds,
+                         date.fromisoformat(args.split), params_for(settings), folds=args.folds,
                          n_trials=n_trials)
     write_text_atomic(render_html(rob, title="ORB baseline — kiểm định độ bền"), Path(args.out))
     print(f"Kết luận: {rob['verdict']}")
