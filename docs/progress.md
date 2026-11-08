@@ -1,5 +1,19 @@
 # Tiến độ
 
+## 2026-11-08 — Backtest trên tick thật (`backtest/ticks.py`, CLI `--ticks`)
+
+**Đã xong**
+- `load_tick_files(paths, source=None)`: đọc đệ quy; thư mục ngày recorder ⇒ `load_ticks` (gộp part, không đếm đôi khi gộp bị ngắt); file lẻ (khớp lệnh downloader) ⇒ đọc thẳng theo schema tick; file không phải tick ⇒ lỗi; nhiều nguồn mà không `--source` ⇒ lỗi (trộn nguồn ⇒ tick đôi).
+- `fill_missing_quotes`: tick khớp thiếu CẢ bid lẫn ask (downloader) ⇒ bid/ask giả = last ∓ max(1, ⌈spread/2⌉) bước (`backtest.synthetic_spread_ticks`, giả định bi quan như tick giả từ bar); tick có báo giá giữ nguyên; báo cáo cảnh báo số tick bị giả báo giá.
+- `python -m backtest.engine --ticks data/raw data/history/trades --source dnse …` (loại trừ với `--bars`; `--from/--to` áp cho tick) ⇒ `run_events` (bar dựng từ tick, khớp lệnh trên tick thật).
+- Test viết trước `tests/test_backtest_ticks.py` (20). Thử phá 12 cơ chế ⇒ 2 sống (đọc thư mục recorder qua `load_ticks`; lọc ngày cho tick) ⇒ thêm 2 test ⇒ hết.
+- 1165 test.
+
+**Rủi ro / giả định còn lại**
+- Khớp lệnh downloader không có báo giá ⇒ spread là GIẢ ĐỊNH (như bar); chỉ recorder cho bid/ask thật.
+- Khối lượng sổ lệnh coi như vô hạn khi tick không có `bid_qty/ask_qty`.
+- `backtest.robustness` vẫn chỉ chạy trên bar.
+
 ## 2026-11-08 — Chênh lệch roll = trung vị nhiều phút
 
 **Đã xong**
@@ -567,7 +581,7 @@
 - `ExecutionManager` nằm ở `core/` nhưng phụ thuộc `risk/` và `brokers/` (chấp nhận để live và backtest dùng chung một chỗ).
 - `detect_lookahead` chỉ bắt rò rỉ qua dữ liệu đưa vào engine; vẫn phải đọc code chiến lược.
 - Chưa dùng `backtest.initial_capital_vnd` (báo cáo theo VNĐ tuyệt đối, chưa có % lợi nhuận/ký quỹ).
-- Định dạng Parquet tick (`run_events`) chưa có loader — chờ recorder P1.4 chốt schema.
+- ~~Định dạng Parquet tick chưa có loader~~ ⇒ `backtest/ticks.py` + `--ticks` (08/11).
 
 **Người dùng cần làm**
 - [ ] Điền `fees.*` và `risk.*` còn null — engine từ chối chạy khi còn thiếu.

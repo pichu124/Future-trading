@@ -508,8 +508,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     from backtest.report import build_report, write_html
 
     ap = argparse.ArgumentParser(description="Backtest VN30F trên bar 1 phút (Parquet)")
-    ap.add_argument("--bars", required=True, nargs="+",
-                    help="file/thư mục Parquet bar 1 phút (đọc đệ quy, nhiều nguồn được; trùng ⇒ giữ volume tin được)")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--bars", nargs="+",
+                     help="file/thư mục Parquet bar 1 phút (đọc đệ quy, nhiều nguồn được; trùng ⇒ giữ volume tin được)")
+    src.add_argument("--ticks", nargs="+",
+                     help="tick thật: thư mục ngày recorder (data/raw/<ngày>) và/hoặc khớp lệnh downloader "
+                          "(data/history/trades) — đọc đệ quy")
+    ap.add_argument("--source", help="với --ticks: chỉ dùng nguồn này (bắt buộc khi dữ liệu có nhiều nguồn)")
     ap.add_argument("--strategy", required=True, help="module:Class, vd strategy.baseline_orb:ORB")
     ap.add_argument("--split", help="ngày bắt đầu out-of-sample (YYYY-MM-DD)")
     ap.add_argument("--n-trials", type=int, default=1, help="tổng số cấu hình đã thử (research/log.md)")
@@ -525,16 +530,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"❌ {exc.args[0]}\n   Chạy `python -m core.settings` để xem mọi khoá còn thiếu.")
         return 2
     load_stats: dict = {}
-    bars, skipped = load_bars_parquet(args.bars, stats=load_stats)
-    if args.date_from:
-        bars = [b for b in bars if b.start.date() >= date.fromisoformat(args.date_from)]
-    if args.date_to:
-        bars = [b for b in bars if b.start.date() <= date.fromisoformat(args.date_to)]
-    res = engine.run_bars(bars)
+    skipped = n_fake_quotes = 0
+
+    def in_range(d: date) -> bool:
+        return (not args.date_from or d >= date.fromisoformat(args.date_from)) and \
+            (not args.date_to or d <= date.fromisoformat(args.date_to))
+    if args.ticks:
+        from backtest.ticks import fill_missing_quotes, load_tick_files
+        try:
+            ticks = [t for t in load_tick_files(args.ticks, source=args.source) if in_range(t.ts.date())]
+        except ValueError as exc:
+            print(f"❌ {exc}")
+            return 2
+        ticks, n_fake_quotes = fill_missing_quotes(ticks, engine.paper_config.tick_size, engine.spread_ticks)
+        res = engine.run_events(bars_from_ticks(ticks))
+    else:
+        bars, skipped = load_bars_parquet(args.bars, stats=load_stats)
+        res = engine.run_bars([b for b in bars if in_range(b.start.date())])
     rep = build_report(res, split_date=date.fromisoformat(args.split) if args.split else None,
                        n_trials=args.n_trials, title=args.strategy)
     if skipped:
         rep["warnings"].append(f"Bỏ {skipped} dòng bar hỏng khi đọc Parquet")
+    if n_fake_quotes:
+        rep["warnings"].append(f"{n_fake_quotes} tick khớp không có bid/ask (vd khớp lệnh tải từ DNSE) — khớp lệnh "
+                               f"trên báo giá giả last ∓ nửa spread ({engine.spread_ticks} bước, "
+                               "backtest.synthetic_spread_ticks)")
     if load_stats.get("duplicates"):
         rep["warnings"].append(f"{load_stats['duplicates']} bar trùng giữa các nguồn ({load_stats['conflicts']} "
                                "bản khác giá OHLC) — giữ bản có volume tin được")
