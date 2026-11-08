@@ -1,5 +1,16 @@
 # Tiến độ
 
+## 2026-11-08 — Stream DE_ORDER cho TCBS (`TcbsOrderStream`)
+
+**Đã xong** (theo tài liệu 7.3 chính thức)
+- Kết nối `wss://openapi.tcbs.com.vn/ws/nesoi` với ping RFC 6455 TẮT (`tcbs_ws_connector`); `authenticate|base64({"jwt":…})` (JSON gọn đúng như ví dụ tài liệu) → chờ `authenticate|{"success":true}` rồi mới `subscribe` DE_ORDER + DE_OPEN_POSITION (chuỗi base64 khớp nguyên văn tài liệu); heartbeat TEXT `ping|1` mỗi 2s.
+- `TcbsBroker.on_stream_frame`: DE_ORDER áp ngay khối lượng khớp cộng dồn (trùng không đếm đôi, bản tin cũ đến muộn không kéo lùi trạng thái); lệnh lạ (DE_ORDER không có refId) ⇒ `resync_requested` ⇒ `ping()` đọc lại REST ngay; DE_OPEN_POSITION ⇒ `stream_net`. Frame hỏng bị bỏ, không ném lỗi.
+- Mỗi lần (re)connect ⇒ đọc lại REST (stream không số thứ tự, không phát lại). Xác thực bị từ chối ⇒ huỷ token (cần iOTP mới). Backoff min(2^n, 30)s; phiên đã xác thực rồi mới rớt không tính là thất bại; 10 lần thất bại liên tiếp ⇒ cảnh báo đúng một lần.
+- Test viết trước `tests/test_tcbs_stream.py` (15); test bắt được 1 lỗi khi viết (phiên đã chạy tốt rồi rớt bị tính thất bại ⇒ backoff tăng mãi). Thử phá 15 cơ chế ⇒ 1 sống (lệnh lạ bị che bởi resync lúc connect) ⇒ thêm test ⇒ 15/15.
+- 964 test.
+
+**Lưu ý**: TCBS vẫn TẮT và chưa nối vào runner; máy chạy bot phải cho phép host `openapi.tcbs.com.vn` (môi trường cloud này chỉ mở `developers.tcbs.com.vn` để đọc tài liệu).
+
 ## 2026-11-08 — Adapter TCBS (`brokers/tcbs.py`) — broker thứ 3, TẮT mặc định
 
 **Nguồn:** tài liệu chính thức `developers.tcbs.com.vn` v1.0.0 + đặc tả `openapi-v1.0.0.json` (cần mở host này: đã tạo môi trường cloud riêng "Future-trading" chỉ thêm `developers.tcbs.com.vn`, bạn đã duyệt). Gói PyPI `tcbs` không có provenance ⇒ không dùng. Ghi vào `docs/broker_notes.md` §2b (endpoint, field, mã trạng thái, mã lỗi, bảng ❓).

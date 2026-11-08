@@ -16,8 +16,9 @@ An toàn:
 - Trước MỌI request thay đổi: TRADING_MODE=live + `--live` + `brokers.tcbs_enabled` + `brokers.tcbs.api_verified` +
   token còn hạn. `dry_run` chỉ log payload.
 - Khớp lệnh: đọc sổ lệnh trong ngày mỗi `poll_s` (`matchVolume` cộng dồn, `matchPriceBQ` bình quân) ⇒ Fill rồi
-  cập nhật lệnh. Stream `DE_ORDER` (wss …/ws/nesoi) chưa dùng — tài liệu: không số thứ tự, không phát lại ⇒
-  REST vẫn là nguồn sự thật.
+  cập nhật lệnh. `TcbsOrderStream` (wss …/ws/nesoi, DE_ORDER + DE_OPEN_POSITION) áp cùng dữ liệu cộng dồn ngay
+  khi có (trùng không đếm đôi, bản tin cũ không kéo lùi trạng thái); stream không số thứ tự, không phát lại ⇒
+  mỗi lần (re)connect và mỗi lệnh lạ ⇒ đọc lại REST ngay — REST vẫn là nguồn sự thật.
 - Stop: bot giữ (như DNSE/SSI); TCBS có lệnh điều kiện SOU/SOL nhưng liên kết lệnh kích hoạt với client id ❓.
 """
 from __future__ import annotations
@@ -52,6 +53,7 @@ EP_CANCEL = "/khronos/v1/order/cancel"
 EP_BOOK = "/khronos/v1/order/in-day"
 EP_POSITIONS = "/khronos/v1/account/portfolio/status"
 EP_DERIVATIVES = "/tartarus/v1/derivatives"
+WS_URL = "wss://openapi.tcbs.com.vn/ws/nesoi"
 TOKEN_MAX_S = 8 * 3600            # tài liệu: access token hiệu lực tối đa 8 giờ
 TOKEN_SKEW_S = 30.0
 API_KEY_WARN_DAYS = 7
@@ -422,6 +424,8 @@ class TcbsBroker(BrokerAdapter):
         self._sync_ok = False
         self._bands: dict[tuple, tuple[float, float]] = {}
         self._warned: set[str] = set()
+        self.resync_requested = False                   # stream: lệnh lạ / vừa (re)connect ⇒ đọc lại REST ngay
+        self.stream_net: dict[str, int] = {}
 
     def __repr__(self) -> str:
         return f"TcbsBroker(name={self.name!r}, custody={self.config.custody_code!r}, dry_run={self.dry_run})"
@@ -532,8 +536,9 @@ class TcbsBroker(BrokerAdapter):
 
     async def ping(self) -> bool:
         now = self.clock.now()
-        if self._last_sync is None or (now - self._last_sync).total_seconds() >= self.config.poll_s:
-            self._last_sync = now
+        due = self._last_sync is None or (now - self._last_sync).total_seconds() >= self.config.poll_s
+        if due or self.resync_requested:
+            self._last_sync, self.resync_requested = now, False
             try:
                 await self.sync()
                 self._sync_ok = True
@@ -629,6 +634,8 @@ class TcbsBroker(BrokerAdapter):
         if o.status.is_terminal:
             return
         st = OrderStatus.FILLED if t.filled >= o.qty else status
+        if st is OrderStatus.PENDING and t.filled > 0:
+            st = OrderStatus.PARTIALLY_FILLED             # bản tin cũ đến muộn không kéo lùi trạng thái
         reason = o.reject_reason
         if st is OrderStatus.REJECTED and not reason:
             reason = f"TCBS từ chối ({row.get('info') or row.get('status')})"
@@ -814,6 +821,45 @@ class TcbsBroker(BrokerAdapter):
                 self._by_ref[t.ref] = cid
                 await self._send(cid, mkt)
 
+    # ------------------------------------------------------------ stream DE_ORDER ----
+
+    def on_stream_frame(self, frame: Any) -> None:
+        """Một frame `message_proto|TOPIC|{json}` của stream TCBS. Không bao giờ ném lỗi."""
+        try:
+            self._on_stream_frame(frame)
+        except Exception:
+            log.exception("tcbs: xử lý frame stream lỗi")
+
+    def _on_stream_frame(self, frame: Any) -> None:
+        if not isinstance(frame, str) or not frame.startswith("message_proto|"):
+            return
+        parts = frame.split("|", 2)
+        if len(parts) < 3:
+            return
+        topic, raw = parts[1], parts[2]
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            return
+        if not isinstance(data, dict):
+            return
+        if topic == "DE_OPEN_POSITION":
+            sym = contracts.symbol_contract(data.get("symbol"))
+            net = _int(data.get("net"))
+            if sym is not None and net is not None:
+                self.stream_net[sym] = net
+            return
+        if topic != "DE_ORDER":
+            return
+        no = str(data.get("orderNo") or "")
+        cid = self._by_no.get(no)
+        if cid is None:                                  # DE_ORDER không có refId ⇒ lệnh lạ: để sync REST nhận
+            self.resync_requested = True
+            return
+        if not data.get("volume") and not data.get("orderStatus"):
+            return                                       # bản tin thiếu thông tin: bỏ, REST sẽ bù
+        self._apply(cid, data)
+
     # ------------------------------------------------------------ vị thế / lệnh chờ ----
 
     async def positions(self) -> dict[str, Position]:
@@ -842,3 +888,136 @@ class TcbsBroker(BrokerAdapter):
     async def open_orders(self) -> list[Order]:
         await self.sync()
         return [t.order for t in self._tracks.values() if not t.order.status.is_terminal]
+
+
+# ------------------------------------------------------------------ stream ----
+
+class _WsTransport:
+    def __init__(self, ws):
+        self._ws = ws
+
+    async def send(self, data: str) -> None:
+        await self._ws.send(data)
+
+    async def recv(self):
+        return await self._ws.recv()
+
+    async def close(self) -> None:
+        await self._ws.close()
+
+
+async def tcbs_ws_connector(url: str):
+    """TCBS chỉ nhận heartbeat TEXT `ping|1` ⇒ BẮT BUỘC tắt ping RFC 6455 của thư viện (tài liệu 7.3)."""
+    import websockets
+    ws = await websockets.connect(url, open_timeout=10, ping_interval=None, ping_timeout=None, max_size=2 ** 20)
+    return _WsTransport(ws)
+
+
+def _b64json(d: dict) -> str:
+    return base64.b64encode(json.dumps(d, separators=(",", ":")).encode()).decode()
+
+
+class TcbsStreamAuthError(BrokerError):
+    """Server từ chối xác thực stream (token hết hạn/sai)."""
+
+
+class TcbsOrderStream:
+    """Stream thay đổi lệnh phái sinh TCBS (DE_ORDER + DE_OPEN_POSITION) → `TcbsBroker.on_stream_frame`.
+
+    Bản tin không có số thứ tự và không phát lại ⇒ mỗi lần (re)connect: `broker.resync_requested = True`
+    (vòng `ping()` kế tiếp đọc lại sổ lệnh REST). Backoff min(2^n, 30)s; `max_failures_alert` lần thất bại
+    liên tiếp ⇒ cảnh báo một lần (REST vẫn chạy).
+    """
+
+    TOPICS = ("DE_ORDER", "DE_OPEN_POSITION")
+
+    def __init__(self, tokens: TcbsTokenManager, broker: TcbsBroker, *, connector=None, url: str = WS_URL,
+                 heartbeat_s: float = 2.0, auth_timeout_s: float = 10.0, recv_timeout_s: float = 45.0,
+                 backoff_sleep: Callable[[float], Awaitable[None]] = asyncio.sleep, max_failures_alert: int = 10):
+        self.tokens, self.broker = tokens, broker
+        self._connector = connector or tcbs_ws_connector
+        self.url, self.heartbeat_s = url, heartbeat_s
+        self.auth_timeout_s, self.recv_timeout_s = auth_timeout_s, recv_timeout_s
+        self._sleep, self.max_failures_alert = backoff_sleep, max_failures_alert
+        self.stopping = False
+        self.connects = 0
+        self.failures = 0
+        self._alerted = False
+        self._authed = False
+
+    async def stop(self) -> None:
+        self.stopping = True
+
+    async def run(self) -> None:
+        attempt = 0
+        while not self.stopping:
+            self._authed = False
+            try:
+                await self._session()
+            except asyncio.CancelledError:
+                raise
+            except TcbsStreamAuthError as exc:
+                self.tokens.invalidate()                     # token bị từ chối ⇒ cần iOTP mới
+                log.warning("tcbs stream: %s", exc)
+            except Exception as exc:
+                log.warning("tcbs stream: mất kết nối (%s: %s)", type(exc).__name__, exc)
+            if self._authed:                                   # phiên đã chạy được (dù sau đó rớt) ⇒ không tính thất bại
+                attempt, self.failures, self._alerted = 0, 0, False
+            else:
+                self.failures += 1
+                if self.failures >= self.max_failures_alert and not self._alerted:
+                    self._alerted = True
+                    await self.broker._say(f"🚨 Stream lệnh TCBS thất bại {self.failures} lần liên tiếp — khớp lệnh "
+                                           "vẫn đọc qua sổ lệnh REST; kiểm tra token / mạng")
+            if self.stopping:
+                break
+            await self._sleep(min(2 ** attempt, 30))
+            attempt += 1
+
+    async def _session(self) -> bool:
+        tr = await self._connector(self.url)
+        hb = None
+        authed = False
+        try:
+            token = await self.tokens.get()
+            await tr.send("authenticate|" + _b64json({"jwt": token}))
+            deadline = asyncio.get_running_loop().time() + self.auth_timeout_s
+            while not authed:                                # PHẢI đợi auth thành công rồi mới subscribe
+                left = deadline - asyncio.get_running_loop().time()
+                if left <= 0:
+                    raise ConnectionError("hết thời gian chờ xác thực stream")
+                msg = await asyncio.wait_for(tr.recv(), left)
+                if isinstance(msg, str) and msg.startswith("authenticate|"):
+                    try:
+                        res = json.loads(msg.split("|", 1)[1])
+                    except ValueError:
+                        res = {}
+                    if not isinstance(res, dict) or not res.get("success"):
+                        raise TcbsStreamAuthError(f"xác thực stream bị từ chối: {str(res.get('error') if isinstance(res, dict) else res)[:100]}")
+                    authed = self._authed = True
+            for topic in self.TOPICS:
+                await tr.send("subscribe|" + _b64json({"topic": topic}))
+            self.connects += 1
+            self.broker.resync_requested = True                # bù bản tin lỡ trong lúc mất kết nối
+            hb = asyncio.create_task(self._heartbeat(tr))
+            while not self.stopping:
+                msg = await asyncio.wait_for(tr.recv(), self.recv_timeout_s)
+                if isinstance(msg, str) and msg.startswith("authenticate|") and '"success":false' in msg.replace(" ", ""):
+                    raise TcbsStreamAuthError("server huỷ xác thực stream")
+                self.broker.on_stream_frame(msg)
+        finally:
+            if hb is not None:
+                hb.cancel()
+            try:
+                await tr.close()
+            except Exception:
+                pass
+        return authed
+
+    async def _heartbeat(self, tr) -> None:
+        while True:
+            try:
+                await tr.send("ping|1")
+            except Exception:
+                return
+            await asyncio.sleep(self.heartbeat_s)

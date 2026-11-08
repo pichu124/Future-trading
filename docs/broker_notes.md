@@ -298,6 +298,7 @@ CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định ⇒ adapter có sẵn nh�
 | `pageNo` bắt đầu từ 0 hay 1 | 1 (theo ví dụ), đọc tới khi trang rỗng / ít hơn `pageSize` | probe |
 | ATO/ATC qua API | không hỗ trợ (từ chối trước khi gửi) | — |
 | Rate limit | `poll_seconds: 1` | header probe ghi lại |
+| Stream DE_ORDER | ✅ dùng (`TcbsOrderStream`): auth → chờ `success` → subscribe; heartbeat TEXT `ping|1` 2s, tắt ping RFC 6455; backoff min(2^n,30)s; (re)connect / lệnh lạ ⇒ đọc lại REST. Host `openapi.tcbs.com.vn` phải được phép ở máy chạy bot | probe với khoá thật |
 | Lệnh điều kiện SOU/SOL làm stop phía broker | chưa dùng — stop do bot giữ như DNSE/SSI (liên kết lệnh kích hoạt với client id chưa rõ) | thử trên tài khoản thật với KL nhỏ, sau khi bật |
 
 ## 3. Hệ quả cho thiết kế (đã/ sẽ áp vào code)
