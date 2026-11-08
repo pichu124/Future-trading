@@ -784,7 +784,9 @@ class TestPositions:
 class TestTokenAndConnect:
     def test_connect_checks_account_and_requests_otp(self):
         b, tr, clock, _, _, notes = make(token=False)
+        assert not b.awaiting_otp
         run(b.connect())
+        assert b.awaiting_otp and any("/otp dnse" in n for n in notes)
         assert "/accounts" in tr.paths("GET") and "/registration/send-email-otp" in tr.paths("POST")
         assert any("/otp" in n for n in notes)
         assert run(b.ping()) is False                                  # chưa có token
@@ -807,7 +809,7 @@ class TestTokenAndConnect:
         b, tr, clock, _, _, notes = make(token=False)
         run(b.connect())
         assert run(b.submit_otp("000000")) is False
-        assert run(b.submit_otp(OTP)) is True
+        assert run(b.submit_otp(OTP)) is True and not b.awaiting_otp
         call = [c for c in tr.calls if c["path"] == "/registration/trading-token"][-1]
         assert call["json"] == {"otpType": "email_otp", "passcode": OTP}
         assert run(b.ping()) is True

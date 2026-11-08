@@ -204,6 +204,50 @@ SignalR, `fc-tradeapi`) là thế hệ trước.
 ### 2.5 Dữ liệu lịch sử
 - `get_ohlc_{1minute…1hour}_historical(symbol, from_date, to_date, page, size≤1000)` ✅. ❓ có trả dữ liệu cho hợp đồng đã đáo hạn không.
 
+### 2.6 Giao dịch — mã nguồn SDK `ssi-sdk` 3.3.2 (`services/trading.py`, `token_manager.py`, `portfolio.py`, `transport/rest_client.py`, `utils/crypto.py`, `models/*`; đọc 08/11/2026) → `brokers/ssi.py`
+- **Token** ✅: `POST /api/v3/auth/requestOtp` body `{"apiKey","apiSecret"}` (SMS/email OTP; Smart OTP trả `transactionId`) →
+  `POST /api/v3/auth/token` body `{"apiKey","apiSecret","otp"}` → `{accessToken, expiresAt (epoch giây; ≥1e10 là ms), refreshToken,
+  refreshExpiresAt}` (có thể bọc trong `data`). Refresh `POST /api/v3/auth/refresh` body `{"refreshToken"}`; mã `401101–401108`
+  ⇒ đăng nhập OTP lại, không retry. SDK coi token hết hạn sớm 30s. Một phiên mỗi apiKey: đăng nhập/refresh ở tiến trình khác
+  làm token này mất hiệu lực ⇒ feed và broker SSI dùng CHUNG một `SsiTokenManager`.
+- **Ký lệnh** ✅: RSA PKCS#1 v1.5 SHA-256 trên đúng chuỗi body (`json.dumps` mặc định), hex, header `X-Signature`; khoá RSA dạng XML
+  (`<RSAKeyValue><Modulus>…<D>…`) mã hoá base64. Mọi request kèm `Authorization: Bearer <access>`.
+- **Lỗi** ✅: HTTP ≥ 400, HOẶC HTTP 2xx có `{code, msg}` với `code` ≠ 200/204 (vd 200 + `{"code":400123,"msg":…}`). 204 /
+  `{"code":204}` = rỗng. 409 = trùng `clientRequestId`. SDK chỉ retry GET; POST/PUT/DELETE không bao giờ.
+- **Đặt** ✅: `POST /api/v3/trading/order` body (thứ tự khoá như SDK) `accountNo, symbol, side (B|S), quantity, price (chuỗi thập
+  phân; "0" cho lệnh thị trường/ATO/ATC), orderType, clientRequestId (≤ 20), deviceId (machine id của hệ điều hành), userAgent`
+  → `{orderId, clientRequestId, orderStatus}`.
+- **Sửa** ✅: `PUT /api/v3/trading/order` body `accountNo, clientModifyId (ngẫu nhiên), deviceId, userAgent, clientRequestId|orderId,
+  price|quantity` — MỘT thay đổi mỗi request (SDK cấm sửa cả giá lẫn khối lượng một lần). **Huỷ** ✅: `DELETE` cùng path, body
+  `accountNo, clientCancelId, deviceId, userAgent, clientRequestId|orderId`.
+- **Sổ lệnh** ✅: `GET /api/v3/trading/orderBook?accountNo&from&to (YYYY/MM/DD)&pageIndex&pageSize` → `{accountNo, orderList, totalRecord}`;
+  dòng lệnh: `orderId, clientRequestId, instrumentId|symbol, buySell|side, orderType, price, avgPrice, quantity, filledQty, cancelQty,
+  orderStatus, inputTime, modifiedTime, message`. SDK: "đừng tin totalRecord, đọc tới khi trang rỗng".
+- **Mã trạng thái** ✅: PD chờ xử lý · WA chờ duyệt · RS sẵn gửi · SD đã gửi sàn · QU nằm sổ · PF khớp một phần · FF khớp hết ·
+  FFPC khớp một phần, phần còn lại huỷ · WM chờ sửa · WC chờ huỷ · CL huỷ · RJ từ chối · EX hết hạn · IAV chờ phiên · SOI/PAS/CPL/RQ/ERR
+  (engine). Adapter: chuỗi lạ ⇒ suy từ khối lượng.
+- **Vị thế** ✅: `GET /api/v3/trading/position?clientId&querySummary=true&accountNo` → `derivative.derOpenPositions[]`:
+  `symbol, long, short, net, bidAvgPrice, askAvgPrice, tradePrice, floatingPL, tradingPL`.
+- **Stream TRADING** ✅ (cùng `wss://stream.ssi.com.vn/ws/v3`): `{"method":"subscribe","channel":"TRADING","topics":["order.<tk>","portfolio.<tk>"]}`;
+  frame `{"channel":"TRADING","topic":"order.<tk>","data":{eventType, notifyId, …}}` với `eventType` ∈ `orderEvent` (trạng thái,
+  `filledQty`/`avgPrice` CỘNG DỒN), `orderMatchEvent` (một lần khớp: `matchQty`, `matchPrice`), `clientPortfolioEvent`
+  (`longQty, shortQty, net, bidAvgPrice, askAvgPrice`). **SDK không có cơ chế phát lại theo `notifyId`** ⇒ bot đọc lại sổ lệnh
+  REST sau mỗi lần (re)connect; `notifyId` chỉ dùng để bỏ frame trùng.
+- **Lệnh điều kiện (FCO)**: SDK có `place_fco_stop`, `stop_limit`, `trailing_stop`, `oco` (`/api/v3/trading/fco/order`) ⇒ trả lời
+  một phần câu hỏi §4 cho SSI; hỗ trợ phái sinh ❓ ⇒ adapter vẫn dùng stop do bot giữ.
+- Không thấy môi trường UAT trong SDK ⇒ không có chỗ đặt lệnh thử bằng tiền ảo.
+
+**Adapter `brokers/ssi.py` quyết định gì khi chưa rõ (❓ — chốt bằng `scripts/ssi_trading_probe.py`):**
+| ❓ | Adapter đang làm | Cách chốt |
+|---|---|---|
+| Mã hợp đồng khi đặt lệnh (KRX hay VN30FYYMM) | `brokers.ssi.order_symbol_format` (null ⇒ không chạy live) | probe in mã masterdata trả về |
+| Lệnh thị trường phái sinh là `MTL` hay `MP` | `brokers.ssi.market_order_type` (null ⇒ không chạy live) | hỏi SSI / tài liệu phái sinh |
+| Response có bọc `data` không | nhận cả hai | probe ghi `wrapped_in_data` |
+| `quantity` khi sửa là tổng hay phần còn lại | gửi tổng (sửa tại chỗ, cùng clientRequestId) | gọi thử khi được phép |
+| `bidAvgPrice`/`askAvgPrice` ứng với Long/Short | Long ⇒ `bidAvgPrice`, Short ⇒ `askAvgPrice` | đối chiếu app khi có vị thế |
+| Đơn vị giá phái sinh (điểm) | gửi điểm, bước 0,1 | probe masterdata |
+| Token chỉ-dữ-liệu có cần OTP | feed dùng chung token có OTP | probe |
+
 ## 3. Hệ quả cho thiết kế (đã/ sẽ áp vào code)
 
 1. `core/contracts.py`: bảng chữ năm A=2020 đã được hai nguồn độc lập xác nhận ⇒ giữ nguyên. Danh sách hợp đồng thật vẫn lấy từ `GET /instruments?marketId=DVX&securityGroupId=FU` (DNSE) / `masterdata` (SSI) lúc khởi động.
@@ -212,7 +256,7 @@ SignalR, `fc-tradeapi`) là thế hệ trước.
 4. Không đặt/huỷ được lệnh trong ATO/ATC ⇒ `flatten_time` (14:25) phải trước ATC đủ xa để còn huỷ/đặt lại trong phiên liên tục.
 5. Sửa lệnh DNSE trả orderId mới ⇒ broker adapter phải cập nhật ánh xạ `client_order_id → broker_order_id` sau mỗi lần sửa.
 6. Dữ liệu backtest thật: DNSE `/price/{symbol}/trades` (tick) và `/price/ohlc` (1 phút), SSI OHLC 1 phút lịch sử ⇒ thêm bước P1.6 tải lịch sử, tốt hơn nhiều so với dữ liệu snapshot import từ dashboard.
-7. Refresh token SSI chỉ dùng MỘT lần ⇒ token manager phải ghi token mới (nguyên tử) trước khi dùng, không bao giờ gửi lại refresh token cũ.
+7. Refresh token SSI chỉ dùng MỘT lần ⇒ `SsiTokenManager` (P4.2) bỏ refresh token khỏi bộ nhớ TRƯỚC khi gửi; lỗi mạng giữa chừng ⇒ coi như đã dùng, xin OTP. Token chỉ ở bộ nhớ (không ghi đĩa) ⇒ khởi động lại cần OTP, đổi lại không bao giờ có token cũ trên đĩa để bị gửi lại.
 
 ## 4. Việc cần người dùng xác nhận khi đăng ký API
 - [ ] DNSE: base URL production, thời hạn trading token, hạn mức rate limit, có kênh sổ lệnh nhiều bước giá không.

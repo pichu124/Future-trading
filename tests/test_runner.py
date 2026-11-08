@@ -384,3 +384,42 @@ def test_async_on_tick_of_real_broker_is_awaited(session_cfg, cal, tmp_path):
     r.trade(1350.0)
     r.step()
     assert seen == [1350.0]
+
+
+class _OtpBroker:
+    def __init__(self, name, awaiting):
+        self.name, self.awaiting_otp, self.got = name, awaiting, []
+
+    async def submit_otp(self, code):
+        self.got.append(code)
+        return True
+
+
+def _two_otp_brokers(session_cfg, cal, tmp_path, dnse_wait, ssi_wait):
+    r = Rig(session_cfg, cal, tmp_path)
+    d, s = _OtpBroker("dnse", dnse_wait), _OtpBroker("ssi", ssi_wait)
+    r.runner.brokers = {"dnse": d, "ssi": s}
+    return r, d, s
+
+
+def test_otp_routed_by_broker_name(session_cfg, cal, tmp_path):
+    r, d, s = _two_otp_brokers(session_cfg, cal, tmp_path, True, True)
+    r.run(r.runner._otp("ssi 445566"))
+    assert s.got == ["445566"] and d.got == []
+
+
+def test_otp_without_name_goes_to_the_only_waiting_broker(session_cfg, cal, tmp_path):
+    r, d, s = _two_otp_brokers(session_cfg, cal, tmp_path, False, True)
+    r.run(r.runner._otp("445566"))
+    assert s.got == ["445566"] and d.got == []
+
+
+def test_otp_without_name_ambiguous_is_refused(session_cfg, cal, tmp_path):
+    """Hai broker cùng chờ ⇒ mỗi bên một mã: không đoán, hỏi lại."""
+    r, d, s = _two_otp_brokers(session_cfg, cal, tmp_path, True, True)
+    r.run(r.runner._otp("445566"))
+    assert d.got == [] and s.got == []
+    assert any("Ghi rõ broker" in n for n in r.notes) and not any("445566" in n for n in r.notes)
+    r2, d2, s2 = _two_otp_brokers(session_cfg, cal, tmp_path, False, False)
+    r2.run(r2.runner._otp("445566"))
+    assert d2.got == [] and s2.got == []

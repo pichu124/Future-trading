@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.5, P2.1, P2.2, P3.1, P3.2, P3.3, P4.3, P5.1, P5.2 (P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Lỗi #1–#12, #14 trong `docs/golive_checklist.md` đã xử lý (#13 chờ P4.2). Phần còn lại cần API key.
+> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.5, P2.1, P2.2, P3.1, P3.2, P3.3, P4.1, P4.2, P4.3, P5.1, P5.2 (P4.1/P4.2: adapter xong, live khoá tới khi kiểm API; P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, làm **P1.6**). Lỗi #1–#12, #14 trong `docs/golive_checklist.md` đã xử lý (#13: token SSI đã có ở P4.2, còn nối composite vào runner). Phần còn lại cần API key.
 
 ---
 
@@ -73,7 +73,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 **P4.1 · Adapter DNSE** ✅ (`brokers/dnse.py`; OTP nhập tay qua Telegram `/otp` thay cho Gmail API — quyết định của người dùng; live khoá tới khi chạy `scripts/dnse_trading_probe.py` và đặt `api_verified`)
 > Đọc tài liệu LightSpeed Trading (bản sau KRX), cập nhật broker_notes.md, rồi viết `brokers/dnse.py`: đăng nhập JWT, lấy trading token qua emailOTP (đọc OTP từ Gmail API), tự gia hạn token, đặt/huỷ/sửa lệnh phái sinh, nhận trạng thái lệnh và vị thế. Idempotent theo client_order_id. Kiểm tra TRADING_MODE trước mọi lệnh thật. Viết chế độ `--dry-run` chỉ log payload.
 
-**P4.2 · Adapter SSI**
+**P4.2 · Adapter SSI** ✅ (`brokers/ssi.py`; OTP nhập tay `/otp ssi`; live khoá tới khi chạy `scripts/ssi_trading_probe.py`, điền `order_symbol_format`/`market_order_type` và `api_verified`)
 > Tương tự cho `brokers/ssi.py` với FastConnect Trading: ký RSA, OTP, stream trạng thái lệnh và danh mục phái sinh, lưu notify_id để reconnect không mất sự kiện.
 
 **P4.3 · Quy trình khẩn cấp** ✅ (`live/emergency.py`)

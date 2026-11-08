@@ -441,6 +441,11 @@ class DnseBroker(BrokerAdapter):
 
     # ------------------------------------------------------------ token ----
 
+    @property
+    def awaiting_otp(self) -> bool:
+        """Đã xin OTP và đang chờ người dùng gửi `/otp dnse <mã>`."""
+        return self._otp_requested_at is not None and not self.token_valid()
+
     def token_valid(self, now: Optional[datetime] = None) -> bool:
         if not self._token or self._token_at is None:
             return False
@@ -455,7 +460,7 @@ class DnseBroker(BrokerAdapter):
             raise LiveTradingNotAllowed("brokers.dnse.api_verified=false — chưa kiểm API DNSE, "
                                         "không gửi lệnh thật (scripts/dnse_trading_probe.py)")
         if not self.token_valid():
-            raise BrokerError("chưa có trading token DNSE hợp lệ — trả lời /otp <mã> trong email")
+            raise BrokerError("chưa có trading token DNSE hợp lệ — trả lời /otp dnse <mã> trong email")
 
     async def request_otp(self, reason: str = "") -> bool:
         self._otp_requested_at = self._now()
@@ -467,7 +472,7 @@ class DnseBroker(BrokerAdapter):
         if not r.ok:
             await self._say(f"⚠️ DNSE: xin OTP lỗi ({DnseApiError(r.status, r.body)})")
             return False
-        await self._say(f"📧 DNSE đã gửi OTP về email{reason} — trả lời /otp <mã> (OTP sống ~2 phút) "
+        await self._say(f"📧 DNSE đã gửi OTP về email{reason} — trả lời /otp dnse <mã> (OTP sống ~2 phút) "
                         "để bot đặt/huỷ lệnh được")
         return True
 

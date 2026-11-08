@@ -131,3 +131,8 @@ def test_parse_commands_keeps_argument_only_for_otp():
     ]
     cmds, _ = parse_commands(updates, authorized_chat_id="111")
     assert cmds == ["otp 834521", "otp 112233", "kill"]
+
+
+def test_parse_commands_otp_with_broker_name():
+    updates = [{"update_id": 1, "message": {"chat": {"id": 111}, "text": "/otp ssi 445566 extra"}}]
+    assert parse_commands(updates, "111")[0] == ["otp ssi 445566"]

@@ -20,7 +20,7 @@ ghi `<report_dir>/daily_YYYY-MM-DD.txt`.
 
 Chạy: `python -m live.runner --assume-computed-contract` (paper). Live cần TRADING_MODE=live VÀ
 `--live`; adapter DNSE đã có (P4.1) nhưng runner chưa nối live (chờ kiểm API + P4.2) ⇒ từ chối.
-Lệnh Telegram `/otp <mã>` chuyển mã OTP email cho broker cần trading token (DNSE), không nhắc lại mã.
+Lệnh Telegram `/otp [dnse|ssi] <mã>` chuyển mã OTP cho broker cần token, không nhắc lại mã.
 """
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
 
 HELP = ("/kill — huỷ lệnh chờ, đóng vị thế, dừng bot · /status — trạng thái · /pnl — lãi/lỗ hôm nay · "
-        "/otp <mã> — trading token DNSE (mã trong email)")
+        "/otp [dnse|ssi] <mã> — token cho broker (mã trong email/SMS)")
 
 
 @dataclass
@@ -305,23 +305,36 @@ class Runner:
             else:
                 await self._say(f"Lệnh /{c} không hỗ trợ. {HELP}")
 
-    async def _otp(self, code: str) -> None:
-        """`/otp <mã>` ⇒ trading token cho broker cần OTP (DNSE). KHÔNG bao giờ nhắc lại mã."""
-        targets = [b for b in self.brokers.values() if callable(getattr(b, "submit_otp", None))]
+    async def _otp(self, args: str) -> None:
+        """`/otp [broker] <mã>` ⇒ token cho broker cần OTP (DNSE email, SSI SMS/email).
+
+        Không ghi tên broker: gửi cho broker DUY NHẤT đang chờ OTP (hai broker chờ ⇒ hỏi lại, vì
+        mỗi bên một mã khác nhau). KHÔNG bao giờ nhắc lại mã.
+        """
+        targets = {n: b for n, b in self.brokers.items() if callable(getattr(b, "submit_otp", None))}
         if not targets:
             await self._say("Không broker nào cần OTP")
             return
-        if not code:
-            await self._say("Cú pháp: /otp <mã trong email>")
+        parts = args.split()
+        if len(parts) == 2 and parts[0].lower() in targets:
+            chosen, code = [targets[parts[0].lower()]], parts[1]
+        elif len(parts) == 1:
+            waiting = [b for b in targets.values() if getattr(b, "awaiting_otp", False)]
+            if len(waiting) > 1 or (not waiting and len(targets) > 1):
+                await self._say(f"Ghi rõ broker: /otp {'|'.join(targets)} <mã>")
+                return
+            chosen, code = (waiting or list(targets.values())), parts[0]
+        else:
+            await self._say(f"Cú pháp: /otp [{'|'.join(targets)}] <mã>")
             return
-        for b in targets:
+        for b in chosen:
             try:
                 ok = await b.submit_otp(code)
             except Exception as exc:
                 log.warning("runner: submit_otp %s lỗi: %s", b.name, type(exc).__name__)
                 ok = False
             if not ok:
-                await self._say(f"⚠️ {b.name}: OTP không được chấp nhận — xin mã mới rồi /otp lại")
+                await self._say(f"⚠️ {b.name}: OTP không được chấp nhận — xin mã mới rồi /otp {b.name} lại")
 
     def status_text(self) -> str:
         now = self.clock.now()

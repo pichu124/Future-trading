@@ -57,10 +57,10 @@ Cột "Xác minh" là trạng thái lúc rà; trạng thái sửa ở bảng 1b.
 
 | Mục | Trạng thái |
 |---|---|
-| §2 Kiến trúc | Thiếu `brokers/ssi.py`, `brokers/tcbs.py` (`brokers/dnse.py` đã có — P4.1, live khoá tới khi kiểm API); **thiếu logger có cấu trúc (JSON)** trong `monitoring/`. Còn lại đủ |
+| §2 Kiến trúc | Thiếu `brokers/tcbs.py` (tuỳ chọn). `brokers/dnse.py` (P4.1), `brokers/ssi.py` (P4.2) đã có — live khoá tới khi kiểm API; **thiếu logger có cấu trúc (JSON)** trong `monitoring/`. Còn lại đủ |
 | §2 Một code strategy cho backtest/paper/live | ✔ `ExecutionManager` + `RiskManager` dùng chung; chỉ đổi broker và nguồn dữ liệu |
 | §2 Giá trị null ⇒ từ chối chạy | ✔ (risk, paper, engine, runner); còn 10 khoá null — xem mục 5 |
-| §3 DNSE chính / SSI dự phòng, net tổng mọi broker | Feed: ✔ cả hai + composite. Broker: DNSE ✔ (`brokers/dnse.py`, chưa nối live), SSI ✗. Net tổng: ✔ (adapter DNSE theo dõi cả lệnh đặt tay) |
+| §3 DNSE chính / SSI dự phòng, net tổng mọi broker | Feed: ✔ cả hai + composite. Broker: DNSE ✔ (`brokers/dnse.py`), SSI ✔ (`brokers/ssi.py`) — chưa nối live vào runner. Net tổng: ✔ (adapter DNSE theo dõi cả lệnh đặt tay) |
 | §3 Đối chiếu feed (lệch/im) ⇒ ngừng mở vị thế | Code ✔ (`feeds/composite.py`), **chưa nối vào runner** (#13) |
 | §3b Hai chốt máy/khoá | ✔ runner + recorder. **Runner chưa kiểm `state_dir`/`data_dir` có nằm trong Dropbox** (chỉ recorder kiểm) |
 | §4 Đối chiếu mã hợp đồng với danh sách broker lúc khởi động | Feed có cơ chế, nhưng runner/recorder đang dùng `--assume-computed-contract`/`--krx` vì chưa có REST `/instruments` (P4.1) |

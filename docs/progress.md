@@ -1,5 +1,33 @@
 # Tiến độ
 
+## 2026-11-08 — P4.2 Adapter SSI (`brokers/ssi.py`) — broker dự phòng, live KHOÁ tới khi kiểm API
+
+**Đã xong**
+- Đọc mã nguồn SDK `ssi-sdk` 3.3.2 (trading, token_manager, portfolio, rest_client, crypto, stream TRADING) ⇒ `docs/broker_notes.md` §2.6: endpoint, field, mã trạng thái lệnh (PD/QU/PF/FF/CL/RJ…), bảng ❓ và cách xử lý. Phát hiện: SSI có lệnh điều kiện FCO (stop, trailing, OCO) — hỗ trợ phái sinh ❓; SDK không có môi trường UAT; SDK không có phát lại sự kiện theo `notifyId`.
+- `brokers/ssi.py`:
+  - `SsiHttp`: Bearer + ký RSA-SHA256 (thuần thư viện chuẩn, như SDK) trên đúng chuỗi body gửi đi; không retry; nhận ra lỗi nằm trong HTTP 200 (`{code, msg}`).
+  - `SsiTokenManager` (dùng CHUNG cho broker và feed SSI): OTP nhập tay `/otp ssi <mã>`; refresh trước hạn 30s, một luồng (khoá); refresh token bị bỏ khỏi bộ nhớ TRƯỚC khi gửi ⇒ lỗi mạng giữa chừng không bao giờ dẫn tới gửi lại (SSI thu hồi cả phiên); 401101–401108 ⇒ xin OTP. Token chỉ ở bộ nhớ, không ghi đĩa.
+  - `SsiBroker`: `clientRequestId` = client_order_id; lệnh "không rõ" (timeout/5xx/409) tìm CHÍNH XÁC theo clientRequestId trong sổ lệnh, không gửi lại; bị coi là chưa tới sàn mà sau đó vẫn hiện ⇒ theo dõi như lệnh ngoài (net position đúng). Sửa = một request cho giá, một cho khối lượng. Huỷ chỉ báo CANCELLED khi sổ lệnh báo CL. Vị thế từ `derOpenPositions` (net ≠ long − short ⇒ lỗi, không đoán). Đọc sổ lệnh theo trang tới khi hết. Stop do bot giữ như DNSE. Lệnh đặt tay được theo dõi.
+  - Chốt trước MỌI lệnh thay đổi: TRADING_MODE=live + `--live` + `api_verified` + khoá ký + token; dry-run chỉ log. Hai ❓ `order_symbol_format` (KRX hay VN30FYYMM) và `market_order_type` (MTL hay MP) còn null ⇒ live từ chối chạy.
+  - `SsiOrderStream`: kênh TRADING `order.<tk>` + `portfolio.<tk>`; `orderEvent` (cộng dồn) áp ngay, trùng `notifyId` bị bỏ, sự kiện cũ đến muộn không kéo lệnh đã kết thúc về "còn sống"; `orderMatchEvent` ⇒ đọc lại sổ lệnh ngay; mỗi lần (re)connect ⇒ đọc lại sổ lệnh REST (bù sự kiện lỡ — thay cho "lưu notify_id để phát lại" vì SDK không có cơ chế đó).
+- Runner: `/otp [dnse|ssi] <mã>` — không ghi tên ⇒ gửi cho broker duy nhất đang chờ OTP; hai broker cùng chờ ⇒ hỏi lại. DNSE thêm `awaiting_otp`.
+- `scripts/ssi_trading_probe.py`: `--payload-only` (không mạng) hoặc OTP → CHỈ ĐỌC masterdata/sổ lệnh/vị thế; ghi response thô đã xoá apiSecret/otp/token + `summary.json` (mã hợp đồng SSI trả về, chuỗi trạng thái, có bọc `data` không). Không đặt lệnh (không có UAT).
+- `config/settings.yaml` thêm `brokers.ssi.*`; `.env.example` ghi chú `SSI_PRIVATE_KEY_PATH`, `/otp ssi`.
+- Test viết trước: `tests/test_broker_ssi.py` (khoá RSA sinh trong test, server giả kiểm chữ ký bằng khoá công khai, mô phỏng refresh-một-lần và thu hồi phiên), `tests/test_ssi_probe.py`, runner/parser. Thử phá 32 cơ chế an toàn ⇒ ban đầu 9 sống sót ⇒ thêm test (refresh song song khi cùng bị 401, OTP sai định dạng, cửa sổ đối soát, huỷ chưa xác nhận, dry-run huỷ, 401 ⇒ lệnh sau dùng token mới, lọc tài khoản trên stream, frame trùng, sự kiện cũ đến muộn) ⇒ 32/32 bị bắt.
+- 781 test.
+
+**Rủi ro / giả định còn lại**
+- Chưa gọi thử được API SSI (không có khoá, không có UAT): mã hợp đồng khi đặt lệnh, MTL/MP, response có bọc `data`, ngữ nghĩa `quantity` khi sửa, `bidAvgPrice/askAvgPrice` ứng với Long/Short — đều ❓ (broker_notes §2.6).
+- Khởi động lại runner ⇒ phải OTP lại SSI (token không ghi đĩa — chủ ý, để không bao giờ gửi lại refresh token cũ).
+- Một phiên mỗi apiKey: chạy thêm công cụ khác dùng cùng apiKey (vd script probe trong lúc bot chạy) sẽ làm token của bot mất hiệu lực.
+- Runner chưa nối: SSI làm broker dự phòng cho `EmergencyHandler`, `SsiFeed` + `SsiOrderStream` dùng chung token, composite feed (#13).
+
+**Người dùng cần làm**
+- [ ] Đăng ký FastConnect V3, tải private key, điền `.env` (SSI_CLIENT_ID/API_KEY/API_SECRET/PRIVATE_KEY_PATH/ACCOUNT).
+- [ ] Chạy `python scripts/ssi_trading_probe.py`, gửi lại `data/probe/ssi_trading_*` ⇒ chốt `order_symbol_format`, `market_order_type`. Hỏi SSI lệnh thị trường cho phái sinh qua API là MTL hay MP, và FCO stop có dùng cho phái sinh không.
+
+**Bước tiếp theo:** nối live vào runner (DNSE chính + SSI dự phòng + composite feed, #13) sau khi có kết quả probe của cả hai bên.
+
 ## 2026-11-08 — P4.1 Adapter DNSE (`brokers/dnse.py`) — live KHOÁ tới khi kiểm API
 
 **Quyết định của người dùng:** OTP email nhập tay qua Telegram `/otp <mã>` (không dùng Gmail API — tránh thư viện Google lớn + cho bot quyền đọc hộp thư); lớp HTTP tự viết mỏng trên `requests` (không dùng SDK `dnse`); viết đủ adapter nhưng chặn lệnh thật ở production tới khi các mục ❓ được kiểm. PROMPTS ghi "đăng nhập JWT" là bản trước KRX ⇒ làm theo V2: ký HMAC mọi request + trading token.

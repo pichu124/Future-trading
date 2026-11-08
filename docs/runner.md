@@ -1,11 +1,13 @@
 # Chạy bot (paper) — `live/runner.py`
 
-> Live CHƯA chạy được: adapter DNSE đã có (`brokers/dnse.py`, P4.1) nhưng phải kiểm API trước
-> (`scripts/dnse_trading_probe.py` ⇒ `brokers.dnse.api_verified`) và chưa có SSI dự phòng (P4.2).
+> Live CHƯA chạy được: adapter DNSE (`brokers/dnse.py`, P4.1) và SSI (`brokers/ssi.py`, P4.2) đã có
+> nhưng phải kiểm API trước (`scripts/dnse_trading_probe.py`, `scripts/ssi_trading_probe.py` ⇒
+> `brokers.*.api_verified`) và runner chưa nối chế độ live.
 > `--live` hoặc `TRADING_MODE=live` hiện bị từ chối có chủ đích.
 >
-> Lệnh Telegram: `/kill`, `/status`, `/pnl`, `/help`, và `/otp <mã>` — chuyển OTP email của DNSE cho
-> adapter để lấy trading token (bot không bao giờ nhắc lại mã; nên xoá tin nhắn chứa mã sau khi dùng).
+> Lệnh Telegram: `/kill`, `/status`, `/pnl`, `/help`, và `/otp [dnse|ssi] <mã>` — chuyển OTP cho
+> adapter để lấy token. Không ghi tên broker thì gửi cho broker DUY NHẤT đang chờ OTP; hai broker cùng
+> chờ ⇒ bot hỏi lại (mỗi bên một mã). Bot không bao giờ nhắc lại mã; nên xoá tin nhắn chứa mã sau khi dùng.
 
 ## Điều kiện trước khi chạy paper
 - `config/settings.yaml`: đã điền `risk.*`, `fees.*`, `live.allowed_machine` (= hostname máy này,

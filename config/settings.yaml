@@ -112,6 +112,19 @@ brokers:
     request_timeout_seconds: 10
     poll_seconds: 1                     # chu kỳ đọc sổ lệnh (khớp lệnh) — hạn mức rate limit ❓
     uncertain_resolve_seconds: 15       # lệnh "không rõ" (timeout/5xx) không thấy trong sổ sau N giây ⇒ REJECTED
+  ssi:                                  # brokers/ssi.py — dự phòng; khoá ở .env (SSI_CLIENT_ID/API_KEY/API_SECRET/PRIVATE_KEY_PATH/ACCOUNT)
+    base_url: https://api.ssi.com.vn
+    stream_url: wss://stream.ssi.com.vn/ws/v3
+    # Mã hợp đồng SSI nhận khi ĐẶT LỆNH: krx (41I1GB000) hay name (VN30F2611) — ❓ broker_notes §2.3;
+    # scripts/ssi_trading_probe.py in mã masterdata trả về. null ⇒ không chạy live.
+    order_symbol_format: null
+    # Loại lệnh thị trường cho phái sinh: MTL hay MP (SDK: MTL = HOSE, MP = HNX) — ❓. null ⇒ không chạy live.
+    market_order_type: null
+    # CHỈ đặt true sau khi chạy scripts/ssi_trading_probe.py và đối chiếu ❓ ở docs/broker_notes.md §2.6.
+    api_verified: false
+    request_timeout_seconds: 10
+    poll_seconds: 1                     # đọc sổ lệnh REST (stream TRADING chỉ để nhanh hơn)
+    uncertain_resolve_seconds: 15       # không thấy clientRequestId trong sổ sau N giây ⇒ REJECTED
 
 live:
   # Hostname DUY NHẤT được chạy bot (Windows: biến COMPUTERNAME). Máy khác từ chối khởi động
