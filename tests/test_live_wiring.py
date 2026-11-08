@@ -133,6 +133,7 @@ def test_main_live_refused_while_settings_unverified(monkeypatch):
     from live import runner
     monkeypatch.setenv("TRADING_MODE", "live")
     monkeypatch.setattr("live.instance_lock.check_allowed_machine", lambda allowed: "test-host")
+    monkeypatch.setattr("live.runner.setup_logging", lambda *a, **k: None)   # không ghi vào logs/ của repo
     assert runner.main(["--live", "--assume-computed-contract"]) == 2
 
 

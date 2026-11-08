@@ -108,18 +108,14 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     settings = load_settings()
-    logs = settings.path("paths.data_dir").parent / "logs"
-    logs.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-                        handlers=[logging.StreamHandler(),
-                                  logging.FileHandler(logs / f"record_{datetime.now():%Y-%m-%d}.log",
-                                                      encoding="utf-8")])
     try:
         from dotenv import load_dotenv
         from core.settings import REPO_ROOT
         load_dotenv(REPO_ROOT / ".env")          # Task Scheduler không đặt cwd = repo
     except ImportError:
         pass
+    from monitoring.logger import setup_logging
+    setup_logging(settings.path("paths.log_dir"), prefix="record")   # logs/record_YYYY-MM-DD.jsonl
 
     mclock = MarketClock.from_settings(settings)
     start, stop = _hhmm(settings.require("recorder.start")), _hhmm(settings.require("recorder.stop"))

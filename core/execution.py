@@ -28,6 +28,7 @@ from brokers.base import BrokerAdapter, BrokerError
 from core.clock import Clock
 from core.models import (AccountState, Fill, Order, OrderStatus, OrderType, Side, Signal,
                          SignalAction)
+from monitoring.logger import log_event
 from risk.risk_manager import ActionKind, OrderIdFactory, RiskAction, RiskManager, Rejected
 
 log = logging.getLogger(__name__)
@@ -80,12 +81,19 @@ class ExecutionManager:
     def _on_update(self, order: Order) -> None:
         self.orders[order.client_order_id] = order
         self.risk.on_order_update(self.state, order)
+        log_event(log, "order", client_order_id=order.client_order_id, broker=order.broker,
+                  broker_order_id=order.broker_order_id, symbol=order.symbol, side=order.side,
+                  qty=order.qty, filled_qty=order.filled_qty, order_type=order.order_type, price=order.price,
+                  status=order.status, tag=order.tag, reject_reason=order.reject_reason or None)
         if order.status is OrderStatus.REJECTED:
             self._event("broker_rejected", f"{order.client_order_id} ({order.tag}): "
                                            f"{order.reject_reason}", order.symbol)
 
     def _on_fill(self, fill: Fill) -> None:
         self.risk.record_fill(self.state, fill)
+        log_event(log, "fill", client_order_id=fill.client_order_id, broker=fill.broker, symbol=fill.symbol,
+                  side=fill.side, qty=fill.qty, price=fill.price, fee_vnd=fill.fee_vnd, fill_ts=fill.ts,
+                  net_after=self.state.net_qty(fill.symbol))
         self._queue.append(lambda s=fill.symbol: self._ensure_protection(s))
 
     async def drain(self) -> None:
@@ -246,7 +254,8 @@ class ExecutionManager:
         decision = self.risk.approve(order, self.state)
         if isinstance(decision, Rejected):
             self.rejections.append(decision)
-            self._event("rejected", str(decision), order.symbol)
+            self._event("rejected", str(decision), order.symbol, code=getattr(decision, "code", None),
+                        client_order_id=order.client_order_id, tag=order.tag)
             return None
         try:
             placed = await self.broker.place(order)
@@ -283,8 +292,9 @@ class ExecutionManager:
             return None
         return round(round(price / self.tick_size) * self.tick_size, 6)
 
-    def _event(self, kind: str, message: str, symbol: str = "") -> None:
+    def _event(self, kind: str, message: str, symbol: str = "", **fields) -> None:
         self.events.append(ExecEvent(self.clock.now(), kind, message, symbol))
         level = logging.WARNING if kind in ("rejected", "broker_rejected", "cancel_failed", "broker_error",
                                             "broker_down") else logging.INFO
-        log.log(level, "%s %s", kind, message)
+        log.log(level, "%s %s", kind, message,
+                extra={"event": f"exec_{kind}", "symbol": symbol or None, "detail": message, **fields})

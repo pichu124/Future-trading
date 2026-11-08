@@ -54,3 +54,15 @@ risk → paper broker; heartbeat khoá mỗi `monitoring.heartbeat_seconds`; t�
 ## Tệp
 - `state/daily_state.json`: bộ đếm rủi ro trong ngày (khởi động lại không xoá giới hạn lỗ ngày).
 - `data/reports/daily_YYYY-MM-DD.txt`: báo cáo cuối ngày (lệnh, P&L sau phí, lệnh bị từ chối + lý do).
+
+## Log
+- `logs/bot_YYYY-MM-DD.jsonl` (runner) và `logs/record_YYYY-MM-DD.jsonl` (recorder): mỗi dòng một JSON
+  `{ts (+07:00), level, logger, msg, event?, …field}`; thư mục đặt ở `paths.log_dir`, không được nằm trong Dropbox.
+- Sự kiện có cấu trúc (`event`): `signal`, `order` (mỗi lần đổi trạng thái), `fill` (kèm `net_after`),
+  `exec_rejected` (kèm `code` của risk), `exec_broker_*`, `risk_action`, `notify` (mọi tin gửi Telegram).
+- Token / OTP / khoá: khoá nhạy cảm ⇒ `***`, giá trị trong `.env` (*_KEY, *_SECRET, *_TOKEN) ⇒ `<secret>`.
+- Dựng timeline sau phiên:
+  ```python
+  from monitoring.logger import read_events
+  for e in read_events("logs/bot_2026-11-09.jsonl", event="fill"): print(e["ts"], e["side"], e["qty"], e["price"])
+  ```

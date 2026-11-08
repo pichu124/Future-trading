@@ -1,5 +1,20 @@
 # Tiến độ
 
+## 2026-11-08 — Logger JSON có cấu trúc (`monitoring/logger.py`)
+
+**Đã xong**
+- `JsonFormatter`: một dòng JSON mỗi bản ghi — `ts` (giờ VN, ms), `level`, `logger`, `msg`, mọi field `extra=`; datetime/Enum/dataclass/Decimal/set đều ghi được, kiểu lạ ⇒ repr; lỗi ⇒ `exc_type`, `exc_msg`, `exc` (traceback).
+- Bảo mật (CLAUDE.md mục 7): khoá nhạy cảm ở mọi độ sâu (apiSecret, otp, passcode, *token, *secret, password, Authorization, X-Signature…) ⇒ `***`; giá trị bí mật từ `.env` (*_KEY/*_SECRET/*_TOKEN/*_PASSWORD, ≥ 6 ký tự) ⇒ `<secret>` trong message, field VÀ traceback; mẫu URL bot Telegram / `Bearer …` / `"tradingToken": …` bị xoá kể cả khi chưa đăng ký. Console cũng được lọc.
+- `DailyJsonlHandler`: `logs/<prefix>_YYYY-MM-DD.jsonl` theo ngày giờ VN (đổi file lúc 00:00), append khi khởi động lại, flush từng dòng, lỗi ghi không làm chết bot, từ chối thư mục trong Dropbox. `setup_logging` gọi lại an toàn (không nhân đôi handler). `read_events(path, event=…)` bỏ dòng hỏng.
+- Nối vào: `live/runner.py` (thay basicConfig; sự kiện `signal`, `risk_action`, `notify`), `core/execution.py` (`order` mỗi lần đổi trạng thái, `fill` kèm `net_after`, `exec_rejected` kèm mã risk, các `exec_*` khác), `scripts/record_today.py` (`record_*.jsonl` thay file .log). `log_event` không làm gì khi mức log tắt ⇒ backtest không chậm. Settings `paths.log_dir: logs`.
+- Test viết trước `tests/test_logger.py`; test bắt được 2 lỗi thật khi nối: `Side(str, Enum)` bị ghi `"Side.BUY"` (phải xét Enum trước str), và test gọi `runner.main()` ghi log vào `logs/` của repo (chặn trong conftest). Thử phá 17 cơ chế ⇒ 16 bị bắt, 1 là điều kiện thừa ⇒ đã bỏ.
+- Golive checklist §2: logger JSON ✔. `docs/runner.md` thêm mục Log + cách dựng timeline.
+- 825 test.
+
+**Giả định**
+- Log chứa số tài khoản và mã lệnh (không phải bí mật) — vẫn KHÔNG nên chia sẻ công khai.
+- Bí mật ngắn < 6 ký tự không được đăng ký (để không xoá nhầm chữ số trong log); OTP vẫn bị che qua tên field (`otp`/`passcode`) và bot không bao giờ log mã.
+
 ## 2026-11-08 — Nối LIVE vào runner (`live/wiring.py`) — vẫn KHOÁ tới khi bạn mở từng chốt
 
 **Đã xong**

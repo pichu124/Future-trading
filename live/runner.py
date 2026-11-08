@@ -44,6 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from backtest.report import TradeBook, compute_metrics  # noqa: E402
 from brokers.base import BrokerAdapter  # noqa: E402
 from brokers.paper import PaperBroker  # noqa: E402
+from monitoring.logger import log_event, setup_logging  # noqa: E402
 from core.bars import BarBuilder  # noqa: E402
 from core.clock import MarketClock  # noqa: E402
 from core.execution import ExecutionManager  # noqa: E402
@@ -125,7 +126,7 @@ class Runner:
 
     async def _say(self, text: str) -> None:
         self._alerts.append(text) if text.startswith(("⚠️", "🚨")) else None
-        log.info("runner: %s", text)
+        log.info("runner: %s", text, extra={"event": "notify"})
         if self.notify is None:
             return
         try:
@@ -305,6 +306,9 @@ class Runner:
         await self.execution.maintain()
         await self.execution.drain()
         actions = self.risk.check(self.state)
+        for a in actions:
+            log_event(log, "risk_action", level=logging.WARNING, kind=a.kind, reason=a.reason, symbol=a.symbol,
+                      broker=a.broker)
         if actions:
             await self.execution.handle_actions(actions)
             await self.execution.drain()
@@ -342,6 +346,8 @@ class Runner:
             await self._say(f"⚠️ Strategy lỗi ở bar {bar.start:%H:%M} — bỏ qua bar này")
             return
         for sig in signals:
+            log_event(log, "signal", symbol=sig.symbol, action=sig.action, signal_ts=sig.ts, qty=sig.qty,
+                      stop_loss=sig.stop_loss, take_profit=sig.take_profit, reason=sig.reason, bar=bar.start)
             await self.execution.on_signal(sig)
             await self.execution.drain()
 
@@ -545,7 +551,6 @@ def main(argv=None) -> int:
     g.add_argument("--krx", nargs="+", help="mã KRX đang niêm yết (đã kiểm tay)")
     g.add_argument("--assume-computed-contract", action="store_true")
     args = ap.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     try:
         from dotenv import load_dotenv
         load_dotenv(REPO_ROOT / ".env")
@@ -562,6 +567,11 @@ def main(argv=None) -> int:
             return 2
 
     settings = load_settings()
+    try:
+        setup_logging(settings.path("paths.log_dir"), prefix="bot")     # JSONL theo ngày, xoá bí mật
+    except ValueError as exc:                                         # thư mục log nằm trong Dropbox
+        log.error("%s", exc)
+        return 2
     try:
         machine = check_allowed_machine(settings.get("live.allowed_machine"))
     except MachineNotAllowed as exc:

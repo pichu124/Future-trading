@@ -8,6 +8,7 @@ paths:
   # tính từ gốc repo.
   data_dir: data
   state_dir: state
+  log_dir: logs        # log JSON theo ngày (bot_YYYY-MM-DD.jsonl, record_YYYY-MM-DD.jsonl)
   # Thư mục data_warehouse của vnstock-dashboard (chỉ để import dữ liệu cũ).
   # Ví dụ Windows: C:/vnstock/data_warehouse
   dashboard_warehouse: null
