@@ -84,7 +84,8 @@ class Runner:
                  fetch_commands: Optional[Callable[[], Awaitable[list[str]]]] = None,
                  state_path: Optional[Path] = None, report_dir: Optional[Path] = None,
                  config: RunnerConfig = RunnerConfig(), mode: str = "paper",
-                 background: Sequence[Callable[[], Awaitable[None]]] = ()):
+                 background: Sequence[Callable[[], Awaitable[None]]] = (),
+                 preflight: Sequence[Callable[[], Awaitable[None]]] = ()):
         self.settings, self.strategy, self.feed = settings, strategy, feed
         self.broker, self.backup_broker = broker, backup_broker
         self.clock, self.risk, self.state = market_clock, risk, state
@@ -118,6 +119,7 @@ class Runner:
         self._reported = False
         self._saved_key: Optional[tuple] = None
         self._background = list(background)            # vd stream lệnh SSI
+        self.preflight = list(preflight)                # vd đối chiếu hợp đồng với broker (live)
         self._bg_tasks: list[asyncio.Task] = []
         self._bg_alerted: set[int] = set()
         self._queued: deque[str] = deque()             # cảnh báo từ callback đồng bộ (feed tổng hợp)
@@ -175,6 +177,12 @@ class Runner:
         code = await self._wait_for_tokens()
         if code is not None:
             return code
+        for check in self.preflight:
+            try:
+                await check()
+            except Exception as exc:
+                await self._say(f"🚨 Kiểm trước giao dịch thất bại: {type(exc).__name__}: {exc} — thoát, KHÔNG giao dịch")
+                return 2
         now = self.clock.now()
         for name, b in self.brokers.items():
             for sym, pos in (await b.positions()).items():
@@ -567,9 +575,13 @@ def main(argv=None) -> int:
             return 2
 
     settings = load_settings()
+    from recorder.tick_recorder import assert_not_in_sync_folder
     try:
+        # CLAUDE.md mục 3b: data/ state/ logs/ của bot KHÔNG nằm trong Dropbox/OneDrive (hai máy cùng ghi)
+        for key in ("paths.data_dir", "paths.state_dir", "paths.log_dir"):
+            assert_not_in_sync_folder(settings.path(key))
         setup_logging(settings.path("paths.log_dir"), prefix="bot")     # JSONL theo ngày, xoá bí mật
-    except ValueError as exc:                                         # thư mục log nằm trong Dropbox
+    except ValueError as exc:
         log.error("%s", exc)
         return 2
     try:
@@ -620,10 +632,12 @@ def main(argv=None) -> int:
 
     backup = None
     background: list = []
+    preflight: list = []
     if live:
         from live.wiring import build_live
         try:
-            setup = build_live(settings, os.environ, live_flag=True, market_clock=mclock, contract_lister=lister,
+            # live: danh sách hợp đồng LUÔN lấy từ DNSE và đối chiếu (bỏ qua --krx/--assume-computed-contract)
+            setup = build_live(settings, os.environ, live_flag=True, market_clock=mclock, contract_lister=None,
                                notify=notify, on_feed_alert=on_feed_alert)
         except (MissingSetting, LiveTradingNotAllowed, ValueError, OSError) as exc:
             log.error("Từ chối live: %s", exc)
@@ -632,6 +646,7 @@ def main(argv=None) -> int:
             log.error("Live cần Telegram (TELEGRAM_TRADING_BOT_TOKEN/_CHAT_ID): nhập OTP + /kill + cảnh báo")
             return 2
         broker, backup, feed, background = setup.primary, setup.backup, setup.feed, setup.background
+        preflight = setup.preflight
     else:
         key, secret = os.environ.get("DNSE_API_KEY"), os.environ.get("DNSE_API_SECRET")
         if not key or not secret:
@@ -662,7 +677,7 @@ def main(argv=None) -> int:
                         report_dir=settings.path("paths.data_dir") / "reports",
                         config=RunnerConfig(heartbeat_s=float(settings.get("monitoring.heartbeat_seconds", 30)),
                                             otp_wait_s=float(settings.get("live.otp_wait_seconds", 600))),
-                        mode=f"{'live' if live else mode}@{machine}", background=background)
+                        mode=f"{'live' if live else mode}@{machine}", background=background, preflight=preflight)
         for text in pending_alerts:
             runner.queue_alert(text)
         alert_sink["fn"] = runner.queue_alert

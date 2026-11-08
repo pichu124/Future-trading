@@ -299,3 +299,90 @@ def test_run_stops_background_before_closing_brokers(session_cfg, cal, tmp_path)
     r.primary.close = close
     assert asyncio.run(r.runner.run()) == 0
     assert events[:2] == ["stream_cancelled", "broker_closed"]
+
+
+@pytest.mark.parametrize("key", ["data_dir", "state_dir", "log_dir"])
+def test_main_refuses_paths_inside_sync_folder(monkeypatch, key):
+    """CLAUDE.md mục 3b: data/ state/ (và logs/) của bot KHÔNG được nằm trong thư mục Dropbox."""
+    from live import runner
+    s = load_settings()
+    d = copy.deepcopy(s._data)
+    d["paths"][key] = "C:/Users/me/Dropbox/bot/" + key
+    monkeypatch.setattr("core.settings.load_settings", lambda *a, **k: Settings(d))
+    monkeypatch.setenv("TRADING_MODE", "paper")
+    called = []
+    monkeypatch.setattr("live.instance_lock.check_allowed_machine", lambda allowed: called.append(1) or "h")
+    assert runner.main(["--assume-computed-contract"]) == 2
+    assert called == []                                   # từ chối trước cả bước kiểm máy / khoá
+
+
+# --------------------------------------------------------------------------- đối chiếu hợp đồng (§4) ----
+
+def test_live_contract_list_comes_from_dnse_and_is_preflighted(live_settings, live_env, cal):
+    calls = []
+
+    async def dnse_transport(method, url, params, json_body, headers, timeout):
+        calls.append(url)
+        import json as _j
+        return 200, {}, _j.dumps({"data": [{"symbol": "41I1GB000", "symbolType": "VN30F1M"},
+                                            {"symbol": "41I1GC000", "symbolType": "VN30F2M"}]})
+    setup = build_live(live_settings, live_env, live_flag=True, market_clock=mclock_for(live_settings, cal),
+                       contract_lister=None, dnse_transport=dnse_transport)
+    assert setup.preflight
+    asyncio.run(setup.preflight[0]())                                  # 09/11/2026: F1M = 41I1GB000 ✔
+    assert any(u.endswith("/instruments") for u in calls)
+    assert asyncio.run(setup.contract_lister()) == ["41I1GB000", "41I1GC000"]
+
+
+def test_live_preflight_fails_on_mismatch(live_settings, live_env, cal):
+    from brokers.dnse import ContractMismatch
+
+    async def dnse_transport(method, url, params, json_body, headers, timeout):
+        import json as _j
+        return 200, {}, _j.dumps({"data": [{"symbol": "41I1GC000", "symbolType": "VN30F1M"}]})
+    setup = build_live(live_settings, live_env, live_flag=True, market_clock=mclock_for(live_settings, cal),
+                       contract_lister=None, dnse_transport=dnse_transport)
+    with pytest.raises(ContractMismatch):
+        asyncio.run(setup.preflight[0]())
+
+
+def test_runner_preflight_failure_exits_2_before_reconcile(session_cfg, cal, tmp_path):
+    from brokers.dnse import ContractMismatch
+
+    async def check():
+        raise ContractMismatch("DNSE báo VN30F1M = 41I1GC000, bot tính 41I1GB000")
+    r = AuthRig(session_cfg, cal, tmp_path, [])
+    r.primary.trading_ready = r.backup.trading_ready = True
+    r.runner.preflight = [check]
+    assert asyncio.run(r.runner.startup()) == 2
+    assert "positions" not in r.primary.calls
+    assert any("VN30F1M" in n and n.startswith("🚨") for n in r.notes)
+
+
+def test_runner_preflight_ok_continues(session_cfg, cal, tmp_path):
+    ran = []
+
+    async def check():
+        ran.append(1)
+    r = AuthRig(session_cfg, cal, tmp_path, [])
+    r.primary.trading_ready = r.backup.trading_ready = True
+    r.runner.preflight = [check]
+    assert asyncio.run(r.runner.startup()) is None and ran == [1] and "positions" in r.primary.calls
+
+
+def test_live_preflight_checks_traded_contract_after_roll(live_settings, live_env, cal):
+    """Ngày đáo hạn 19/11/2026 (roll_days_before_expiry=1 ⇒ bot đã chuyển sang F2M = 41I1GC000), còn DNSE
+    vẫn báo F1M = 41I1GB000 và không trả F2M ⇒ đối chiếu nhãn qua, nhưng hợp đồng ĐANG giao dịch không có ⇒ dừng."""
+    from core import contracts
+    from feeds.data_feed_dnse import ContractNotListed
+    day = datetime(2026, 11, 19, 10, 0)
+    assert contracts.trading_contract(day.date(), cal, 1) == "VN30F2612"
+
+    async def dnse_transport(method, url, params, json_body, headers, timeout):
+        import json as _j
+        return 200, {}, _j.dumps({"data": [{"symbol": "41I1GB000", "symbolType": "VN30F1M"}]})
+    mclock = MarketClock(SessionSchedule.from_mapping(live_settings.get("session")), cal, FakeClock(day))
+    setup = build_live(live_settings, live_env, live_flag=True, market_clock=mclock, contract_lister=None,
+                       dnse_transport=dnse_transport)
+    with pytest.raises(ContractNotListed):
+        asyncio.run(setup.preflight[0]())

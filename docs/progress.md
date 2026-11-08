@@ -1,5 +1,19 @@
 # Tiến độ
 
+## 2026-11-08 — Hoàn tất phần checklist go-live làm được không cần khoá
+
+**Đã xong**
+- §3b: runner từ chối khởi động khi `paths.data_dir` / `state_dir` / `log_dir` nằm trong Dropbox/OneDrive (trước đó chỉ recorder kiểm).
+- §4: đối chiếu mã hợp đồng với broker lúc khởi động live — `brokers/dnse.py` `fetch_vn30_futures` (`GET /instruments?symbol=…&marketId=DVX&securityGroupId=FU`, theo đặc tả OpenAPI chính thức `docs/dnseopenapi-en.yaml` của repo SDK) + `verify_contracts`: `symbolType` DNSE báo (VN30F1M/F2M/F1Q/F2Q) phải trùng mã bot tự tính, thiếu F1M ⇒ lỗi; `live/wiring.py` dùng danh sách này cho feed và chạy `preflight` (hợp đồng đang giao dịch sau roll phải có trong danh sách). Runner chạy preflight sau khi có token, TRƯỚC khi đối soát/giao dịch; lỗi ⇒ thoát 2. Live bỏ qua `--krx`/`--assume-computed-contract`.
+- #14 (backtest bớt lạc quan): tick giả có bid/ask cách giá ≥ 1 bước mỗi phía (spread lẻ trước đây cho bán ở đúng giá); cực trị giữ lâu hơn độ trễ paper + 1s (trước: độ trễ ≥ 1s ⇒ stop khớp ở cực trị KIA); lệnh còn mở cuối dữ liệu vào số liệu (giá cuối, trừ ước phí đóng) kèm cảnh báo. Ba test cũ đổi kỳ vọng đúng 1 bước giá (Long thoát chịu thêm nửa spread). Chưa có backtest nào trên dữ liệu thật ⇒ không có kết quả nào bị ảnh hưởng.
+- `tests/test_execution.py`: 20 test trực tiếp cho `ExecutionManager` với broker giả điều khiển được (khớp một phần, huỷ chưa xác nhận, lỗi mạng, broker chết, đảo chiều ngoài ý muốn, lệnh đóng kẹt, KILL/FLATTEN/khẩn cấp). Thử phá 14 cơ chế ⇒ 2 sống vì risk chặn hộ ⇒ siết test để kiểm chính ExecutionManager ⇒ 14/14.
+- Thử phá thêm: đối chiếu hợp đồng + chặn Dropbox 7/7 (sau khi thêm test ngày đáo hạn), #14 6/6.
+- `docs/golive_checklist.md`: thêm mục 0 "Trạng thái mới nhất", cập nhật §2/§3/§6.
+- 865 test.
+
+**Còn lại là việc của bạn** (không tự làm được): lịch nghỉ 2026–2027 theo thông báo của sở; `fees.*`, `risk.*`, `live.allowed_machine`, `backtest.initial_capital_vnd`; khoá API + ba script thăm dò; dữ liệu lịch sử; paper ≥ vài tuần.
+- Tuỳ chọn chưa làm: `brokers/tcbs.py` (CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định), feed tổng hợp cho paper.
+
 ## 2026-11-08 — Logger JSON có cấu trúc (`monitoring/logger.py`)
 
 **Đã xong**

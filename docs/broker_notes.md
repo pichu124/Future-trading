@@ -66,7 +66,7 @@ Trang hướng dẫn: hdsd.dnse.com.vn → "DNSE LightSpeed API V2"; đăng ký 
 | Chi tiết / sổ lệnh / lịch sử | `GET …/orders/{orderId}`, `GET …/orders`, `GET …/orders/history` | `marketType`, `orderCategory` / `from`,`to` |
 | Vị thế | `GET /accounts/{accountNo}/positions` | `marketType=DERIVATIVE`, `pageSize` |
 | **Đóng vị thế** | `POST /accounts/positions/{positionId}/close` + `trading-token` | `marketType=DERIVATIVE` (hiện chỉ hỗ trợ phái sinh) |
-| Danh sách HĐTL | `GET /instruments` | `marketId=DVX`, `securityGroupId=FU`, `symbol`, `limit`, `page` |
+| Danh sách HĐTL | `GET /instruments` | **`symbol` bắt buộc** (danh sách phân cách dấu phẩy), `marketId=DVX`, `securityGroupId=FU`, `limit`, `page` → `{"data": [{symbol, marketId, securityGroupId, symbolType (VN30F1M/F2M/F1Q/F2Q), listedDate, shortName, name, indexName}], "total"}` ✅ (đặc tả `docs/dnseopenapi-en.yaml` trong repo `dnse-tech/dnse-py`, đọc 08/11/2026; trên dây ❓) — `brokers/dnse.py` `verify_contracts` đối chiếu `symbolType` với lịch đáo hạn của bot |
 | Trần/sàn/tham chiếu | `GET /price/{symbol}/secdef` | `boardId=G1` |
 | **Lịch sử khớp lệnh (tick)** | `GET /price/{symbol}/trades` | `boardId=G1`, `from`, `to` (timestamp), `limit` |
 | Khớp gần nhất | `GET /price/{symbol}/trades/latest` | `boardId=G1` |

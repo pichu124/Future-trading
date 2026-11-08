@@ -11,13 +11,14 @@ Chống look-ahead:
   trước tương lai (qua dữ liệu được đưa vào) sẽ lộ ra.
 
 Dữ liệu bar (không có bid/ask) ⇒ tick GIẢ, theo hướng bi quan:
-- bid = giá − ⌊spread/2⌋ bước, ask = bid + spread bước (`backtest.synthetic_spread_ticks`);
+- bid = giá − h, ask = giá + h với h = max(1, ⌈spread/2⌉) bước (`backtest.synthetic_spread_ticks`):
+  cả mua lẫn bán đều chịu nửa spread (spread lẻ không còn cho một phía khớp đúng giá);
 - đường đi O → cực trị gần O hơn → cực trị kia → C (`validation.bar_high_first`); không quyết
   được ⇒ đi về phía BẤT LỢI cho vị thế đang giữ + lệnh vào đang chờ (SL thắng, CLAUDE.md mục 6);
-- mỗi cực trị phát hai tick liền nhau ⇒ stop bị kích hoạt ở cực trị khớp tại chính cực trị
-  (giả định xấu nhất), LO chờ chỉ khớp khi cực trị xuyên qua giá LO;
-- thời điểm trong bar: O +1s, cực trị +15s/+16s và +30s/+31s, C +59s; khối lượng sổ lệnh coi
-  như vô hạn. Báo cáo luôn ghi rõ là "tick giả".
+- mỗi cực trị phát hai tick cách nhau `độ trễ paper + 1s` (≥ 1s) ⇒ stop bị kích hoạt ở cực trị khớp
+  tại chính cực trị (giả định xấu nhất) dù độ trễ dài; LO chờ chỉ khớp khi cực trị xuyên qua giá LO;
+- thời điểm trong bar: O +1s, cực trị +15s và +30s (lặp sau thời gian giữ), C +59s; khối lượng sổ
+  lệnh coi như vô hạn. Báo cáo luôn ghi rõ là "tick giả".
 """
 from __future__ import annotations
 
@@ -93,22 +94,30 @@ def _exposure(state: AccountState, symbol: str) -> int:
     return state.net_qty(symbol) + pending
 
 
-def synthetic_ticks(bar: Bar, net_qty: int, tick_size: float, spread_ticks: int) -> list[Tick]:
-    """Tick giả bi quan cho một bar (xem docstring module)."""
+def synthetic_ticks(bar: Bar, net_qty: int, tick_size: float, spread_ticks: int,
+                    hold_s: float = 1.0) -> list[Tick]:
+    """Tick giả bi quan cho một bar (xem docstring module).
+
+    `hold_s`: cực trị được giữ bao lâu (tick lặp lại sau `hold_s` giây) — phải DÀI HƠN độ trễ paper,
+    nếu không lệnh stop kích hoạt ở cực trị sẽ khớp ở tick kế tiếp là cực trị KIA (lạc quan, golive #14).
+    """
     high_first = bar_high_first(bar.open, bar.high, bar.low)
     if high_first is None:
         high_first = net_qty < 0          # Long/phẳng ⇒ đáy trước; Short ⇒ đỉnh trước
     x, y = (bar.high, bar.low) if high_first else (bar.low, bar.high)
     scale = bar.interval_s / 60.0
-    path = [(_T_OPEN, bar.open), (_T_X, x), (_T_X + 1, x), (_T_Y, y), (_T_Y + 1, y),
-            (_T_CLOSE, bar.close)]
-    down = (spread_ticks // 2) * tick_size
+    t_x, t_y, t_close = _T_X * scale, _T_Y * scale, _T_CLOSE * scale
+    hold = max(1.0, float(hold_s))
+    hold_x = min(hold, t_y - t_x - 1.0)            # không chạm tới cực trị kia / giá đóng
+    hold_y = min(hold, t_close - t_y - 1.0)
+    path = [(_T_OPEN * scale, bar.open), (t_x, x), (t_x + hold_x, x), (t_y, y), (t_y + hold_y, y),
+            (t_close, bar.close)]
+    # mỗi phía cách giá ít nhất 1 bước: spread lẻ (vd 1) trước đây cho bán ở bid = giá ⇒ không mất gì
+    half = 0.0 if spread_ticks <= 0 else max(1, -(-spread_ticks // 2)) * tick_size
     out = []
     for sec, px in path:
-        bid = round(px - down, 6)
-        ask = round(bid + spread_ticks * tick_size, 6)
-        out.append(Tick(bar.symbol, bar.start + timedelta(seconds=sec * scale), last=px,
-                        bid=bid, ask=ask, source="synthetic"))
+        out.append(Tick(bar.symbol, bar.start + timedelta(seconds=sec), last=px,
+                        bid=round(px - half, 6), ask=round(px + half, 6), source="synthetic"))
     return out
 
 
@@ -164,6 +173,8 @@ class BacktestEngine:
         self.trading_contract_only = trading_contract_only
         # kiểm cấu hình NGAY (null ⇒ MissingSetting), không đợi tới lúc chạy
         self.paper_config = PaperConfig.from_settings(settings)
+        # giữ cực trị lâu hơn độ trễ tối đa của paper (golive #14)
+        self._hold_s = float(int((self.paper_config.latency_ms + self.paper_config.latency_jitter_ms) // 1000) + 1)
         self.spread_ticks = int(settings.require("backtest.synthetic_spread_ticks"))
         if self.spread_ticks < 0:
             raise ValueError("backtest.synthetic_spread_ticks phải ≥ 0")
@@ -217,7 +228,8 @@ class BacktestEngine:
                     # chiều bất lợi tính theo vị thế lúc bar bắt đầu + lệnh vào đang chờ
                     # (lệnh đặt cuối bar trước sẽ khớp ngay ở tick mở của bar này)
                     yield from synthetic_ticks(ev, _exposure(state, ev.symbol),
-                                               self.paper_config.tick_size, self.spread_ticks)
+                                               self.paper_config.tick_size, self.spread_ticks,
+                                               hold_s=self._hold_s)
                 yield ev
 
         async def step() -> None:

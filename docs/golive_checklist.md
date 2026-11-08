@@ -6,7 +6,23 @@
 
 > **Cập nhật cùng ngày:** đã sửa #1–#8, #10–#12, #14 (mỗi lỗi có test tái hiện trong
 > `tests/test_golive_fixes.py`, thử phá từng bản sửa đều có test đỏ). #9 đã làm theo quyết định của
-> bạn (đóng khi mất dữ liệu > 30s). #13 đã nối cho live (08/11). Còn mở: mọi mục "chưa có" ở phần 2. Live đã nối nhưng còn KHOÁ (`api_verified`, giá trị null) — **chưa chạy live**.
+> bạn (đóng khi mất dữ liệu > 30s). #13 đã nối cho live (08/11). #14 sửa hết (08/11). Phần 2: mọi mục làm được không cần khoá đã xong —
+> còn lại là việc của bạn (lịch nghỉ, phí, giới hạn risk, khoá API, chạy script thăm dò). Live đã nối nhưng còn
+> KHOÁ (`api_verified`, giá trị null) — **chưa chạy live**. Bảng trạng thái mới nhất: mục 0 ngay dưới.
+
+## 0. Trạng thái mới nhất (08/11/2026, sau P4.1/P4.2/live/logger)
+
+| Hạng mục | Trạng thái |
+|---|---|
+| Lỗi #1–#14 | ✅ tất cả đã sửa, mỗi lỗi có test tái hiện |
+| Adapter DNSE / SSI | ✅ có, live KHOÁ tới khi chạy `scripts/*_trading_probe.py` và đặt `api_verified` |
+| Nối live (DNSE chính + SSI dự phòng + feed tổng hợp) | ✅ `live/wiring.py`; chờ `/otp` rồi mới đối soát |
+| Đối chiếu mã hợp đồng với broker lúc khởi động (§4) | ✅ live: DNSE `/instruments` + `symbolType` phải khớp F1M/F2M/F1Q/F2Q bot tính, hợp đồng đang giao dịch phải có ⇒ lệch thì không giao dịch |
+| data/state/logs ngoài Dropbox (§3b) | ✅ runner kiểm cả ba lúc khởi động |
+| Logger JSON có cấu trúc | ✅ `monitoring/logger.py`, không lộ token/OTP/khoá |
+| Test trực tiếp `ExecutionManager` | ✅ `tests/test_execution.py` |
+| **Việc của bạn** | lịch nghỉ 2026–2027 (`check_calendar.py` báo thiếu), `fees.*`, `risk.*`, `live.allowed_machine`, `backtest.initial_capital_vnd`; khoá API + chạy hai script thăm dò; dữ liệu lịch sử (P1.6) + backtest ORB; paper ≥ vài tuần |
+| Chưa làm (tuỳ chọn) | `brokers/tcbs.py` (CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định); paper dùng feed tổng hợp |
 
 ## Kết luận
 
@@ -33,7 +49,7 @@ Cột "Xác minh" là trạng thái lúc rà; trạng thái sửa ở bảng 1b.
 | 11 | MEDIUM | `risk.record_fill` | Chuỗi thua tính theo điểm TRƯỚC phí ⇒ lệnh +0,1 điểm nhưng lỗ sau phí lại xoá chuỗi thua | — | đọc code (đã ghi là giả định ở P2.1) |
 | 12 | MEDIUM | `live/runner.py` | Bộ đếm ngày chỉ lưu mỗi 30s ⇒ mất điện ngay sau khi chạm ngưỡng lỗ ⇒ khởi động lại giao dịch tiếp | Mất điện | đọc code |
 | 13 | MEDIUM | `live/runner.py` `main` | Đối chiếu giá DNSE/SSI (CLAUDE.md §3) **chưa được áp** — runner chỉ dùng feed DNSE | ✅ live: `live/wiring.py` dùng `CompositeFeed` DNSE+SSI (token SSI chung). Paper vẫn chỉ feed DNSE | `tests/test_live_wiring.py` |
-| 14 | LOW | `backtest/engine.py`, `backtest/report.py` | Lạc quan backtest: file bar thiếu cột `volume_reliable` mặc định là tin được; lệnh còn mở cuối dữ liệu không vào số liệu; spread 1 bước ⇒ bán ở bid = last không mất nửa spread; tick lặp cực trị cách 1s ⇒ độ trễ ≥ 1s thì stop khớp ở cực trị kia | — | đọc code |
+| 14 | LOW | `backtest/engine.py`, `backtest/report.py` | Lạc quan backtest: file bar thiếu cột `volume_reliable` mặc định là tin được; lệnh còn mở cuối dữ liệu không vào số liệu; spread 1 bước ⇒ bán ở bid = last không mất nửa spread; tick lặp cực trị cách 1s ⇒ độ trễ ≥ 1s thì stop khớp ở cực trị kia | ✅ sửa cả 4 (xem 1b) | `TestGolive14` |
 
 ## 1b. Đã sửa
 
@@ -49,7 +65,7 @@ Cột "Xác minh" là trạng thái lúc rà; trạng thái sửa ở bảng 1b.
 | 10 | Bộ đếm thử lại đối ứng về 0 khi net đã về 0 |
 | 11 | Chuỗi thua tính SAU phí (phí mở + phí đóng) |
 | 12 | Runner lưu bộ đếm ngay khi đổi (không đợi heartbeat 30s) |
-| 14 | File bar thiếu cột `volume_reliable` ⇒ coi là không tin được |
+| 14 | File bar thiếu cột `volume_reliable` ⇒ coi là không tin được; tick giả: mỗi phía cách giá ≥ 1 bước (cả mua lẫn bán chịu spread); cực trị giữ lâu hơn độ trễ paper + 1s; lệnh còn mở cuối dữ liệu vào số liệu (giá cuối, trừ ước phí đóng) kèm cảnh báo |
 
 | 9 | Luật mới `risk.flatten_on_feed_silence_seconds` (30s): đang có vị thế, trong phiên liên tục, không có dữ liệu thị trường quá ngưỡng ⇒ FLATTEN_ALL; mốc tính = muộn nhất của tick cuối / đầu đoạn phiên / lúc runner khởi động (nghỉ trưa và đầu phiên chiều không đóng oan). Engine backtest chạy vòng kiểm tại mốc ngưỡng khi dữ liệu thủng (live kiểm mỗi giây). Ghi vào CLAUDE.md §5 |
 
@@ -62,20 +78,20 @@ Cột "Xác minh" là trạng thái lúc rà; trạng thái sửa ở bảng 1b.
 | §2 Giá trị null ⇒ từ chối chạy | ✔ (risk, paper, engine, runner); còn 10 khoá null — xem mục 5 |
 | §3 DNSE chính / SSI dự phòng, net tổng mọi broker | Feed: ✔ cả hai + composite. Broker: DNSE ✔ (`brokers/dnse.py`), SSI ✔ (`brokers/ssi.py`) — chưa nối live vào runner. Net tổng: ✔ (adapter DNSE theo dõi cả lệnh đặt tay) |
 | §3 Đối chiếu feed (lệch/im) ⇒ ngừng mở vị thế | ✔ live (`live/wiring.py` → `CompositeFeed`); paper chỉ DNSE |
-| §3b Hai chốt máy/khoá | ✔ runner + recorder. **Runner chưa kiểm `state_dir`/`data_dir` có nằm trong Dropbox** (chỉ recorder kiểm) |
-| §4 Đối chiếu mã hợp đồng với danh sách broker lúc khởi động | Feed có cơ chế, nhưng runner/recorder đang dùng `--assume-computed-contract`/`--krx` vì chưa có REST `/instruments` (P4.1) |
+| §3b Hai chốt máy/khoá | ✔ runner + recorder; runner từ chối `data_dir`/`state_dir`/`log_dir` trong Dropbox/OneDrive |
+| §4 Đối chiếu mã hợp đồng với danh sách broker lúc khởi động | ✔ live: DNSE `/instruments` (`symbolType` phải khớp lịch đáo hạn bot tính) — lệch ⇒ thoát 2. Paper/recorder vẫn `--krx`/`--assume-computed-contract` (không cần khoá giao dịch) |
 | §4 Lịch nghỉ | `scripts/check_calendar.py`: 2026 và 2027 **thiếu ngày nghỉ** (Tết, Giỗ Tổ, nghỉ bù) |
 | §4 Phí trong settings | null ⇒ backtest/paper từ chối chạy (đúng thiết kế) |
-| §5 Luật rủi ro | Tất cả có trong `risk_manager` + unit test `approve/check`; nhưng **thực thi đầu-cuối có lỗ hổng** #1, #2, #4, #5, #7 |
+| §5 Luật rủi ro | Tất cả có trong `risk_manager` + unit test `approve/check`; lỗ hổng đầu-cuối #1, #2, #4, #5, #7 đã sửa |
 | §5 Stop ngay sau khi khớp | ✔ phía bot; broker thật không có lệnh stop qua API (❓ broker_notes §4) ⇒ DNSE: stop do bot giữ trong adapter (chạm giá ⇒ MTL), chống stop mù bằng luật mất dữ liệu (#9) |
-| §5 Chống lệnh trùng | `client_order_id` ✔; DNSE không có idempotency ⇒ adapter phải không tự retry (chưa có adapter) |
-| §5 Mất kết nối broker ⇒ khẩn cấp | ✔ `live/emergency.py`, **nhưng hỏng khi có TP** (#1) và **chưa nối broker dự phòng trong `main`** |
-| §5 Kill-switch file + /kill | ✔ (cẩn thận #6: lộ token ⇒ người khác ăn mất /kill) |
-| §6 Backtest chống tự lừa | ✔ bid/ask + trượt, bar kế tiếp, SL thắng, IS/OOS/WF, báo cáo đủ mục, n_trials, cảnh báo dữ liệu snapshot; còn #14 |
-| §7 Bảo mật | `.env` ✔, mặc định paper ✔, live cần env + `--live` ✔ (runner từ chối live vì chưa có adapter). **Lộ token Telegram** (#6). Khoá DNSE/SSI không thấy bị log (feed có test) |
+| §5 Chống lệnh trùng | `client_order_id` ✔; DNSE (không idempotency): không bao giờ gửi lại, đối soát sổ lệnh; SSI: `clientRequestId` = client id, 409 ⇒ tra sổ |
+| §5 Mất kết nối broker ⇒ khẩn cấp | ✔ `live/emergency.py` (#1 đã sửa); live nối SSI làm broker dự phòng (`live/wiring.py`) |
+| §5 Kill-switch file + /kill | ✔ (#6 lộ token Telegram đã sửa) |
+| §6 Backtest chống tự lừa | ✔ bid/ask + trượt, bar kế tiếp, SL thắng, IS/OOS/WF, báo cáo đủ mục, n_trials, cảnh báo dữ liệu snapshot; #14 đã sửa |
+| §7 Bảo mật | `.env` ✔, mặc định paper ✔, live cần env + `--live` + `api_verified` ✔; adapter kiểm TRADING_MODE trước MỌI lệnh thay đổi ✔; logger che token/OTP/khoá ✔; #6 đã sửa |
 | §8 Mục ❓ broker_notes | Chưa mục nào được kiểm bằng gọi thử (chưa có khoá) |
 
-## 3. Test còn thiếu
+## 3. Test còn thiếu (lúc rà) — ✅ đã bổ sung: `tests/test_golive_fixes.py` (từng lỗi), `tests/test_execution.py` (ExecutionManager trực tiếp)
 
 - Không có `tests/test_execution.py` — `ExecutionManager` chỉ được test gián tiếp.
 - Stop sau mỗi lần khớp: thiếu khớp một phần lệnh vào, stop + TP cùng khớp, đặt stop thất bại.
@@ -100,9 +116,9 @@ idempotency — cấm tự retry lệnh đặt, phải tra sổ lệnh trước 
       cả hai có lệnh điều kiện (stop) cho phái sinh qua API không.
 - [ ] Chạy `scripts/dnse_feed_probe.py` để chốt các mục ❓; bật recorder hằng ngày.
 
-## 6. Thứ tự đề xuất
+## 6. Thứ tự đề xuất (cập nhật 08/11)
 
-1. Sửa #1–#7 (không cần khoá), mỗi lỗi một test tái hiện trước.
-2. P1.6 tải lịch sử + chạy `backtest.robustness` cho ORB (cần khoá).
-3. P4.1/P4.2 adapter (cần khoá), stop do bot giữ, nối composite + broker dự phòng vào runner.
-4. Paper trade ≥ vài tuần, so với backtest cùng kỳ; rồi mới cân nhắc live (hỏi người dùng).
+1. ~~Sửa #1–#14~~ ✅. ~~P4.1/P4.2 adapter, stop do bot giữ, nối composite + broker dự phòng~~ ✅ (live còn khoá).
+2. Bạn: điền settings còn null, lịch nghỉ 2026–2027; có khoá ⇒ chạy `dnse_history_probe.py`, `dnse_trading_probe.py`, `ssi_trading_probe.py`, gửi kết quả ⇒ mình chốt các ❓ và viết P1.6 downloader.
+3. Tải lịch sử thật ⇒ `backtest.robustness` cho ORB (kết luận theo luật đã đăng ký trước).
+4. Paper trade ≥ vài tuần, so với backtest cùng kỳ; rồi mới cân nhắc live (hỏi người dùng trước khi bật).

@@ -2,7 +2,7 @@
 Viết TRƯỚC khi implement.
 
 Pipeline phải giống live: feed giả → strategy → risk_manager → paper broker.
-Dữ liệu bar không có bid/ask ⇒ engine dựng tick giả: bid = giá, ask = giá + spread (1 bước),
+Dữ liệu bar không có bid/ask ⇒ engine dựng tick giả: bid = giá − 1 bước, ask = giá + 1 bước (spread 1),
 đường đi O → cực trị gần O → cực trị kia → C, mỗi cực trị lặp hai tick (giá chạm cực trị thì
 "tick kế tiếp" vẫn ở cực trị ⇒ stop khớp bi quan). Bar không quyết được thứ tự cực trị ⇒ đi về
 phía bất lợi cho vị thế đang giữ (SL thắng).
@@ -195,11 +195,11 @@ class TestExits:
         t = res.trades[0]
         assert t.exit_reason == "stop"
         assert t.entry_price == pytest.approx(1350.2)
-        assert t.exit_price == pytest.approx(1343.9)                # đáy bar − trượt, không phải 1345
-        assert t.gross_points == pytest.approx(-6.3)
+        assert t.exit_price == pytest.approx(1343.8)                # bid (đáy − 1 bước) − trượt, không phải 1345
+        assert t.gross_points == pytest.approx(-6.4)
         assert t.fees_vnd == pytest.approx(2 * FEE)
-        assert t.pnl_vnd == pytest.approx(-6.3 * 100_000 - 2 * FEE)
-        assert t.pnl_points == pytest.approx(-6.5)
+        assert t.pnl_vnd == pytest.approx(-6.4 * 100_000 - 2 * FEE)
+        assert t.pnl_points == pytest.approx(-6.6)
         assert [q for b, q in strat.seen if b.start.minute == 1] == [1]   # ctx thấy vị thế
         assert res.open_orders_at_end == []
 
@@ -217,7 +217,7 @@ class TestExits:
         res = run(settings, cal, Script({"10:00": ("long", 1345.0, 1355.0)}), bars)
         t = res.trades[0]
         assert t.exit_reason == "stop"
-        assert t.exit_price == pytest.approx(1343.9)    # khớp ở đáy, không phải ở đỉnh sau đó
+        assert t.exit_price == pytest.approx(1343.8)    # khớp ở đáy (bid − trượt), không phải ở đỉnh sau đó
 
     def test_undecidable_bar_stop_wins_for_short(self, settings, cal):
         bars = [mk("10:00", 1350), mk("10:01", 1350, h=1350.2, l=1349.6, c=1350),
@@ -237,7 +237,7 @@ class TestExits:
         res = run(settings, cal, Script({"10:00": ("long", 1340.0), "10:02": ("exit",)}), bars)
         t = res.trades[0]
         assert t.exit_reason == "exit" and t.exit_ts == datetime(2026, 11, 9, 10, 3, 1)
-        assert t.exit_price == pytest.approx(1351.9)                 # bid 1352 − trượt
+        assert t.exit_price == pytest.approx(1351.8)                 # bid (1352 − 1 bước) − trượt
 
     def test_opposite_entry_only_closes(self, settings, cal):
         bars = flat("10:00", 6)
@@ -399,3 +399,48 @@ def test_data_gap_with_position_flattens(settings, cal):
     t = res.trades[0]
     assert t.exit_reason == "flatten"
     assert t.exit_ts.time() >= datetime(2026, 11, 9, 10, 5).time()
+
+
+# ------------------------------------------------------------------ golive #14: bớt lạc quan ----
+
+class TestGolive14:
+    def test_odd_spread_costs_both_sides(self):
+        """Spread 1 bước trước đây: bid = last ⇒ bán không tốn gì. Giờ mỗi phía cách last ≥ 1 bước."""
+        from backtest.engine import synthetic_ticks
+        ticks = synthetic_ticks(mk("10:00", 1350), 0, 0.1, 1)
+        assert all(t.bid == pytest.approx(t.last - 0.1) and t.ask == pytest.approx(t.last + 0.1) for t in ticks)
+
+    def test_even_spread_unchanged(self):
+        from backtest.engine import synthetic_ticks
+        ticks = synthetic_ticks(mk("10:00", 1350), 0, 0.1, 4)
+        assert all(t.bid == pytest.approx(t.last - 0.2) and t.ask == pytest.approx(t.last + 0.2) for t in ticks)
+
+    def test_extreme_held_longer_than_latency(self):
+        from backtest.engine import synthetic_ticks
+        ticks = synthetic_ticks(mk("10:00", 1350, h=1353, l=1345, c=1351), 1, 0.1, 1, hold_s=4)
+        lows = [t for t in ticks if t.last == 1345]
+        assert len(lows) == 2 and (lows[1].ts - lows[0].ts) == timedelta(seconds=4)
+
+    def test_hold_never_reaches_other_extreme(self):
+        from backtest.engine import synthetic_ticks
+        ticks = synthetic_ticks(mk("10:00", 1350, h=1353, l=1345, c=1351), 1, 0.1, 1, hold_s=60)
+        assert [t.ts for t in ticks] == sorted(t.ts for t in ticks)
+        assert len({t.ts for t in ticks}) == len(ticks)
+
+    def test_long_latency_stop_fills_at_stop_extreme_not_the_other(self, session_cfg, cal):
+        """Độ trễ 2 giây > 1 giây giữ cực trị cũ ⇒ trước đây stop khớp ở ĐỈNH (lạc quan)."""
+        s = bt_settings(session_cfg)
+        s.raw["paper"]["latency_ms"] = 2000
+        bars = flat("10:00", 2) + [mk("10:02", 1350, h=1356, l=1338, c=1350)] + flat("10:03", 3)
+        res = run(s, cal, Script({"10:00": ("long", 1340.0)}), bars)
+        t = res.trades[0]
+        assert t.exit_reason == "stop" and t.exit_price < 1340.0              # quanh đáy, không phải 1356
+
+    def test_open_trade_at_data_end_counted_with_exit_fee(self, settings, cal):
+        res = run(settings, cal, Script({"10:00": ("long", 1300.0)}), flat("10:00", 5))
+        rep = build_report(res)
+        m = rep["sections"]["all"]["metrics"]
+        assert m["n_trades"] == 1                                             # không còn bị bỏ ra ngoài
+        ot = res.open_trades[0]
+        assert ot.fees_vnd == pytest.approx(2 * FEE)                          # phí vào + ƯỚC phí đóng
+        assert any("còn mở cuối dữ liệu" in w for w in rep["warnings"])

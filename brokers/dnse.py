@@ -952,3 +952,57 @@ class DnseBroker(BrokerAdapter):
     async def open_orders(self) -> list[Order]:
         await self.sync()
         return [t.order for t in self._tracks.values() if not t.order.status.is_terminal]
+
+
+# ------------------------------------------------------------------ danh sách hợp đồng (CLAUDE.md §4) ----
+
+class ContractMismatch(BrokerError):
+    """Hợp đồng DNSE báo khác hợp đồng bot tự tính (lịch nghỉ / ngày đáo hạn sai?) ⇒ không giao dịch."""
+
+
+async def fetch_vn30_futures(http: DnseHttp, d, calendar) -> list[dict]:
+    """`GET /instruments?symbol=…&marketId=DVX&securityGroupId=FU` (đặc tả OpenAPI DNSE; `symbol` bắt buộc).
+
+    Hỏi đúng các mã bot tự tính (F1M/F2M/F1Q/F2Q) và tháng trước F1M; mỗi dòng có `symbolType`
+    (`VN30F1M`…) để đối chiếu. Field ngoài đặc tả ❓ — khuôn lạ ⇒ lỗi, không đoán.
+    """
+    names = list(contracts.listed_contracts(d, calendar).values())
+    y, m = contracts.contract_ym(names[0])
+    prev = (y - 1, 12) if m == 1 else (y, m - 1)
+    krx = [contracts.krx_symbol(*prev)] + [to_krx(n) for n in names]
+    r = await http.request("GET", "/instruments", params={"symbol": ",".join(krx), "marketId": "DVX",
+                                                          "securityGroupId": "FU", "limit": 100, "page": 1})
+    if not r.ok:
+        raise DnseApiError(r.status, r.body)
+    rows = r.body.get("data") if isinstance(r.body, dict) else None
+    if not isinstance(rows, list):
+        raise BrokerError("danh sách hợp đồng DNSE: response không có 'data' (khuôn lạ — kiểm broker_notes §1.3)")
+    return [x for x in rows if isinstance(x, dict)]
+
+
+def verify_contracts(rows: list[dict], d, calendar) -> list[str]:
+    """Đối chiếu danh sách DNSE với lịch đáo hạn của bot; trả các mã KRX VN30F được niêm yết.
+
+    `symbolType` DNSE báo (VN30F1M/F2M/F1Q/F2Q) phải trùng mã bot tính; thiếu F1M ⇒ lỗi.
+    """
+    expected = {label: to_krx(name) for label, name in contracts.listed_contracts(d, calendar).items()}
+    listed: list[str] = []
+    by_type: dict[str, str] = {}
+    for row in rows:
+        sym = str(row.get("symbol") or "").strip().upper()
+        if not contracts.is_vn30_future(sym):
+            continue
+        listed.append(sym)
+        t = str(row.get("symbolType") or "").strip().upper()
+        if t:
+            by_type[t] = sym
+    for label, krx in expected.items():
+        if label in by_type and by_type[label] != krx:
+            raise ContractMismatch(
+                f"DNSE báo {label} = {by_type[label]}, bot tính {krx} — kiểm config/holidays.yaml và "
+                "lịch đáo hạn (core/contracts.py) trước khi chạy")
+    if "VN30F1M" not in by_type and expected["VN30F1M"] not in listed:
+        raise ContractMismatch(f"DNSE không trả hợp đồng F1M ({expected['VN30F1M']}) — danh sách: {sorted(listed)}")
+    if not by_type:
+        log.warning("dnse: /instruments không có symbolType — chỉ đối chiếu được mã có niêm yết hay không")
+    return listed

@@ -850,3 +850,61 @@ class TestTokenAndConnect:
 def test_api_error_message_is_safe():
     e = DnseApiError(400, {"code": "X", "message": "m" * 1000, "tradingToken": TOKEN})
     assert TOKEN not in str(e) and len(str(e)) < 400 and e.code == "X"
+
+
+# --------------------------------------------------------------------------- danh sách hợp đồng (§4) ----
+
+from datetime import date as _date  # noqa: E402
+
+from brokers.dnse import ContractMismatch, fetch_vn30_futures, verify_contracts  # noqa: E402
+
+D = _date(2026, 11, 9)          # F1M = VN30F2611 (41I1GB000), F2M = 2612, F1Q = 2703, F2Q = 2706
+
+
+def rows(**types):
+    return [{"symbol": sym, "marketId": "DVX", "securityGroupId": "FU", "symbolType": t}
+            for t, sym in types.items()]
+
+
+class TestContracts:
+    def test_verify_ok_returns_listed(self, cal):
+        listed = verify_contracts(rows(VN30F1M="41I1GB000", VN30F2M="41I1GC000", VN30F1Q="41I1H3000",
+                                       VN30F2Q="41I1H6000"), D, cal)
+        assert set(listed) == {"41I1GB000", "41I1GC000", "41I1H3000", "41I1H6000"}
+
+    def test_label_mismatch_means_calendar_is_wrong(self, cal):
+        """DNSE nói F1M là 2612 ⇒ bot tính sai ngày đáo hạn (lịch nghỉ thiếu?) ⇒ KHÔNG chạy."""
+        with pytest.raises(ContractMismatch, match="VN30F1M"):
+            verify_contracts(rows(VN30F1M="41I1GC000", VN30F2M="41I1H1000"), D, cal)
+
+    def test_front_month_missing_refused(self, cal):
+        with pytest.raises(ContractMismatch, match="F1M"):
+            verify_contracts(rows(VN30F2M="41I1GC000"), D, cal)
+
+    def test_without_symbol_type_falls_back_to_membership(self, cal):
+        r = [{"symbol": "41I1GB000", "symbolType": ""}, {"symbol": "ACB", "symbolType": ""}]
+        assert verify_contracts(r, D, cal) == ["41I1GB000"]
+
+    def test_fetch_queries_candidates_and_parses(self, cal):
+        calls = []
+
+        async def transport(method, url, params, json_body, headers, timeout):
+            calls.append((url, dict(params)))
+            return 200, {}, json.dumps({"data": rows(VN30F1M="41I1GB000"), "total": 1})
+        http = DnseHttp(KEY, SECRET, transport=transport)
+        got = run(fetch_vn30_futures(http, D, cal))
+        assert got == rows(VN30F1M="41I1GB000")
+        url, p = calls[0]
+        assert url.endswith("/instruments") and p["marketId"] == "DVX" and p["securityGroupId"] == "FU"
+        assert {"41I1GA000", "41I1GB000", "41I1GC000", "41I1H3000", "41I1H6000"} <= set(p["symbol"].split(","))
+
+    def test_fetch_errors(self, cal):
+        async def bad(method, url, params, json_body, headers, timeout):
+            return 401, {}, json.dumps({"code": "UNAUTHORIZED"})
+        with pytest.raises(BrokerError):
+            run(fetch_vn30_futures(DnseHttp(KEY, SECRET, transport=bad), D, cal))
+
+        async def shape(method, url, params, json_body, headers, timeout):
+            return 200, {}, json.dumps({"items": []})
+        with pytest.raises(BrokerError, match="data"):
+            run(fetch_vn30_futures(DnseHttp(KEY, SECRET, transport=shape), D, cal))

@@ -100,12 +100,14 @@ class TradeBook:
                            fees_vnd=o.fees, pnl_vnd=pnl_vnd, pnl_points=pnl_vnd / self.multiplier)
 
     def open_trades(self, marks: dict[str, float], ts: Optional[datetime]) -> list[TradeRecord]:
-        """Lệnh chưa đóng, đánh dấu theo giá cuối (chưa trừ phí đóng)."""
+        """Lệnh chưa đóng, đánh dấu theo giá cuối, ĐÃ trừ ước phí đóng (= phí trung bình mỗi HĐ mỗi chiều)."""
         out = []
         for sym, o in self._open.items():
             mark = marks.get(sym, o.pos.avg_price)
             gross = o.pos.realized_points + o.pos.unrealized_points(mark)
-            out.append(self._record(o, None, mark, "open", gross))
+            per_side = o.fees / max(1, o.entry_qty + o.exit_qty)
+            est = replace(o, fees=o.fees + per_side * abs(o.pos.qty))
+            out.append(self._record(est, None, mark, "open", gross))
         return out
 
 
@@ -160,7 +162,9 @@ def make_section(trades: list[TradeRecord], n_trials: int, th: Thresholds) -> di
 def build_report(result, split_date: Optional[date] = None, n_trials: int = 1, title: str = "",
                  thresholds: Thresholds = DEFAULT) -> dict:
     """Báo cáo dạng dict. `split_date` = ngày đầu out-of-sample; `n_trials` = số cấu hình đã thử."""
-    trades = sorted(result.trades, key=lambda t: t.entry_ts)
+    # lệnh còn mở cuối dữ liệu VẪN vào số liệu (đánh dấu giá cuối, trừ ước phí đóng) — golive #14
+    open_trades = list(result.open_trades)
+    trades = sorted(list(result.trades) + open_trades, key=lambda t: t.entry_ts)
     sections = {"all": make_section(trades, n_trials, thresholds)}
     if split_date is not None:
         sections["in_sample"] = make_section([t for t in trades if t.entry_ts.date() < split_date],
@@ -173,6 +177,9 @@ def build_report(result, split_date: Optional[date] = None, n_trials: int = 1, t
         warnings.insert(0, f"{q['unreliable_volume_bars']} bar có volume KHÔNG tin được (dữ liệu snapshot, "
                            "vd import từ vnstock-dashboard) — chỉ để thử nhanh, không dùng để kết luận "
                            "có edge (CLAUDE.md mục 6).")
+    if open_trades:
+        warnings.append(f"{len(open_trades)} lệnh còn mở cuối dữ liệu — đã tính vào số liệu theo giá cuối, "
+                        "trừ ước phí đóng (chưa tính trượt giá khi đóng).")
     if q.get("synthetic_ticks"):
         warnings.append("Khớp lệnh trên tick giả dựng từ bar (bid/ask và thứ tự đỉnh/đáy là giả định "
                         "bi quan) — kết quả thật có thể khác.")
@@ -186,7 +193,7 @@ def build_report(result, split_date: Optional[date] = None, n_trials: int = 1, t
         "warnings": warnings,
         "rejection_counts": dict(Counter(r.code.value for r in result.rejections)),
         "rejection_events": [e for e in result.events if e.kind == "rejected"],
-        "open_trades": list(result.open_trades),
+        "open_trades": open_trades,
     }
 
 
