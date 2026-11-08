@@ -28,6 +28,13 @@ lời `/otp dnse <mã>` và `/otp ssi <mã>` (tối đa `live.otp_wait_seconds`,
 không giao dịch; `/kill` lúc này ⇒ thoát) → đối soát vị thế/lệnh chờ trên CẢ HAI broker → chạy.
 Khởi động lại giữa phiên ⇒ nhập OTP lại (token SSI không ghi đĩa).
 
+## Paper với feed tổng hợp DNSE + SSI (tuỳ chọn)
+`paper.composite_feed: true` ⇒ paper vẫn khớp lệnh mô phỏng nhưng dữ liệu = DNSE + SSI qua `CompositeFeed`
+(như live: giá lệch > `feeds.feed_divergence_ticks` hoặc một feed im > `feeds.feed_stale_seconds` ⇒ ngừng mở
+vị thế, cảnh báo Telegram). Cần thêm `SSI_API_KEY`/`SSI_API_SECRET` và Telegram: lúc khởi động SSI gửi OTP,
+bot nhắn "⏳ Chờ OTP cho ssi", trả lời `/otp ssi <mã>` (hoặc `/otp <mã>` nếu chỉ SSI đang chờ). Quá
+`live.otp_wait_seconds` ⇒ thoát, không chạy. Mặc định `false` = chỉ feed DNSE như trước.
+
 ## Điều kiện trước khi chạy paper
 - `config/settings.yaml`: đã điền `risk.*`, `fees.*`, `live.allowed_machine` (= hostname máy này,
   xem bằng `hostname`), `paths.*` ngoài Dropbox. `python -m core.settings` phải không còn khoá rỗng

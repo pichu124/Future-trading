@@ -1,5 +1,16 @@
 # Tiến độ
 
+## 2026-11-08 — Feed tổng hợp DNSE + SSI cho chế độ paper
+
+**Đã xong**
+- `live/wiring.py` `build_paper_feed`: `paper.composite_feed: true` ⇒ `CompositeFeed(DNSE, SSI)` giống live (lệch giá / một feed im ⇒ ngừng mở vị thế, cảnh báo Telegram qua `queue_alert`); false (mặc định) ⇒ chỉ feed DNSE như cũ. Thiếu SSI_API_KEY/SECRET ⇒ thoát 2; bật mà không có Telegram ⇒ thoát 2 (không nhập được OTP).
+- Runner nhận `auth`: đối tượng cần OTP không phải broker (token SSI cho feed). Khởi động: connect → chờ `/otp` cho cả broker lẫn auth → mới đối soát/giao dịch. `/otp ssi <mã>` tới token manager; trùng tên với broker (live) ⇒ chỉ broker nhận, không gửi mã hai lần. "Đang chờ OTP" giờ = đã xin mã VÀ chưa có token (bền hơn khi broker báo awaiting nhầm).
+- `SsiTokenManager`: `name = "ssi"`, `trading_ready`, `connect()` (xin OTP đúng một lần khi chưa có token).
+- Test viết trước `tests/test_paper_composite.py` (13 test); thử phá 9 cơ chế ⇒ 9/9 bị bắt.
+- 876 test.
+
+**Lưu ý**: paper với feed tổng hợp phải nhập OTP SSI mỗi lần khởi động (token chỉ ở bộ nhớ); SSI token chỉ-dữ-liệu có cần OTP không vẫn ❓ (broker_notes §2.4).
+
 ## 2026-11-08 — Hoàn tất phần checklist go-live làm được không cần khoá
 
 **Đã xong**

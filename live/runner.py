@@ -85,7 +85,8 @@ class Runner:
                  state_path: Optional[Path] = None, report_dir: Optional[Path] = None,
                  config: RunnerConfig = RunnerConfig(), mode: str = "paper",
                  background: Sequence[Callable[[], Awaitable[None]]] = (),
-                 preflight: Sequence[Callable[[], Awaitable[None]]] = ()):
+                 preflight: Sequence[Callable[[], Awaitable[None]]] = (),
+                 auth: Sequence[Any] = ()):
         self.settings, self.strategy, self.feed = settings, strategy, feed
         self.broker, self.backup_broker = broker, backup_broker
         self.clock, self.risk, self.state = market_clock, risk, state
@@ -120,6 +121,8 @@ class Runner:
         self._saved_key: Optional[tuple] = None
         self._background = list(background)            # vd stream lệnh SSI
         self.preflight = list(preflight)                # vd đối chiếu hợp đồng với broker (live)
+        # đối tượng cần OTP mà KHÔNG phải broker (vd token SSI cho feed ở paper): connect/trading_ready/submit_otp
+        self.auth = {a.name: a for a in auth}
         self._bg_tasks: list[asyncio.Task] = []
         self._bg_alerted: set[int] = set()
         self._queued: deque[str] = deque()             # cảnh báo từ callback đồng bộ (feed tổng hợp)
@@ -174,6 +177,8 @@ class Runner:
                             f"lãi/lỗ {self.state.realized_points_today:+.1f} điểm")
         for b in self.brokers.values():
             await b.connect()
+        for a in self.auth.values():
+            await a.connect()
         code = await self._wait_for_tokens()
         if code is not None:
             return code
@@ -202,8 +207,17 @@ class Runner:
         await self._say(f"🤖 Runner {self.mode} khởi động {now:%Y-%m-%d %H:%M:%S}")
         return None
 
+    def _otp_targets(self) -> dict[str, Any]:
+        out = {n: b for n, b in self.brokers.items() if callable(getattr(b, "submit_otp", None))}
+        for n, a in self.auth.items():
+            out.setdefault(n, a)                        # trùng tên broker (live: broker ssi) ⇒ broker nhận
+        return out
+
     def _not_ready(self) -> list[str]:
-        return [n for n, b in self.brokers.items() if getattr(b, "trading_ready", True) is False]
+        names = {n: b for n, b in self.brokers.items()}
+        for n, a in self.auth.items():
+            names.setdefault(n, a)
+        return [n for n, x in names.items() if getattr(x, "trading_ready", True) is False]
 
     async def _wait_for_tokens(self) -> Optional[int]:
         """Broker thật cần token (OTP) mới đặt/huỷ lệnh được ⇒ chờ `/otp` TRƯỚC khi đối soát và giao dịch.
@@ -394,7 +408,7 @@ class Runner:
         Không ghi tên broker: gửi cho broker DUY NHẤT đang chờ OTP (hai broker chờ ⇒ hỏi lại, vì
         mỗi bên một mã khác nhau). KHÔNG bao giờ nhắc lại mã.
         """
-        targets = {n: b for n, b in self.brokers.items() if callable(getattr(b, "submit_otp", None))}
+        targets = self._otp_targets()
         if not targets:
             await self._say("Không broker nào cần OTP")
             return
@@ -402,7 +416,8 @@ class Runner:
         if len(parts) == 2 and parts[0].lower() in targets:
             chosen, code = [targets[parts[0].lower()]], parts[1]
         elif len(parts) == 1:
-            waiting = [b for b in targets.values() if getattr(b, "awaiting_otp", False)]
+            waiting = [b for b in targets.values() if getattr(b, "awaiting_otp", False)
+                       and getattr(b, "trading_ready", False) is not True]
             if len(waiting) > 1 or (not waiting and len(targets) > 1):
                 await self._say(f"Ghi rõ broker: /otp {'|'.join(targets)} <mã>")
                 return
@@ -633,6 +648,7 @@ def main(argv=None) -> int:
     backup = None
     background: list = []
     preflight: list = []
+    auth: list = []
     if live:
         from live.wiring import build_live
         try:
@@ -652,14 +668,22 @@ def main(argv=None) -> int:
         if not key or not secret:
             log.error("Thiếu DNSE_API_KEY / DNSE_API_SECRET trong .env (feed dữ liệu)")
             return 2
-        from feeds.data_feed_dnse import DnseFeed
         try:
             broker = PaperBroker.from_settings(settings, mclock.clock, name=risk.limits.primary_broker,
                                                session=mclock)
         except MissingSetting as exc:
             log.error("%s — chạy `python -m core.settings`", exc)
             return 2
-        feed = DnseFeed.from_settings(settings, key, secret, lister, mclock)
+        from live.wiring import build_paper_feed
+        try:
+            feed, auth = build_paper_feed(settings, os.environ, market_clock=mclock, contract_lister=lister,
+                                          on_feed_alert=on_feed_alert, notify=notify)
+        except MissingSetting as exc:
+            log.error("Feed tổng hợp paper: %s", exc)
+            return 2
+        if auth and not (tg_token and tg_chat):
+            log.error("paper.composite_feed cần Telegram để nhập /otp ssi <mã> cho feed SSI")
+            return 2
 
     lock = InstanceLock(settings.path("paths.state_dir") / "bot.lock", mode=mode,
                         stale_after_s=float(settings.get("live.lock_stale_after_seconds", 120)))
@@ -677,7 +701,8 @@ def main(argv=None) -> int:
                         report_dir=settings.path("paths.data_dir") / "reports",
                         config=RunnerConfig(heartbeat_s=float(settings.get("monitoring.heartbeat_seconds", 30)),
                                             otp_wait_s=float(settings.get("live.otp_wait_seconds", 600))),
-                        mode=f"{'live' if live else mode}@{machine}", background=background, preflight=preflight)
+                        mode=f"{'live' if live else mode}@{machine}", background=background, preflight=preflight,
+                        auth=auth)
         for text in pending_alerts:
             runner.queue_alert(text)
         alert_sink["fn"] = runner.queue_alert

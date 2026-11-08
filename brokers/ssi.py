@@ -301,8 +301,20 @@ class SsiTokenManager:
         self._lock_loop = None
         self.awaiting_otp = False
 
+    name = "ssi"                                         # tên trong lệnh `/otp ssi <mã>`
+
     def __repr__(self) -> str:
         return f"SsiTokenManager(access={'có' if self._access else 'không'}, awaiting_otp={self.awaiting_otp})"
+
+    @property
+    def trading_ready(self) -> bool:
+        """Có access token còn hạn — runner chờ OTP tới khi True (feed SSI ở paper dùng)."""
+        return self.valid()
+
+    async def connect(self) -> None:
+        """Chưa có token và chưa xin ⇒ xin OTP (runner gọi lúc khởi động)."""
+        if not self.valid() and not self.awaiting_otp:
+            await self.request_otp()
 
     def _get_lock(self) -> asyncio.Lock:
         loop = asyncio.get_running_loop()

@@ -22,7 +22,8 @@
 | Logger JSON có cấu trúc | ✅ `monitoring/logger.py`, không lộ token/OTP/khoá |
 | Test trực tiếp `ExecutionManager` | ✅ `tests/test_execution.py` |
 | **Việc của bạn** | lịch nghỉ 2026–2027 (`check_calendar.py` báo thiếu), `fees.*`, `risk.*`, `live.allowed_machine`, `backtest.initial_capital_vnd`; khoá API + chạy hai script thăm dò; dữ liệu lịch sử (P1.6) + backtest ORB; paper ≥ vài tuần |
-| Chưa làm (tuỳ chọn) | `brokers/tcbs.py` (CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định); paper dùng feed tổng hợp |
+| Feed tổng hợp cho paper | ✅ `paper.composite_feed: true` (mặc định false) |
+| Chưa làm (tuỳ chọn) | `brokers/tcbs.py` (CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định) |
 
 ## Kết luận
 
@@ -77,7 +78,7 @@ Cột "Xác minh" là trạng thái lúc rà; trạng thái sửa ở bảng 1b.
 | §2 Một code strategy cho backtest/paper/live | ✔ `ExecutionManager` + `RiskManager` dùng chung; chỉ đổi broker và nguồn dữ liệu |
 | §2 Giá trị null ⇒ từ chối chạy | ✔ (risk, paper, engine, runner); còn 10 khoá null — xem mục 5 |
 | §3 DNSE chính / SSI dự phòng, net tổng mọi broker | Feed: ✔ cả hai + composite. Broker: DNSE ✔ (`brokers/dnse.py`), SSI ✔ (`brokers/ssi.py`) — chưa nối live vào runner. Net tổng: ✔ (adapter DNSE theo dõi cả lệnh đặt tay) |
-| §3 Đối chiếu feed (lệch/im) ⇒ ngừng mở vị thế | ✔ live (`live/wiring.py` → `CompositeFeed`); paper chỉ DNSE |
+| §3 Đối chiếu feed (lệch/im) ⇒ ngừng mở vị thế | ✔ live (`live/wiring.py` → `CompositeFeed`); paper: bật `paper.composite_feed: true` (cần OTP SSI) |
 | §3b Hai chốt máy/khoá | ✔ runner + recorder; runner từ chối `data_dir`/`state_dir`/`log_dir` trong Dropbox/OneDrive |
 | §4 Đối chiếu mã hợp đồng với danh sách broker lúc khởi động | ✔ live: DNSE `/instruments` (`symbolType` phải khớp lịch đáo hạn bot tính) — lệch ⇒ thoát 2. Paper/recorder vẫn `--krx`/`--assume-computed-contract` (không cần khoá giao dịch) |
 | §4 Lịch nghỉ | `scripts/check_calendar.py`: 2026 và 2027 **thiếu ngày nghỉ** (Tết, Giỗ Tổ, nghỉ bù) |

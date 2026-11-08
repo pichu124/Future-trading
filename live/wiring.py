@@ -26,6 +26,27 @@ from feeds.data_feed_ssi import SsiFeed
 Notify = Callable[[str], Any]
 
 
+def build_paper_feed(settings: Settings, env: Mapping[str, str], *, market_clock: MarketClock,
+                     contract_lister: Callable[[], Awaitable[Iterable[str]]],
+                     on_feed_alert: Optional[Callable[[Any], None]] = None, notify: Optional[Notify] = None,
+                     ssi_transport=None) -> tuple[Any, list]:
+    """Feed cho PAPER: `paper.composite_feed: true` ⇒ DNSE + SSI qua `CompositeFeed` (như live; trả kèm
+    token manager SSI để runner chờ `/otp ssi`), ngược lại chỉ feed DNSE. Không gọi mạng."""
+    dnse_feed = DnseFeed.from_settings(settings, _env(env, "DNSE_API_KEY", "khoá API DNSE (feed)"),
+                                       _env(env, "DNSE_API_SECRET", "secret DNSE (feed)"), contract_lister,
+                                       market_clock)
+    if not bool(settings.get("paper.composite_feed", False)):
+        return dnse_feed, []
+    ssi_http = SsiHttp(str(settings.get("brokers.ssi.base_url") or "https://api.ssi.com.vn"),
+                       float(settings.get("brokers.ssi.request_timeout_seconds", 10)), transport=ssi_transport)
+    tokens = SsiTokenManager(ssi_http, _env(env, "SSI_API_KEY", "khoá API SSI (feed dự phòng)"),
+                             _env(env, "SSI_API_SECRET", "secret SSI (feed dự phòng)"), notify=notify)
+    kw = {"url": settings.get("brokers.ssi.stream_url")} if settings.get("brokers.ssi.stream_url") else {}
+    ssi_feed = SsiFeed.from_settings(settings, tokens.get, contract_lister, market_clock, **kw)
+    feed = CompositeFeed.from_settings(settings, dnse_feed, ssi_feed, market_clock, on_alert=on_feed_alert)
+    return feed, [tokens]
+
+
 @dataclass
 class LiveSetup:
     primary: DnseBroker

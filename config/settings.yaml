@@ -52,6 +52,9 @@ paper:
   latency_ms: 300
   latency_jitter_ms: 200                # cộng ngẫu nhiên [0, jitter] mỗi lệnh
   seed: 0                               # cố định để backtest lặp lại được
+  # Paper dùng feed tổng hợp DNSE + SSI (như live: lệch giá / một feed im ⇒ ngừng mở vị thế)?
+  # true ⇒ cần SSI_API_KEY/SECRET và Telegram để nhập /otp ssi <mã> lúc khởi động. false ⇒ chỉ feed DNSE.
+  composite_feed: false
 
 risk:
   max_contracts: 1
