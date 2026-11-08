@@ -19,6 +19,7 @@ from tests.test_broker_tcbs import KRX, SYM, make, order, ref_id_for
 
 DOC_DE_ORDER = "subscribe|eyJ0b3BpYyI6IkRFX09SREVSIn0="                 # nguyên văn trong tài liệu
 DOC_DE_POSITION = "subscribe|eyJ0b3BpYyI6IkRFX09QRU5fUE9TSVRJT04ifQ=="
+DOC_DE_COND = "subscribe|eyJ0b3BpYyI6IkRFX0NPTkRJVElPTkFMX09SREVSIn0="
 AUTH_OK = 'authenticate|{"success":true,"error":null}'
 
 
@@ -83,7 +84,7 @@ def test_auth_then_subscribe_exact_frames():
     sent = [m for _, m in ws.sent]
     assert sent[0].startswith("authenticate|")
     assert json.loads(base64.b64decode(sent[0].split("|", 1)[1])) == {"jwt": b.tokens._token}
-    assert DOC_DE_ORDER in sent and DOC_DE_POSITION in sent
+    assert DOC_DE_ORDER in sent and DOC_DE_POSITION in sent and DOC_DE_COND in sent
     # subscribe chỉ gửi SAU khi đã nhận được frame xác thực thành công (frame thứ 2)
     assert all(n >= 2 for n, m in ws.sent if m.startswith("subscribe|"))
 

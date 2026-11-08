@@ -110,6 +110,9 @@ brokers:
     request_timeout_seconds: 10
     poll_seconds: 1
     uncertain_resolve_seconds: 15       # tài liệu TCBS: không thấy theo refId ⇒ chờ 10–15s tra lại
+    # Stop ĐIỀU KIỆN phía TCBS (SOU/SOL) thay cho stop do bot giữ: sống sót khi bot/feed chết, nhưng nhiều ❓
+    # (broker_notes §2b — thời hạn hiệu lực, liên kết lệnh kích hoạt). Chỉ bật sau khi thử với KL nhỏ.
+    broker_side_stops: false
   dnse:                                 # brokers/dnse.py — số tiểu khoản đặt ở .env (DNSE_ACCOUNT_NO)
     base_url: https://openapi.dnse.com.vn   # UAT: https://openapi-uat.dnse.com.vn
     # Gói vay phái sinh: GET /accounts/{tiểu khoản}/loan-packages?marketType=DERIVATIVE

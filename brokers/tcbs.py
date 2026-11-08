@@ -19,7 +19,11 @@ An toàn:
   cập nhật lệnh. `TcbsOrderStream` (wss …/ws/nesoi, DE_ORDER + DE_OPEN_POSITION) áp cùng dữ liệu cộng dồn ngay
   khi có (trùng không đếm đôi, bản tin cũ không kéo lùi trạng thái); stream không số thứ tự, không phát lại ⇒
   mỗi lần (re)connect và mỗi lệnh lạ ⇒ đọc lại REST ngay — REST vẫn là nguồn sự thật.
-- Stop: bot giữ (như DNSE/SSI); TCBS có lệnh điều kiện SOU/SOL nhưng liên kết lệnh kích hoạt với client id ❓.
+- Stop: mặc định bot giữ (như DNSE/SSI). `broker_side_stops: true` ⇒ lệnh điều kiện SOU (bán, giá ≤) / SOL (mua, ≥)
+  đặt ở TCBS, lệnh sinh ra = LO sàn/trần. Sổ điều kiện REST không có refId lẫn số lệnh đã kích hoạt ⇒ liên kết qua
+  `details` của stream DE_CONDITIONAL_ORDER, hoặc lệnh thường MỚI cùng mã/chiều/KL (lệnh như vậy được giữ lại
+  ≤ `uncertain_resolve_s` chứ không nhận là lệnh tay); kích hoạt mà chưa liên kết ⇒ stop vẫn PENDING (không đóng
+  hai lần). Sửa giá kích hoạt ⇒ pk MỚI; không sửa KL. Lệnh điều kiện còn chờ mà bot không biết ⇒ báo là STOP sống.
 """
 from __future__ import annotations
 
@@ -53,6 +57,11 @@ EP_CANCEL = "/khronos/v1/order/cancel"
 EP_BOOK = "/khronos/v1/order/in-day"
 EP_POSITIONS = "/khronos/v1/account/portfolio/status"
 EP_DERIVATIVES = "/tartarus/v1/derivatives"
+EP_CPLACE = "/khronos/v1/order/condition/place"
+EP_CBOOK = "/khronos/v1/order/condition/detail"
+EP_CCANCEL = "/khronos/v1/order/condition/cancel"
+EP_CCHANGE = "/khronos/v2/order/condition/change"
+COND_PREFIX = "cond:"
 WS_URL = "wss://openapi.tcbs.com.vn/ws/nesoi"
 TOKEN_MAX_S = 8 * 3600            # tài liệu: access token hiệu lực tối đa 8 giờ
 TOKEN_SKEW_S = 30.0
@@ -297,6 +306,9 @@ class TcbsConfig:
     fee_vnd_per_contract: float = 0.0
     tick_size: float = 0.1
     page_size: int = 100
+    # Stop ĐIỀU KIỆN phía TCBS (SOU/SOL) thay cho stop do bot giữ — sống sót khi bot chết, nhưng nhiều ❓
+    # (broker_notes §2b). Mặc định TẮT; chỉ bật sau khi thử trên tài khoản thật với khối lượng nhỏ.
+    broker_side_stops: bool = False
 
     def __repr__(self) -> str:                               # không in API key
         return (f"TcbsConfig(custody={self.custody_code!r}, sub={self.sub_account!r}, enabled={self.enabled}, "
@@ -328,6 +340,7 @@ class TcbsConfig:
             enabled=enabled, api_verified=verified, base_url=str(g("base_url") or BASE_URL).rstrip("/"),
             timeout_s=float(g("request_timeout_seconds", 10)), poll_s=float(g("poll_seconds", 1)),
             uncertain_resolve_s=float(g("uncertain_resolve_seconds", 15)), fee_vnd_per_contract=fee,
+            broker_side_stops=bool(g("broker_side_stops", False)),
             tick_size=float(s.require("contract.tick_size_points")))
 
 
@@ -405,6 +418,12 @@ class _Track:
     triggered: bool = False
     uncertain_since: Optional[datetime] = None
     modifies: int = 0
+    cond: bool = False                       # stop điều kiện phía TCBS
+    cond_pk: Optional[str] = None            # pk_orderNo (ĐỔI sau mỗi lần sửa giá kích hoạt)
+    cond_activated: bool = False             # đã kích hoạt — chờ/đã liên kết lệnh thường sinh ra
+    cond_known_before: frozenset = frozenset()   # lệnh thường đã thấy trước khi kích hoạt (không phải ứng viên)
+    cond_known_pks: frozenset = frozenset()      # pk đã thấy trước khi gửi (đối soát khi không rõ)
+    cond_payload: Optional[dict] = None
 
 
 class TcbsBroker(BrokerAdapter):
@@ -425,6 +444,9 @@ class TcbsBroker(BrokerAdapter):
         self._bands: dict[tuple, tuple[float, float]] = {}
         self._warned: set[str] = set()
         self.resync_requested = False                   # stream: lệnh lạ / vừa (re)connect ⇒ đọc lại REST ngay
+        self._by_cpk: dict[str, str] = {}               # pk lệnh điều kiện → client id
+        self._seen_cpk: set[str] = set()
+        self._held: dict[str, datetime] = {}            # lệnh thường mới có thể là lệnh stop sinh ra: chờ liên kết
         self.stream_net: dict[str, int] = {}
 
     def __repr__(self) -> str:
@@ -562,6 +584,8 @@ class TcbsBroker(BrokerAdapter):
                 return self._reject(cid, "stop cần giá kích hoạt và khối lượng > 0")
             if not self.dry_run:
                 self._guard()
+            if self.config.broker_side_stops:
+                return await self._place_condition(order)
             self._tracks[cid] = _Track(order.with_status(OrderStatus.NEW, broker=self.name), ref_id_for(cid),
                                        local_stop=True)
             return self._set(cid, order.with_status(OrderStatus.PENDING, broker=self.name,
@@ -664,8 +688,10 @@ class TcbsBroker(BrokerAdapter):
 
     async def sync(self) -> None:
         now = self.clock.now()
+        if self.config.broker_side_stops:
+            await self._sync_conditions(now)
         for cid, t in list(self._tracks.items()):          # lệnh "không rõ": tra đúng theo refId (tài liệu 8.1)
-            if t.uncertain_since is None:
+            if t.uncertain_since is None or t.cond:
                 continue
             found = [r for r in await self._book(t.ref) if str(r.get("refId") or "") == t.ref]
             if found:
@@ -686,14 +712,21 @@ class TcbsBroker(BrokerAdapter):
                     cid = rid
             if cid is not None:
                 self._apply(cid, row)
+        if self.config.broker_side_stops:
+            self._link_activated(by_no, now)
         await self._adopt(by_no)
         self._seen.update(by_no)
         self._primed = True
 
     async def _adopt(self, by_no: dict[str, dict]) -> None:
+        now = self.clock.now()
         for no, row in by_no.items():
             if no in self._by_no:
                 continue
+            if self._maybe_stop_child(no, row):
+                first = self._held.setdefault(no, now)
+                if (now - first).total_seconds() < self.config.uncertain_resolve_s:
+                    continue                             # có thể là lệnh do stop điều kiện sinh ra: đợi liên kết
             is_new = self._primed and no not in self._seen
             vol, matched = _int(row.get("volume")) or 0, _int(row.get("matchVolume")) or 0
             status = map_order_status(row.get("orderStatus"), row.get("status"), vol, matched)
@@ -735,6 +768,8 @@ class TcbsBroker(BrokerAdapter):
         t = self._live(cid)
         if t.local_stop and not t.triggered:
             return self._set(cid, t.order.with_status(OrderStatus.CANCELLED))
+        if t.cond and not t.cond_activated:
+            return await self._cancel_condition(cid, t)
         if t.order_no is None:
             raise BrokerError(f"lệnh {cid} chưa biết orderNo — đang đối soát sổ lệnh")
         acc, _ = self._acc()
@@ -768,6 +803,8 @@ class TcbsBroker(BrokerAdapter):
         if t.local_stop and not t.triggered:
             return self._set(cid, replace(o, price=o.price if price is None else price,
                                           qty=o.qty if qty is None else int(qty)))
+        if t.cond and not t.cond_activated:
+            return await self._modify_condition(cid, t, price, qty)
         if o.order_type is not OrderType.LIMIT:
             raise BrokerError("chỉ sửa được lệnh LO (TCBS không sửa ATO/ATC/MTL; lệnh thị trường của bot là LO trần/sàn)")
         if t.order_no is None:
@@ -821,6 +858,222 @@ class TcbsBroker(BrokerAdapter):
                 self._by_ref[t.ref] = cid
                 await self._send(cid, mkt)
 
+    # ------------------------------------------------------------ stop điều kiện (SOU/SOL) ----
+
+    async def _place_condition(self, order: Order) -> Order:
+        """Stop phía TCBS: bán ⇒ SOU (kích hoạt khi giá ≤ soPrice), mua ⇒ SOL (≥); lệnh sinh ra = LO sàn/trần."""
+        cid = order.client_order_id
+        t = _Track(order.with_status(OrderStatus.NEW, broker=self.name), ref_id_for(cid), cond=True)
+        self._tracks[cid] = t
+        try:
+            band = await self._band(order.symbol)
+        except BrokerError as exc:
+            return self._reject(cid, f"không lấy được giá trần/sàn: {exc}")
+        if band is None:
+            return self._reject(cid, "không có giá trần/sàn cho lệnh điều kiện")
+        acc, sub = self._acc()
+        payload = {"accountId": acc, "subAccountId": sub, "side": _SIDE_CODE[order.side],
+                   "symbol": to_krx(order.symbol), "price": float(band[1] if order.side is Side.SELL else band[0]),
+                   "volume": int(order.qty), "orderType": "SOU" if order.side is Side.SELL else "SOL",
+                   "soPrice": _on_tick(float(order.price), self.config.tick_size), "refId": t.ref}
+        t.cond_payload = payload
+        if self.dry_run:
+            self._dry(EP_CPLACE, payload)
+            return self._reject(cid, "dry-run: không gửi lệnh điều kiện")
+        known = frozenset(self._seen_cpk)
+        try:
+            r = await self._post(EP_CPLACE, payload)
+        except TcbsTransportError as exc:
+            t.cond_known_pks, t.uncertain_since = known, self.clock.now()
+            await self._say(f"⚠️ TCBS: không rõ lệnh điều kiện {cid} ({exc}) — không gửi lại, đối soát sổ lệnh điều kiện")
+            return self._set(cid, t.order.with_status(OrderStatus.PENDING))
+        except BrokerError as exc:
+            return self._reject(cid, str(exc))
+        if r.error is not None:
+            if r.error.uncertain:
+                t.cond_known_pks, t.uncertain_since = known, self.clock.now()
+                return self._set(cid, t.order.with_status(OrderStatus.PENDING))
+            return self._reject(cid, str(r.error))
+        rows = r.body.get("data") if isinstance(r.body, dict) else None
+        pk = rows[0].get("pk_orderNo") if isinstance(rows, list) and rows and isinstance(rows[0], dict) else None
+        if pk is None:
+            t.cond_known_pks, t.uncertain_since = known, self.clock.now()
+            return self._set(cid, t.order.with_status(OrderStatus.PENDING))
+        self._attach_cond(cid, str(pk))
+        return self._tracks[cid].order
+
+    def _attach_cond(self, cid: str, pk: str) -> None:
+        t = self._tracks[cid]
+        if t.cond_pk:
+            self._by_cpk.pop(t.cond_pk, None)
+        t.cond_pk, t.uncertain_since = pk, None
+        self._by_cpk[pk] = cid
+        self._seen_cpk.add(pk)
+        self._set(cid, t.order.with_status(OrderStatus.PENDING if not t.order.status.is_terminal else t.order.status,
+                                           broker_order_id=f"{COND_PREFIX}{pk}"))
+
+    async def _cond_book(self) -> list[dict]:
+        acc, sub = self._acc()
+        out: list[dict] = []
+        for page in range(1, 21):
+            r = await self._get(EP_CBOOK, {"accountId": acc, "subAccountID": sub, "pageNo": page,
+                                           "PageSize": self.config.page_size, "orderStatus": 0, "orderType": "",
+                                           "Symbol": "ALL,ALL"})
+            rows = r.body.get("data") if isinstance(r.body, dict) else None
+            rows = rows if isinstance(rows, list) else []
+            out += [x for x in rows if isinstance(x, dict)]
+            if len(rows) < self.config.page_size:
+                return out
+        raise BrokerError("sổ lệnh điều kiện TCBS quá 20 trang")
+
+    def _cond_matches(self, t: _Track, row: Mapping) -> bool:
+        p = t.cond_payload or {}
+        return (str(row.get("side") or "") == p.get("side")
+                and contracts.symbol_contract(row.get("symbol")) == t.order.symbol
+                and _int(row.get("volume")) == p.get("volume")
+                and abs(_float(row.get("soPrice")) - float(p.get("soPrice") or 0)) < 1e-6)
+
+    async def _sync_conditions(self, now: datetime) -> None:
+        rows = await self._cond_book()
+        by_pk = {str(r["pk_orderNo"]): r for r in rows if r.get("pk_orderNo") not in (None, "")}
+        for cid, t in list(self._tracks.items()):         # lệnh điều kiện "không rõ": khớp pk MỚI cùng nội dung
+            if not t.cond or t.uncertain_since is None:
+                continue
+            cands = [pk for pk, r in by_pk.items() if pk not in t.cond_known_pks and pk not in self._by_cpk
+                     and self._cond_matches(t, r)]
+            if cands:
+                self._attach_cond(cid, min(cands, key=lambda x: (len(x), x)))
+                await self._say(f"✅ TCBS: đã thấy lệnh điều kiện {cid} trong sổ")
+            elif (now - t.uncertain_since).total_seconds() >= self.config.uncertain_resolve_s:
+                self._reject(cid, f"không thấy lệnh điều kiện trong sổ sau {self.config.uncertain_resolve_s:.0f}s "
+                                  "— coi như chưa tới TCBS")
+        for pk, r in by_pk.items():
+            cid = self._by_cpk.get(pk)
+            if cid is None:
+                continue
+            self._cond_status(cid, str(r.get("status") or ""), None)
+        for pk, r in by_pk.items():                        # lệnh điều kiện còn chờ mà bot không biết ⇒ báo là STOP sống
+            if pk in self._by_cpk or str(r.get("status") or "") != "0":
+                continue
+            sym = contracts.symbol_contract(r.get("symbol"))
+            side = _SIDE_FROM.get(str(r.get("side") or "").upper())
+            vol = _int(r.get("volume")) or 0
+            if sym is None or side is None or vol <= 0:
+                continue
+            cid = f"{EXTERNAL_PREFIX}C{pk}"[-MAX_CLIENT_ORDER_ID_LEN:]
+            o = Order(cid, sym, side, vol, OrderType.STOP, self.clock.now(), price=_float(r.get("soPrice")),
+                      status=OrderStatus.NEW, broker=self.name, tag="external")
+            self._tracks[cid] = _Track(o, "", cond=True)
+            self._attach_cond(cid, pk)
+            await self._say(f"⚠️ TCBS: lệnh điều kiện ngoài bot pk {pk} ({side.value} {vol} {sym} @ {o.price}) — "
+                            f"bot theo dõi (id {cid})")
+        self._seen_cpk.update(by_pk)
+
+    def _cond_status(self, cid: str, status: str, details: Optional[str]) -> None:
+        """REST: 0 chờ · 1 đã kích hoạt · 2 đã huỷ · 3 từ chối (stream: 1/2/3 cùng nghĩa)."""
+        t = self._tracks[cid]
+        if t.order.status.is_terminal:
+            return
+        if status == "1":
+            if not t.cond_activated:
+                t.cond_activated = True
+                # lệnh đang được GIỮ (có thể là lệnh do stop sinh ra) vẫn là ứng viên dù đã thấy trước đó
+                t.cond_known_before = frozenset(self._seen - set(self._held))
+                log.warning("tcbs: stop điều kiện %s đã kích hoạt", cid)
+            if details and t.order_no is None and str(details) not in self._by_no:
+                self._attach(cid, str(details))
+        elif status == "2" and not t.cond_activated:
+            self._set(cid, t.order.with_status(OrderStatus.CANCELLED))
+        elif status == "3":
+            self._reject(cid, "TCBS từ chối lệnh điều kiện")
+
+    def _link_activated(self, by_no: dict[str, dict], now: datetime) -> None:
+        """Stop đã kích hoạt nhưng chưa biết lệnh thường sinh ra (sổ REST không có): lệnh MỚI cùng mã/chiều/KL."""
+        for cid, t in self._tracks.items():
+            if not (t.cond and t.cond_activated and t.order_no is None) or t.order.status.is_terminal:
+                continue
+            o = t.order
+            cands = [no for no, r in by_no.items()
+                     if no not in self._by_no and no not in t.cond_known_before
+                     and contracts.symbol_contract(r.get("symbol")) == o.symbol
+                     and _SIDE_FROM.get(str(r.get("side") or "").upper()) is o.side
+                     and (_int(r.get("volume")) or 0) == o.qty - o.filled_qty]
+            if cands:
+                no = min(cands, key=lambda x: (len(x), x))
+                self._attach(cid, no)
+                self._held.pop(no, None)
+                self._apply(cid, by_no[no])
+
+    def _maybe_stop_child(self, no: str, row: Mapping) -> bool:
+        if not self.config.broker_side_stops or not self._primed or no in self._seen:
+            return False
+        sym = contracts.symbol_contract(row.get("symbol"))
+        side = _SIDE_FROM.get(str(row.get("side") or "").upper())
+        for t in self._tracks.values():
+            if t.cond and t.order_no is None and not t.order.status.is_terminal and t.order.symbol == sym \
+                    and t.order.side is side and (_int(row.get("volume")) or 0) == t.order.qty - t.order.filled_qty:
+                return True
+        return False
+
+    async def _cancel_condition(self, cid: str, t: _Track) -> Order:
+        if t.cond_pk is None:
+            raise BrokerError(f"lệnh điều kiện {cid} chưa biết pk — đang đối soát")
+        acc, sub = self._acc()
+        body = {"accountId": acc, "subAccountId": sub, "orderNo": t.cond_pk}
+        if self.dry_run:
+            self._dry(EP_CCANCEL, body)
+            raise BrokerError("dry-run: không huỷ lệnh điều kiện thật")
+        self._guard()
+        try:
+            r = await self._post(EP_CCANCEL, body)
+        except TcbsTransportError as exc:
+            raise BrokerError(f"huỷ lệnh điều kiện {cid}: không rõ kết quả ({exc})") from exc
+        if r.error is not None and r.error.code not in ALREADY_DONE_CODES:
+            raise r.error
+        try:
+            await self.sync()                                # chỉ CANCELLED khi sổ lệnh điều kiện báo đã huỷ
+        except Exception as exc:
+            log.warning("tcbs: đọc sổ sau huỷ lệnh điều kiện lỗi: %s", exc)
+        return self._tracks[cid].order
+
+    async def _modify_condition(self, cid: str, t: _Track, price: Optional[float], qty: Optional[int]) -> Order:
+        if qty is not None and qty != t.order.qty:
+            raise BrokerError("TCBS không sửa khối lượng lệnh điều kiện — huỷ rồi đặt lại")
+        if price is None or price == t.order.price:
+            return t.order
+        if t.cond_pk is None:
+            raise BrokerError(f"lệnh điều kiện {cid} chưa biết pk — đang đối soát")
+        acc, _ = self._acc()
+        t.modifies += 1
+        body = {"accountId": acc, "pkOrderNo": t.cond_pk, "refId": ref_id_for(cid, t.modifies),
+                "soPrice": float(price), "type": "", "cmd": "Web.Order.ChangeCondition"}
+        if self.dry_run:
+            self._dry(EP_CCHANGE, body)
+            raise BrokerError("dry-run: không sửa lệnh điều kiện thật")
+        self._guard()
+        try:
+            r = await self._post(EP_CCHANGE, body)
+        except TcbsTransportError as exc:
+            raise BrokerError(f"sửa lệnh điều kiện {cid}: không rõ kết quả ({exc})") from exc
+        if r.error is not None:
+            raise r.error
+        rows = r.body.get("data") if isinstance(r.body, dict) else None
+        new_pk = rows[0].get("pkOrderNo") if isinstance(rows, list) and rows and isinstance(rows[0], dict) else None
+        if t.cond_payload is not None:
+            t.cond_payload = {**t.cond_payload, "soPrice": float(price)}
+        self._set(cid, replace(t.order, price=float(price)))
+        if new_pk:
+            self._attach_cond(cid, str(new_pk))              # pk ĐỔI sau khi sửa (tài liệu 6.9)
+        return self._tracks[cid].order
+
+    def _on_condition_event(self, data: Mapping) -> None:
+        pk = str(data.get("pk_order_no") or data.get("pkOrderNo") or "")
+        cid = self._by_cpk.get(pk)
+        if cid is None:
+            self.resync_requested = True
+            return
+        self._cond_status(cid, str(data.get("status") or ""), data.get("details"))
+
     # ------------------------------------------------------------ stream DE_ORDER ----
 
     def on_stream_frame(self, frame: Any) -> None:
@@ -848,6 +1101,9 @@ class TcbsBroker(BrokerAdapter):
             net = _int(data.get("net"))
             if sym is not None and net is not None:
                 self.stream_net[sym] = net
+            return
+        if topic == "DE_CONDITIONAL_ORDER":
+            self._on_condition_event(data)
             return
         if topic != "DE_ORDER":
             return
@@ -929,7 +1185,7 @@ class TcbsOrderStream:
     liên tiếp ⇒ cảnh báo một lần (REST vẫn chạy).
     """
 
-    TOPICS = ("DE_ORDER", "DE_OPEN_POSITION")
+    TOPICS = ("DE_ORDER", "DE_CONDITIONAL_ORDER", "DE_OPEN_POSITION")
 
     def __init__(self, tokens: TcbsTokenManager, broker: TcbsBroker, *, connector=None, url: str = WS_URL,
                  heartbeat_s: float = 2.0, auth_timeout_s: float = 10.0, recv_timeout_s: float = 45.0,

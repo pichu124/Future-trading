@@ -1,5 +1,16 @@
 # Tiến độ
 
+## 2026-11-08 — Stop điều kiện phía TCBS (SOU/SOL) — sau cờ `brokers.tcbs.broker_side_stops` (mặc định TẮT)
+
+**Đã xong** (tài liệu 6.5/6.7/6.9/6.11/7.3)
+- `OrderType.STOP` khi bật cờ ⇒ `POST /khronos/v1/order/condition/place`: bán ⇒ SOU (giá ≤ soPrice), mua ⇒ SOL (≥), giá lệnh sinh ra = sàn/trần; `broker_order_id = cond:<pk>`. Không bật cờ ⇒ stop do bot giữ như cũ.
+- Đồng bộ sổ lệnh điều kiện (0 chờ / 1 kích hoạt / 2 huỷ / 3 từ chối) + stream `DE_CONDITIONAL_ORDER` (đã thêm vào subscribe). Sổ REST không có refId lẫn số lệnh kích hoạt ⇒ liên kết lệnh thường sinh ra qua `details` của stream, hoặc lệnh MỚI cùng mã/chiều/KL; lệnh như vậy được GIỮ lại tối đa `uncertain_resolve_s` chứ không nhận ngay là lệnh tay. Kích hoạt mà chưa liên kết ⇒ stop vẫn PENDING (risk không thấy "mất stop" ⇒ không đóng hai lần).
+- Huỷ: còn chờ ⇒ `condition/cancel` (pk), chỉ CANCELLED khi sổ báo đã huỷ; đã kích hoạt ⇒ huỷ lệnh thường sinh ra. Sửa giá kích hoạt ⇒ `v2/order/condition/change`, theo pk MỚI; không sửa KL. Lệnh "không rõ" ⇒ đối soát pk mới cùng nội dung trong sổ điều kiện. Lệnh điều kiện còn chờ mà bot không biết (vd bot chết) ⇒ báo là STOP đang sống (tag external) để bot xử lý.
+- Test viết trước `tests/test_tcbs_condition_stop.py` (24). Test bắt được 1 lỗi thật: lệnh do stop sinh ra bị giữ lại ở lần đọc trước lại bị loại khỏi ứng viên liên kết ⇒ không bao giờ nối được. Thử phá 20 cơ chế ⇒ ban đầu 6 sống ⇒ thêm 6 test ⇒ 20/20.
+- 998 test.
+
+**❓ phải kiểm trước khi bật** (broker_notes §2b): thời hạn hiệu lực mặc định của lệnh điều kiện — nếu sống qua ngày, stop bán kích hoạt khi đang phẳng sẽ MỞ vị thế Short; mã hợp đồng KRX hay mã cũ cho lệnh điều kiện; refId lệnh điều kiện có chống trùng không.
+
 ## 2026-11-08 — Nối TCBS vào runner (chọn làm broker chính hoặc dự phòng)
 
 **Quyết định của người dùng:** `brokers.primary` / `brokers.backup` chọn được trong {dnse, ssi, tcbs}; giữ kiến trúc một-chính-một-dự-phòng; mặc định vẫn DNSE/SSI.
