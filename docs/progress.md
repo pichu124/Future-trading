@@ -1,5 +1,23 @@
 # Tiến độ
 
+## 2026-11-08 — Backtest nối chuỗi qua roll (`backtest/engine.py`)
+
+**Thiết kế**: bot intraday, phẳng mỗi đêm ⇒ chuỗi liên tục = mỗi ngày đưa vào pipeline ĐÚNG hợp đồng bot giao dịch (`trading_contract`, cùng hàm live dùng, theo `roll_days_before_expiry`). **Không back-adjust** giá: P&L tính trên giá thật của từng hợp đồng, khoảng chênh giữa hai hợp đồng không bao giờ lọt vào lệnh vì không có vị thế qua roll.
+
+**Đã xong**
+- `load_bars_parquet`: đọc thư mục ĐỆ QUY (`data/history/ohlc1m/<hợp đồng>/<ngày>.parquet`) và nhiều đường dẫn một lúc; bar trùng (symbol, start) giữa các nguồn ⇒ giữ bản volume tin được (hoà ⇒ đường dẫn đưa trước); `stats` đếm file/trùng/trùng-khác-giá; file không phải bar (vd `trades/`) ⇒ lỗi nêu tên file; thư mục rỗng ⇒ lỗi; file `.tmp` đang ghi dở bị bỏ qua.
+- Engine thêm vào `data_quality`: `rolls` (vd `2026-11-19: VN30F2611 → VN30F2612`), `other_contract_bars` (bar hợp đồng khác bị bỏ), `days_missing_trading_contract` (có dữ liệu nhưng thiếu đúng hợp đồng giao dịch ⇒ bỏ cả ngày + cảnh báo nêu hợp đồng cần tải), `missing_trading_days` (ngày giao dịch theo lịch không có dữ liệu nào — cuối tuần/ngày nghỉ không tính).
+- CLI `backtest.engine` và `backtest.robustness`: `--bars` nhận nhiều đường dẫn; báo cáo cảnh báo bar trùng giữa các nguồn.
+- Test viết trước `tests/test_backtest_roll.py` (16). Thử phá 14 cơ chế ⇒ 3 sống (hoà giữa hai nguồn tin được, đếm bar chứ không đếm tick ở chế độ tick, chế độ mọi hợp đồng nhiều ngày) ⇒ thêm 3 test ⇒ hết.
+- 1035 test.
+
+**Dùng**: `python -m backtest.engine --bars data/history/ohlc1m --strategy strategy.baseline_orb:OpeningRangeBreakout --split YYYY-MM-DD --n-trials N` (thêm `data/imported` sau nếu muốn lấp chỗ trống — bản có volume thật luôn thắng).
+
+**Rủi ro / giả định còn lại**
+- Ngày đáo hạn (`roll_days_before_expiry = 1`): bot đã ở hợp đồng tháng sau, và risk vẫn chặn mở vị thế trong ngày đáo hạn (`trade_on_expiry_day = false`) — đúng như live, nhưng nghĩa là ngày đó không có lệnh.
+- Chế độ `trading_contract_only=False` với bar nhiều hợp đồng cùng phút vẫn không chạy được trên tick giả (giới hạn cũ: tick giả của hai hợp đồng không xen kẽ theo thời gian). Không dùng cho bot hiện tại.
+- Chiến lược cần lịch sử nhiều ngày (hiện không có — `StrategyContext` chỉ có bar hôm nay) sẽ cần chuỗi back-adjust riêng; chưa làm.
+
 ## 2026-11-08 — P1.6 bước 2: `scripts/download_history.py` (tải lịch sử DNSE) — code xong, CHƯA chạy trên dây
 
 **Cơ sở**: đặc tả OpenAPI chính thức DNSE (`dnseopenapi-en.yaml`) chốt được phần lớn ❓ của bước 1 (from/to epoch giây, OHLC dạng cột + `nextTime`, khuôn trades). Phần còn ❓ trên dây được downloader **tự kiểm** thay vì đoán (broker_notes §1.3, bảng mới).
@@ -16,7 +34,7 @@
 - CHƯA gọi trên dây lần nào (môi trường này không có khoá và không tới được `openapi.dnse.com.vn`). Theo CLAUDE.md mục 8, phải chạy thử trước khi dựa vào dữ liệu: `dnse_history_probe.py`, rồi downloader 1–2 ngày, đối chiếu với tick recorder (`validate_day.py`).
 - `t` của OHLC được coi là giờ MỞ nến (ví dụ đặc tả) — nếu là giờ đóng, mọi bar lệch 1 phút (lookahead nhẹ trong backtest) ⇒ phải kiểm.
 - Độ sâu lịch sử của hợp đồng đã đáo hạn chưa biết: ngày rỗng ghi manifest.
-- `backtest.engine --bars <thư mục>` không đọc đệ quy ⇒ hiện trỏ từng thư mục hợp đồng; nối chuỗi liên tục qua roll là việc của module backtest.
+- ~~`backtest.engine --bars` không đọc đệ quy~~ ⇒ đã xử lý ở mục "Backtest nối chuỗi qua roll" bên trên.
 
 **Việc của bạn**
 - [ ] Có khoá DNSE: `python scripts/dnse_history_probe.py` rồi `python scripts/download_history.py --start <hôm qua> --end <hôm qua>`; gửi `_manifest.json` + log (không chứa khoá).

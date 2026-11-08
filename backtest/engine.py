@@ -121,27 +121,65 @@ def synthetic_ticks(bar: Bar, net_qty: int, tick_size: float, spread_ticks: int,
     return out
 
 
-def load_bars_parquet(path: Union[str, Path, Sequence[Path]]) -> tuple[list[Bar], int]:
-    """Đọc bar 1 phút (schema của scripts/import_dashboard_bars.py). Trả (bars, số dòng hỏng bị bỏ)."""
+BAR_COLUMNS = ("symbol", "start", "open", "high", "low", "close")
+
+
+def _bar_files(path: Union[str, Path, Sequence[Union[str, Path]]]) -> list[Path]:
+    """File/thư mục (đệ quy, vd `data/history/ohlc1m/<hợp đồng>/<ngày>.parquet`) → danh sách file."""
+    items = list(path) if isinstance(path, (list, tuple)) else [path]
+    files: list[Path] = []
+    for it in items:
+        p = Path(it)
+        files += sorted(p.rglob("*.parquet")) if p.is_dir() else [p]   # file đang ghi dở có đuôi .tmp
+    if not files:
+        raise ValueError(f"Không có file Parquet bar nào trong {', '.join(str(x) for x in items)}")
+    return files
+
+
+def load_bars_parquet(path: Union[str, Path, Sequence[Union[str, Path]]],
+                      stats: Optional[dict] = None) -> tuple[list[Bar], int]:
+    """Đọc bar 1 phút (schema `import_dashboard_bars.py` / `download_history.py`). Trả (bars, số dòng hỏng bị bỏ).
+
+    Nhận file, thư mục (đọc ĐỆ QUY, mỗi hợp đồng một thư mục con) hoặc danh sách các thứ đó. Bar trùng
+    (symbol, start) giữa các nguồn ⇒ giữ bản có volume tin được, hoà thì bản đọc trước; `stats` (nếu
+    truyền) nhận `files`, `duplicates`, `conflicts` (bản trùng khác giá OHLC).
+    """
     import pandas as pd
 
-    p = path if isinstance(path, (list, tuple)) else Path(path)
-    files = list(p) if isinstance(p, (list, tuple)) else (sorted(p.glob("*.parquet")) if p.is_dir() else [p])
-    bars: list[Bar] = []
-    skipped = 0
+    files = _bar_files(path)
+    best: dict[tuple[str, datetime], Bar] = {}
+    skipped = dups = conflicts = 0
     for f in files:
         df = pd.read_parquet(f)
+        missing = [c for c in BAR_COLUMNS if c not in df.columns]
+        if missing:
+            raise ValueError(f"{f}: không phải file bar (thiếu cột {', '.join(missing)}) — trỏ --bars vào "
+                             "thư mục bar (vd data/history/ohlc1m), không phải tick/trades")
         # thiếu cột ⇒ không xác nhận được nguồn ⇒ coi là KHÔNG tin được (golive #14)
         reliable = df["volume_reliable"] if "volume_reliable" in df else [False] * len(df)
         interval = df["interval_s"] if "interval_s" in df else [60] * len(df)
-        for row, rel, iv in zip(df.itertuples(index=False), reliable, interval):
+        volume = df["volume"] if "volume" in df else [0] * len(df)
+        for row, rel, iv, vol in zip(df.itertuples(index=False), reliable, interval, volume):
             try:
-                bars.append(Bar(str(row.symbol), pd.Timestamp(row.start).to_pydatetime(),
-                                float(row.open), float(row.high), float(row.low), float(row.close),
-                                int(row.volume or 0), int(iv), bool(rel)))
+                b = Bar(str(row.symbol), pd.Timestamp(row.start).to_pydatetime(),
+                        float(row.open), float(row.high), float(row.low), float(row.close),
+                        int(vol or 0), int(iv), bool(rel))
             except (ValueError, TypeError):
                 skipped += 1
-    bars.sort(key=lambda b: (b.start, b.symbol))
+                continue
+            key = (b.symbol, b.start)
+            old = best.get(key)
+            if old is None:
+                best[key] = b
+                continue
+            dups += 1
+            if (old.open, old.high, old.low, old.close) != (b.open, b.high, b.low, b.close):
+                conflicts += 1
+            if b.volume_reliable and not old.volume_reliable:
+                best[key] = b
+    if stats is not None:
+        stats.update(files=len(files), duplicates=dups, conflicts=conflicts)
+    bars = sorted(best.values(), key=lambda b: (b.start, b.symbol))
     return bars, skipped
 
 
@@ -212,11 +250,19 @@ class BacktestEngine:
                    "unreliable_volume_bars": 0, "days": 0}
         last_ts: Optional[datetime] = None
 
+        quality.update(rolls=[], other_contract_bars=0, days_missing_trading_contract=0, missing_trading_days=0)
+        seen_days: dict[date, set[str]] = {}       # mọi hợp đồng có trong dữ liệu, theo ngày
+        kept_days: dict[date, str] = {}            # hợp đồng thực sự đưa vào pipeline
+
         def keep(ev: Event) -> bool:
-            if not self.trading_contract_only:
-                return True
             d = (ev.ts if isinstance(ev, Tick) else ev.start).date()
-            return ev.symbol == mclock.trading_contract(d)
+            seen_days.setdefault(d, set()).add(ev.symbol)
+            if self.trading_contract_only and ev.symbol != mclock.trading_contract(d):
+                if isinstance(ev, Bar):
+                    quality["other_contract_bars"] += 1
+                return False
+            kept_days.setdefault(d, ev.symbol)
+            return True
 
         def expand() -> Iterator[Event]:
             for ev in source:
@@ -294,6 +340,7 @@ class BacktestEngine:
 
         if state.trading_day is not None:
             self._end_day(state, warnings)
+        self._coverage(seen_days, kept_days, mclock, quality, warnings)
         marks = dict(state.last_prices)
         return BacktestResult(
             trades=list(book.closed), open_trades=book.open_trades(marks, last_ts),
@@ -308,6 +355,36 @@ class BacktestEngine:
             if p.qty != 0:
                 warnings.append(f"{state.trading_day}: còn vị thế {p.symbol} {p.qty:+d} sau sự kiện "
                                 "cuối ngày — flatten không chạy được (thiếu dữ liệu sau flatten_time?)")
+
+    def _coverage(self, seen: dict, kept: dict, mclock: MarketClock, quality: dict, warnings: list[str]) -> None:
+        """Chuỗi qua roll: ngày roll, ngày thiếu hợp đồng giao dịch, ngày giao dịch không có dữ liệu.
+
+        Không back-adjust: bot phẳng mỗi đêm nên mỗi ngày chỉ cần đúng một hợp đồng, P&L trên giá thật.
+        """
+        if not seen:
+            return
+        if self.trading_contract_only:
+            prev = None
+            for d in sorted(seen):
+                tc = mclock.trading_contract(d)
+                if d not in kept:
+                    quality["days_missing_trading_contract"] += 1
+                    warnings.append(f"{d}: có dữ liệu {', '.join(sorted(seen[d]))} nhưng thiếu hợp đồng giao "
+                                    f"dịch {tc} — bỏ cả ngày (tải thêm hợp đồng đó)")
+                    continue
+                if prev is not None and kept[d] != prev:
+                    quality["rolls"].append(f"{d}: {prev} → {kept[d]}")
+                prev = kept[d]
+        missing = []
+        d, last = min(seen), max(seen)
+        while d <= last:
+            if self.calendar.is_trading_day(d) and d not in seen:
+                missing.append(d)
+            d += timedelta(days=1)
+        quality["missing_trading_days"] = len(missing)
+        if missing:
+            shown = ", ".join(str(x) for x in missing[:10]) + (" …" if len(missing) > 10 else "")
+            warnings.append(f"{len(missing)} ngày giao dịch không có dữ liệu nào: {shown}")
 
     def _assumptions(self, synthetic: bool) -> dict:
         c = self.paper_config
@@ -392,7 +469,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     from backtest.report import build_report, write_html
 
     ap = argparse.ArgumentParser(description="Backtest VN30F trên bar 1 phút (Parquet)")
-    ap.add_argument("--bars", required=True, help="thư mục hoặc file Parquet bar 1 phút")
+    ap.add_argument("--bars", required=True, nargs="+",
+                    help="file/thư mục Parquet bar 1 phút (đọc đệ quy, nhiều nguồn được; trùng ⇒ giữ volume tin được)")
     ap.add_argument("--strategy", required=True, help="module:Class, vd strategy.baseline_orb:ORB")
     ap.add_argument("--split", help="ngày bắt đầu out-of-sample (YYYY-MM-DD)")
     ap.add_argument("--n-trials", type=int, default=1, help="tổng số cấu hình đã thử (research/log.md)")
@@ -407,7 +485,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except MissingSetting as exc:
         print(f"❌ {exc.args[0]}\n   Chạy `python -m core.settings` để xem mọi khoá còn thiếu.")
         return 2
-    bars, skipped = load_bars_parquet(args.bars)
+    load_stats: dict = {}
+    bars, skipped = load_bars_parquet(args.bars, stats=load_stats)
     if args.date_from:
         bars = [b for b in bars if b.start.date() >= date.fromisoformat(args.date_from)]
     if args.date_to:
@@ -417,6 +496,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                        n_trials=args.n_trials, title=args.strategy)
     if skipped:
         rep["warnings"].append(f"Bỏ {skipped} dòng bar hỏng khi đọc Parquet")
+    if load_stats.get("duplicates"):
+        rep["warnings"].append(f"{load_stats['duplicates']} bar trùng giữa các nguồn ({load_stats['conflicts']} "
+                               "bản khác giá OHLC) — giữ bản có volume tin được")
     write_html(rep, Path(args.out))
     m = rep["sections"]["all"]["metrics"]
     print(f"{m['n_trades']} lệnh, P&L sau phí {m['total_pnl_vnd']:,.0f} VNĐ → {args.out}")

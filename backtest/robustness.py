@@ -267,7 +267,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     from strategy.baseline_orb import OpeningRangeBreakout
 
     ap = argparse.ArgumentParser(description="Kiểm định độ bền chiến lược ORB + kết luận edge")
-    ap.add_argument("--bars", required=True, help="thư mục/file Parquet bar 1 phút")
+    ap.add_argument("--bars", required=True, nargs="+", help="file/thư mục Parquet bar 1 phút (đọc đệ quy)")
     ap.add_argument("--split", required=True, help="ngày đầu out-of-sample (YYYY-MM-DD), chốt TRƯỚC khi chạy")
     ap.add_argument("--folds", type=int, default=4)
     ap.add_argument("--n-trials", type=int, default=None,
