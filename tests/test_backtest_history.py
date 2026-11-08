@@ -71,7 +71,7 @@ def test_history_back_adjusted_across_roll(settings, cal):
     assert {b.symbol for b in h} == {DEC}
     assert {b.close for b in h} == {1400.0}                         # 1350 + 50 = giá 2612
     q = res.data_quality
-    assert q["roll_gaps"] == [f"{D18}: {NOV} → {DEC} {50.0:+.1f} điểm"]
+    assert q["roll_gaps"] == [f"{D18}: {NOV} → {DEC} {50.0:+.1f} điểm (trung vị 1 phút)"]
     assert q["roll_gaps_missing"] == 0
 
 
@@ -97,7 +97,7 @@ def test_other_listed_contracts_on_eve_do_not_break_gap(settings, cal):
     data = roll_data() + day(D18, "VN30F2703", 1450.0, hhmm="10:01") + day(D18, "VN30F2706", 1480.0, hhmm="10:01")
     strat = Recorder(history_days=5)
     res = run(settings, cal, strat, data)
-    assert res.data_quality["roll_gaps"] == [f"{D18}: {NOV} → {DEC} {50.0:+.1f} điểm"]
+    assert res.data_quality["roll_gaps"] == [f"{D18}: {NOV} → {DEC} {50.0:+.1f} điểm (trung vị 1 phút)"]
     assert {b.close for b in strat.seen[D20]} == {1400.0}
 
 

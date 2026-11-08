@@ -32,7 +32,7 @@ def required_days(today: date, days: int, calendar: TradingCalendar) -> list[dat
 
 
 def load_live_history(dirs: Sequence[Union[str, Path]], today: date, days: int, calendar: TradingCalendar,
-                      trading_contract: Callable[[date], str]) -> ContinuousHistory:
+                      trading_contract: Callable[[date], str], gap_minutes: int = 1) -> ContinuousHistory:
     from backtest.engine import load_bars_parquet
 
     if int(days) < 1:
@@ -47,7 +47,7 @@ def load_live_history(dirs: Sequence[Union[str, Path]], today: date, days: int, 
     except ValueError as exc:
         raise HistoryUnavailable(f"Đọc lịch sử lỗi: {exc} — {hint}") from exc
     wanted = set(need)
-    builder = HistoryBuilder(int(days), trading_contract, calendar.next_trading_day)
+    builder = HistoryBuilder(int(days), trading_contract, calendar.next_trading_day, gap_minutes=gap_minutes)
     for b in bars:
         if b.start.date() in wanted:
             builder.observe(b)

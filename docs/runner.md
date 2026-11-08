@@ -43,7 +43,8 @@ bot nhắn "⏳ Chờ OTP cho ssi", trả lời `/otp ssi <mã>` (hoặc `/otp <
 
 Runner nạp bar 1 phút các phiên trước từ `live.history_bar_dirs` (mặc định `data/history/ohlc1m` rồi `data/bars`)
 lúc khởi động, **trước khi kết nối broker**, dựng chuỗi back-adjust bằng đúng code của backtest
-(`core.continuous.HistoryBuilder`) ⇒ `ctx.history` live = backtest với cùng dữ liệu.
+(`core.continuous.HistoryBuilder`, chênh lệch roll = trung vị `contract.roll_gap_median_minutes` phút) ⇒
+`ctx.history` live = backtest với cùng dữ liệu.
 
 Nghiêm ngặt: phải đủ đúng N phiên giao dịch gần nhất của hợp đồng giao dịch từng ngày; ngày trước roll phải có
 cả hợp đồng kế tiếp (đo chênh lệch). Thiếu ⇒ báo Telegram ngày/hợp đồng cần tải + lệnh `download_history.py`,

@@ -19,6 +19,9 @@ contract:
   tick_size_points: 0.1
   daily_limit_pct: 7.0
   roll_days_before_expiry: 1          # N phiên CUỐI của F1M (gồm ngày đáo hạn) bot giao dịch F2M; 0 = không roll sớm
+  # Chiến lược cần lịch sử nhiều ngày: chênh lệch roll = TRUNG VỊ (giá HĐ mới − HĐ cũ) của K phút chung cuối
+  # ngày trước roll (core/continuous.py) — backtest và live dùng chung khoá này.
+  roll_gap_median_minutes: 15
 
 # Lịch phiên phái sinh (giờ Asia/Ho_Chi_Minh, HH:MM). KIỂM TRA LẠI theo
 # thông báo hiện hành của HNX trước khi chạy live.

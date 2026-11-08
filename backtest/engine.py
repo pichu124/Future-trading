@@ -42,7 +42,7 @@ from core.execution import ExecEvent, ExecutionManager  # noqa: E402
 from core.models import AccountState, Bar, Fill, Order, Signal, SignalAction, Tick  # noqa: E402
 from core.settings import MissingSetting, Settings, load_settings  # noqa: E402
 from risk.risk_manager import Rejected, RiskManager  # noqa: E402
-from core.continuous import HistoryBuilder  # noqa: E402
+from core.continuous import HistoryBuilder, check_gap_minutes  # noqa: E402
 from strategy.base import Strategy, StrategyContext, history_days  # noqa: E402
 
 Event = Union[Tick, Bar]
@@ -213,6 +213,9 @@ class BacktestEngine:
         self.history_days = history_days(strategy)
         if self.history_days and not trading_contract_only:
             raise ValueError("Chiến lược cần lịch sử nhiều ngày ⇒ phải chạy với trading_contract_only=True")
+        # cùng khoá với live (live/history.py) ⇒ cùng chuỗi back-adjust; chỉ bắt buộc khi cần lịch sử
+        self.gap_minutes = (check_gap_minutes(settings.require("contract.roll_gap_median_minutes"))
+                            if self.history_days else None)
         # kiểm cấu hình NGAY (null ⇒ MissingSetting), không đợi tới lúc chạy
         self.paper_config = PaperConfig.from_settings(settings)
         # giữ cực trị lâu hơn độ trễ tối đa của paper (golive #14)
@@ -257,8 +260,8 @@ class BacktestEngine:
         quality.update(rolls=[], other_contract_bars=0, days_missing_trading_contract=0, missing_trading_days=0)
         seen_days: dict[date, set[str]] = {}       # mọi hợp đồng có trong dữ liệu, theo ngày
         kept_days: dict[date, str] = {}            # hợp đồng thực sự đưa vào pipeline
-        history = (HistoryBuilder(self.history_days, mclock.trading_contract, self.calendar.next_trading_day)
-                   if self.history_days else None)
+        history = (HistoryBuilder(self.history_days, mclock.trading_contract, self.calendar.next_trading_day,
+                                  gap_minutes=self.gap_minutes) if self.history_days else None)
         if history is not None:
             quality.update(roll_gaps=[], roll_gaps_missing=0)
 
@@ -284,7 +287,8 @@ class BacktestEngine:
                                 f"{r.next_contract} cùng phút với {r.contract}) — lịch sử nhiều ngày bị cắt tại roll "
                                 f"này; tải thêm {r.next_contract} ngày {d}")
             else:
-                quality["roll_gaps"].append(f"{d}: {r.contract} → {r.next_contract} {r.gap.gap:+.1f} điểm")
+                quality["roll_gaps"].append(f"{d}: {r.contract} → {r.next_contract} {r.gap.gap:+.1f} điểm "
+                                            f"(trung vị {r.gap.n_minutes} phút)")
         history_view: dict[str, tuple[Bar, ...]] = {}
 
         def expand() -> Iterator[Event]:
@@ -429,8 +433,9 @@ class BacktestEngine:
         if synthetic:
             out["synthetic_spread_ticks"] = self.spread_ticks
         if self.history_days:
-            out["history"] = (f"{self.history_days} phiên trước, back-adjust cộng điểm tại thời điểm (chênh lệch "
-                              "đo ở phút chung cuối của ngày trước roll, không dùng roll tương lai)")
+            out["history"] = (f"{self.history_days} phiên trước, back-adjust cộng điểm tại thời điểm (chênh lệch = "
+                              f"trung vị {self.gap_minutes} phút chung cuối của ngày trước roll, không dùng roll "
+                              "tương lai)")
         return out
 
 

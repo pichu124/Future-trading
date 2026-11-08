@@ -33,7 +33,7 @@ def bt_settings(session_cfg, **risk_over) -> Settings:
     risk.update(risk_over)
     return Settings({
         "contract": {"multiplier_vnd_per_point": 100000, "tick_size_points": 0.1,
-                     "roll_days_before_expiry": 1},
+                     "roll_days_before_expiry": 1, "roll_gap_median_minutes": 1},
         "session": session_cfg,
         "risk": risk,
         "brokers": {"primary": "dnse", "backup": "ssi"},

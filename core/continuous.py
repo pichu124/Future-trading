@@ -2,7 +2,8 @@
 
 Hàm thuần, không I/O, không đọc giờ hệ thống ⇒ dùng chung cho backtest và (sau này) live.
 
-- Chênh lệch roll = giá đóng HĐ mới − giá đóng HĐ cũ ở PHÚT CHUNG CUỐI CÙNG của ngày trước roll.
+- Chênh lệch roll = TRUNG VỊ của (giá đóng HĐ mới − HĐ cũ) ở K phút CHUNG cuối cùng của ngày trước roll
+  (`contract.roll_gap_median_minutes`; K = 1 ⇒ một phút) — một phút méo (ATC, HĐ mỏng) không làm lệch cả chuỗi.
 - Lịch sử HĐ cũ được CỘNG chênh lệch (giữ nguyên khoảng cách theo điểm: biên độ, ATR, khoảng stop).
 - "Tại thời điểm": `view(hđ hiện tại)` chỉ dùng các chênh lệch đã đăng ký ⇒ HĐ hiện tại là giá thật, không
   roll tương lai nào lọt vào. Thiếu chênh lệch của một roll ⇒ lịch sử dừng tại roll đó (không đoán).
@@ -10,6 +11,7 @@ Hàm thuần, không I/O, không đọc giờ hệ thống ⇒ dùng chung cho b
 """
 from __future__ import annotations
 
+import statistics
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 from typing import Callable, Iterable, Optional, Sequence
@@ -22,8 +24,9 @@ class RollGap:
     old: str
     new: str
     day: date              # ngày đo (ngày trước roll)
-    at: datetime           # phút chung dùng để đo (giờ MỞ bar)
-    gap: float             # điểm: giá HĐ mới − giá HĐ cũ
+    at: datetime           # phút chung CUỐI dùng để đo (giờ MỞ bar)
+    gap: float             # điểm: trung vị (giá HĐ mới − giá HĐ cũ)
+    n_minutes: int = 1     # số phút chung thực sự dùng (≤ K)
 
 
 def _single_symbol(bars: Sequence[Bar]) -> Optional[str]:
@@ -33,7 +36,15 @@ def _single_symbol(bars: Sequence[Bar]) -> Optional[str]:
     return next(iter(syms), None)
 
 
-def measure_gap(old_bars: Iterable[Bar], new_bars: Iterable[Bar]) -> Optional[RollGap]:
+def check_gap_minutes(minutes) -> int:
+    if isinstance(minutes, bool) or not isinstance(minutes, int) or minutes < 1:
+        raise ValueError(f"số phút đo chênh lệch roll phải là số nguyên ≥ 1, nhận {minutes!r}")
+    return minutes
+
+
+def measure_gap(old_bars: Iterable[Bar], new_bars: Iterable[Bar], minutes: int = 1) -> Optional[RollGap]:
+    """Trung vị (đóng HĐ mới − đóng HĐ cũ) trên `minutes` phút CHUNG cuối (ít hơn thì dùng hết số có)."""
+    minutes = check_gap_minutes(minutes)
     old, new = list(old_bars), list(new_bars)
     o_sym, n_sym = _single_symbol(old), _single_symbol(new)
     if o_sym is None or n_sym is None:
@@ -42,9 +53,11 @@ def measure_gap(old_bars: Iterable[Bar], new_bars: Iterable[Bar]) -> Optional[Ro
     common = sorted(t for t in {b.start for b in new} if t in old_by)
     if not common:
         return None
-    t = common[-1]
-    nb = next(b for b in new if b.start == t)
-    return RollGap(o_sym, n_sym, t.date(), t, round(nb.close - old_by[t].close, 6))
+    use = common[-minutes:]
+    new_by = {b.start: b for b in new}
+    gap = statistics.median(new_by[t].close - old_by[t].close for t in use)
+    t = use[-1]
+    return RollGap(o_sym, n_sym, t.date(), t, round(gap, 6), len(use))
 
 
 def shift_bar(bar: Bar, offset: float, symbol: str) -> Bar:
@@ -109,8 +122,9 @@ class HistoryBuilder:
     hết phiên ⇒ lưu bar HĐ giao dịch; ngày trước roll đo chênh lệch với HĐ kế tiếp (dùng từ phiên sau)."""
 
     def __init__(self, max_days: int, trading_contract: Callable[[date], str],
-                 next_trading_day: Callable[[date], date]):
+                 next_trading_day: Callable[[date], date], gap_minutes: int = 1):
         self.history = ContinuousHistory(max_days)
+        self.gap_minutes = check_gap_minutes(gap_minutes)
         self._tc, self._next_day = trading_contract, next_trading_day
         self._today: dict[date, list[Bar]] = {}
         self._eve: dict[date, list[Bar]] = {}
@@ -131,7 +145,7 @@ class HistoryBuilder:
         today, eve = self._today.pop(d, []), self._eve.pop(d, [])
         if today:
             self.history.add_day(d, tc, today)
-        gap = measure_gap(today, eve)                       # eve chỉ có bar ở ngày trước roll
+        gap = measure_gap(today, eve, self.gap_minutes)     # eve chỉ có bar ở ngày trước roll
         if gap is not None:
             self.history.add_gap(gap)
         return DayClose(d, tc, nxt, len(today), gap)

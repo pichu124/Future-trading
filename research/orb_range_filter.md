@@ -17,7 +17,7 @@ Lọc bỏ hai đầu có thể cải thiện ORB baseline. Có thể SAI — m�
 | Thành phần | Quy tắc |
 |---|---|
 | Mọi phần khác | y hệt cấu hình #1 (biên 15′, vào khi đóng ngoài biên, stop cạnh đối diện, TP 1,5R, ≤ 2 lệnh/ngày) |
-| ADR | trung bình (đỉnh − đáy) của **10** phiên gần nhất trước hôm nay, mọi bar của phiên (gồm ATO/ATC). Lịch sử back-adjust cộng điểm ⇒ đỉnh − đáy không đổi qua roll |
+| ADR | trung bình (đỉnh − đáy) của **10** phiên gần nhất trước hôm nay, mọi bar của phiên (gồm ATO/ATC). Lịch sử back-adjust cộng điểm ⇒ đỉnh − đáy không đổi qua roll — cách đo chênh lệch roll (trung vị `contract.roll_gap_median_minutes` phút) không ảnh hưởng cấu hình này |
 | Lọc | tỉ lệ = (đỉnh − đáy biên 15′) / ADR; chỉ giao dịch hôm đó khi **0,10 ≤ tỉ lệ ≤ 0,60** (biên tính là trong) |
 | Dữ liệu thiếu | chưa đủ 10 phiên lịch sử hoặc ADR = 0 ⇒ không giao dịch hôm đó (backtest); live/paper từ chối khởi động nếu thiếu (live/history.py) |
 

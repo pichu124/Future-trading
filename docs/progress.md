@@ -1,5 +1,19 @@
 # Tiến độ
 
+## 2026-11-08 — Chênh lệch roll = trung vị nhiều phút
+
+**Đã xong**
+- `core/continuous.py` `measure_gap(old, new, minutes=K)`: trung vị của (đóng HĐ mới − HĐ cũ) trên K phút CHUNG cuối của ngày trước roll (ít hơn K thì dùng hết số có); `RollGap.n_minutes` ghi số phút thực dùng. `minutes=1` ⇒ y hệt cách cũ. `HistoryBuilder(gap_minutes=K)`.
+- Khoá `contract.roll_gap_median_minutes: 15` dùng CHUNG cho backtest (`BacktestEngine`) và live (`live/history.py`, `runner.main`) ⇒ cùng chuỗi. Chỉ bắt buộc khi chiến lược cần lịch sử; null ⇒ `MissingSetting` (backtest) / thoát 2 (runner); không phải số nguyên ≥ 1 ⇒ lỗi.
+- `data_quality.roll_gaps` ghi `(trung vị N phút)`; `assumptions["history"]` ghi K.
+- Test viết trước `tests/test_roll_gap_median.py` (19): phút méo bị loại, K phút CUỐI (không phải đầu), chỉ phút chung, số chẵn ⇒ trung bình hai giữa, backtest và live cho cùng chuỗi, `runner.main` truyền K. Thử phá 12 cơ chế ⇒ 0 sống.
+- 1145 test.
+
+**Ảnh hưởng nghiên cứu:** ORB #2 chỉ dùng (đỉnh − đáy) ⇒ không đổi theo chênh lệch roll ⇒ kết quả #2 không phụ thuộc thay đổi này, không tính là cấu hình mới (`n_trials` giữ 2). Chiến lược sau này dùng MỨC giá lịch sử (MA, đỉnh/đáy hôm qua…) mới chịu ảnh hưởng.
+
+**Rủi ro / giả định còn lại**
+- HĐ kế tiếp mỏng ⇒ K phút chung cuối có thể rải trên nhiều giờ (lẫn biến động trong ngày). `n_minutes` trong báo cáo cho thấy khi ít phút chung.
+
 ## 2026-11-08 — ORB cấu hình #2: lọc theo độ rộng biên / ADR (dùng lịch sử nhiều ngày)
 
 **Quyết định của người dùng:** dùng lịch sử để lọc ngày theo độ rộng biên; biến thể MỚI, baseline giữ nguyên.
@@ -66,7 +80,7 @@
 - 1062 test.
 
 **Rủi ro / giả định còn lại**
-- Chênh lệch đo ở MỘT phút (phút chung cuối) ⇒ nhạy với nhiễu phút đó; ATC/khớp cuối ngày có thể méo. Nếu dùng nhiều, cân nhắc trung vị nhiều phút cuối (đổi phải ghi `research/log.md`).
+- ~~Chênh lệch đo ở MỘT phút~~ ⇒ đã đổi sang trung vị `contract.roll_gap_median_minutes` phút (mục bên trên).
 - Dữ liệu đã tải trước thay đổi này thiếu HĐ kế tiếp ngày trước roll ⇒ chạy lại downloader (mục đã có bị bỏ qua, chỉ tải phần thiếu).
 - ~~Live/paper chưa cấp lịch sử~~ ⇒ đã nối (mục bên trên); recorder vẫn chỉ ghi HĐ đang giao dịch.
 

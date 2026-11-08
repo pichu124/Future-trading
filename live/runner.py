@@ -718,8 +718,14 @@ def main(argv=None) -> int:
         if not dirs:
             log.error("Chiến lược cần lịch sử %d phiên nhưng live.history_bar_dirs còn trống", n_hist)
             return 2
+        from core.continuous import check_gap_minutes
         from core.settings import REPO_ROOT as _ROOT
         from live.history import load_live_history
+        try:
+            gap_minutes = check_gap_minutes(settings.require("contract.roll_gap_median_minutes"))
+        except (MissingSetting, ValueError) as exc:
+            log.error("Chiến lược cần lịch sử: %s", exc)
+            return 2
         hist_dirs = [Path(p) if Path(p).is_absolute() else _ROOT / p for p in dirs]
         for p in hist_dirs:
             try:
@@ -728,8 +734,8 @@ def main(argv=None) -> int:
                 log.error("%s", exc)
                 return 2
 
-        def history_loader(today, _dirs=hist_dirs, _n=n_hist):
-            return load_live_history(_dirs, today, _n, mclock.calendar, mclock.trading_contract)
+        def history_loader(today, _dirs=hist_dirs, _n=n_hist, _g=gap_minutes):
+            return load_live_history(_dirs, today, _n, mclock.calendar, mclock.trading_contract, gap_minutes=_g)
 
     lock = InstanceLock(settings.path("paths.state_dir") / "bot.lock", mode=mode,
                         stale_after_s=float(settings.get("live.lock_stale_after_seconds", 120)))
