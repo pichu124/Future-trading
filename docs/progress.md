@@ -1,5 +1,39 @@
 # Tiến độ
 
+## 2026-11-08 — P4.1 Adapter DNSE (`brokers/dnse.py`) — live KHOÁ tới khi kiểm API
+
+**Quyết định của người dùng:** OTP email nhập tay qua Telegram `/otp <mã>` (không dùng Gmail API — tránh thư viện Google lớn + cho bot quyền đọc hộp thư); lớp HTTP tự viết mỏng trên `requests` (không dùng SDK `dnse`); viết đủ adapter nhưng chặn lệnh thật ở production tới khi các mục ❓ được kiểm. PROMPTS ghi "đăng nhập JWT" là bản trước KRX ⇒ làm theo V2: ký HMAC mọi request + trading token.
+
+**Đã xong**
+- Đọc mã nguồn SDK `dnse` 0.5.0 (orders, registration, accounts, deals, stream lệnh) ⇒ `docs/broker_notes.md` §1.5 (endpoint, field, bảng ❓ và cách adapter xử lý từng mục); sửa §1.1 (header `date`, ký path không kèm query theo mã SDK).
+- `brokers/dnse.py`:
+  - `DnseHttp`: ký HMAC như SDK, MỘT request = MỘT lần gửi (không retry 429/5xx/timeout), `trading-token` chỉ gửi kèm lệnh thay đổi, sửa lỗi `metadata` chưa escape của server, `repr` không lộ khoá.
+  - `DnseBroker`: đặt LO/MTL/ATO/ATC, sửa (huỷ-đặt ⇒ orderId mới, cùng client id, gửi phần CÒN LẠI), huỷ (chỉ báo CANCELLED khi sàn xác nhận), vị thế (gộp deal, thiếu trang / chiều lạ / deal mâu thuẫn ⇒ lỗi, không đoán), lệnh chờ.
+  - Không bao giờ gửi lại lệnh: timeout/lỗi mạng/408/5xx ⇒ "không rõ", đối soát sổ lệnh (chỉ lệnh MỚI xuất hiện sau lúc gửi, khớp mã/chiều/loại/KL/giá); quá `uncertain_resolve_seconds` ⇒ REJECTED. Gọi lại cùng client id chỉ trả lệnh cũ.
+  - Chốt trước MỌI lệnh thay đổi: `TRADING_MODE=live` + `--live` + `api_verified` (production) + trading token còn hạn. `dry_run` chỉ log payload.
+  - Khớp lệnh: đọc sổ lệnh mỗi `poll_seconds` trong `ping()`, phát Fill (trước) rồi cập nhật lệnh; trạng thái suy từ khối lượng trước, chuỗi `orderStatus` sau (chưa biết giá trị thật). Lệnh đặt tay trên app được theo dõi (`EXT<id>`) để net position đúng; lệnh có sẵn lúc khởi động không phát lại phần đã khớp.
+  - Stop do bot giữ (API không có lệnh stop): chạm giá ⇒ gửi MTL đúng một lần, cùng client id.
+  - Token: xin OTP lúc `connect()` / khi 401 `INVALID_TRADING_TOKEN` / trước khi hết hạn; không token ⇒ `ping()` = False (risk chặn mở vị thế; có vị thế quá `broker_timeout_seconds` ⇒ quy trình khẩn cấp).
+- Runner: lệnh Telegram `/otp <mã>` (không bao giờ nhắc lại mã), chuyển tick cho MỌI broker có `on_tick` (kể cả async). `telegram.parse_commands` giữ tham số chỉ cho `/otp`. Live vẫn bị từ chối (chưa nối, chờ kiểm API + P4.2).
+- `scripts/dnse_trading_probe.py`: `--payload-only` (không mạng), mặc định chỉ đọc (tài khoản, gói vay, sổ lệnh, lịch sử, vị thế, secdef), `--uat --order-test [--with-modify] --live` đặt-sửa-huỷ thử một lệnh LO giá sàn trên UAT qua chính adapter; ghi response thô đã xoá passcode/token + `summary.json` (chuỗi `orderStatus` thấy được).
+- `config/settings.yaml` thêm `brokers.dnse.*` (`loan_package_id`, `trading_token_ttl_seconds` = null; `api_verified: false`); `.env.example` thêm `DNSE_ACCOUNT_NO`, bỏ `DNSE_OTP_EMAIL`.
+- Test viết trước: `tests/test_broker_dnse.py` (95 test), `tests/test_trading_probe.py` (6), runner/parser (4). Thử phá 23 cơ chế an toàn của adapter ⇒ ban đầu 4 cơ chế sống sót ⇒ thêm test (lệnh có sẵn đã khớp một phần lúc khởi động, lệnh giống hệt đã khớp xong không được nhận nhầm, deal mâu thuẫn, trạng thái sau sửa lệnh) ⇒ 23/23 bị bắt.
+- 680 test.
+
+**Rủi ro / giả định còn lại**
+- Chưa gọi thử được API (không có khoá, proxy chặn) ⇒ mọi mục ❓ ở broker_notes §1.5 chưa kiểm: giá trị `orderStatus`, ngữ nghĩa `quantity` khi sửa, `side`/`status` của deal, thời hạn token, rate limit, server có chấp nhận chữ ký path-không-query.
+- Stop do bot giữ: MTL phần dư thành LO (quy định sàn) ⇒ stop đã kích hoạt có thể đứng chờ; `ExecutionManager` chưa đặt lại lệnh tag `stop` như với `exit/flatten`. Bot khởi động lại giữa phiên ⇒ stop cục bộ mất, risk sẽ đòi stop mới hoặc đóng.
+- Thời điểm Fill = lúc đọc sổ lệnh (chậm tối đa `poll_seconds`), không phải giờ khớp ở sàn.
+- Lệnh "không rõ" khớp nhầm một lệnh đặt tay giống hệt đặt đúng trong cửa sổ đối soát — rất hiếm; khi đó vẫn đúng net position.
+- OTP đi qua Telegram (mã sống ~2 phút, một mình mã không đủ để giao dịch); nên xoá tin sau khi dùng.
+- Runner chưa nối chế độ live; danh sách hợp đồng REST `/instruments` vẫn chưa có.
+
+**Người dùng cần làm**
+- [ ] Điền `DNSE_ACCOUNT_NO` trong `.env`; chạy `python scripts/dnse_trading_probe.py` (chỉ đọc) ⇒ điền `brokers.dnse.loan_package_id` theo gói vay in ra.
+- [ ] Trên UAT: `TRADING_MODE=live` rồi `python scripts/dnse_trading_probe.py --uat --order-test --with-modify --live`; gửi lại thư mục `data/probe/dnse_trading_*` để chốt các ❓ và điền `trading_token_ttl_seconds`. Chỉ sau đó mới cân nhắc `api_verified: true`.
+
+**Bước tiếp theo:** P4.2 adapter SSI (broker dự phòng), hoặc chốt ❓ DNSE khi có kết quả probe rồi nối live vào runner.
+
 ## 2026-11-08 — P1.6 bước 1: thăm dò REST lịch sử (downloader CHƯA viết)
 
 **Vì sao chưa viết `scripts/download_history.py`:** P1.6 yêu cầu gọi thử bằng tay để chốt các mục ❓ TRƯỚC khi viết code. Môi trường này không có khoá DNSE và không gọi được tới `openapi.dnse.com.vn` (proxy chặn). Đọc SDK `dnse` 0.5.0: `/price/ohlc` không có trong SDK (field hoàn toàn chưa biết); `/price/{symbol}/trades` có field nhưng đơn vị `from`/`to` và định dạng `time` chưa rõ; SDK ký đường dẫn KHÔNG kèm query, trái với ghi chú cũ. Viết downloader lúc này là đoán.

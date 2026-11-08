@@ -340,3 +340,47 @@ def test_feed_silence_with_position_flattens(rig):
     rig.trade(1349.0)                                        # dữ liệu trở lại ⇒ lệnh đóng khớp
     rig.step()
     assert rig.state.net_qty(SYM) == 0
+
+
+# ------------------------------------------------------------------ /otp + on_tick bất đồng bộ ----
+
+def test_otp_command_goes_to_broker_and_code_is_never_echoed(session_cfg, cal, tmp_path, caplog):
+    import logging
+    caplog.set_level(logging.DEBUG)
+    r = Rig(session_cfg, cal, tmp_path, commands=["otp 834521"])
+    got = []
+
+    async def submit_otp(code):
+        got.append(code)
+        return False
+    r.broker.submit_otp = submit_otp
+    r.start()
+    r.step()
+    assert got == ["834521"]
+    assert any("OTP không được chấp nhận" in n for n in r.notes)
+    assert not any("834521" in n for n in r.notes) and "834521" not in caplog.text
+
+
+def test_otp_command_without_supporting_broker(session_cfg, cal, tmp_path):
+    r = Rig(session_cfg, cal, tmp_path, commands=["otp 834521", "otp"])
+    r.start()
+    r.step()
+    assert any("Không broker nào cần OTP" in n for n in r.notes)
+    assert not any("834521" in n for n in r.notes)
+
+
+def test_async_on_tick_of_real_broker_is_awaited(session_cfg, cal, tmp_path):
+    """Adapter DNSE giữ stop ở bot ⇒ runner phải chuyển tick cho MỌI broker có on_tick (kể cả async)."""
+    r = Rig(session_cfg, cal, tmp_path)
+    seen = []
+    orig = r.broker.on_tick
+
+    async def on_tick(t):
+        seen.append(t.last)
+        orig(t)
+    r.broker.on_tick = on_tick
+    r.start()
+    r.at(T0 + timedelta(seconds=5))
+    r.trade(1350.0)
+    r.step()
+    assert seen == [1350.0]

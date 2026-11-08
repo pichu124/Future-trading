@@ -70,7 +70,7 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 
 ## Giai đoạn 4 — Kết nối broker thật (paper trước)
 
-**P4.1 · Adapter DNSE**
+**P4.1 · Adapter DNSE** ✅ (`brokers/dnse.py`; OTP nhập tay qua Telegram `/otp` thay cho Gmail API — quyết định của người dùng; live khoá tới khi chạy `scripts/dnse_trading_probe.py` và đặt `api_verified`)
 > Đọc tài liệu LightSpeed Trading (bản sau KRX), cập nhật broker_notes.md, rồi viết `brokers/dnse.py`: đăng nhập JWT, lấy trading token qua emailOTP (đọc OTP từ Gmail API), tự gia hạn token, đặt/huỷ/sửa lệnh phái sinh, nhận trạng thái lệnh và vị thế. Idempotent theo client_order_id. Kiểm tra TRADING_MODE trước mọi lệnh thật. Viết chế độ `--dry-run` chỉ log payload.
 
 **P4.2 · Adapter SSI**

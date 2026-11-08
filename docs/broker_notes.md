@@ -33,14 +33,14 @@ Trang hướng dẫn: hdsd.dnse.com.vn → "DNSE LightSpeed API V2"; đăng ký 
 (ký đề nghị sử dụng dịch vụ với DNSE). Tài liệu "LightSpeed API trước KRX" (JWT + MQTT) là bản **cũ**, không dùng.
 
 ### 1.1 Xác thực
-- Mỗi request ký **HMAC-SHA256** bằng `api_secret` ✅. Header: `X-API-Key`, `X-Aux-Date` (hoặc `date`), `X-Signature` ✅.
-- Chuỗi ký (theo SDK):
+- Mỗi request ký **HMAC-SHA256** bằng `api_secret` ✅. Header: `x-api-key`, `date` (SDK mặc định; tuỳ chọn `x-aux-date`), `X-Signature` ✅ (SDK 0.5.0 `_hmac_signer`).
+- Chuỗi ký (theo MÃ NGUỒN SDK — docstring cũ ghi "path kèm query", mã thật ký path KHÔNG kèm query, xem §1.3 ❓):
   ```
-  (request-target): <method thường> <path kèm query>
-  x-aux-date: <RFC 2822 UTC, vd "Sat, 07 Nov 2026 13:00:00 +0000">
+  (request-target): <method thường> <path>
+  date: <RFC 2822 UTC, vd "Sat, 07 Nov 2026 13:00:00 +0000">
   nonce: <uuid4 hex>
   ```
-  `X-Signature: Signature keyId="<api_key>",algorithm="hmac-sha256",headers="(request-target) x-aux-date",signature="<base64, URL-encode>",nonce="<nonce>"` ✅ (SDK)
+  `X-Signature: Signature keyId="<api_key>",algorithm="hmac-sha256",headers="(request-target) date",signature="<base64, URL-encode>",nonce="<nonce>"` ✅ (SDK)
 - **Trading token** (bắt buộc cho đặt/sửa/huỷ lệnh, đóng vị thế) ✅:
   1. `POST /registration/send-email-otp` → DNSE gửi OTP vào email;
   2. `POST /registration/trading-token` body `{"otpType": "email_otp" | "smart_otp", "passcode": "123456"}` → nhận token;
@@ -119,6 +119,42 @@ lệnh đôi ⇒ adapter DNSE phải: không tự retry lệnh đặt; khi khôn
 - ❓ Kênh có sổ lệnh nhiều bước giá (top 3/top 10) hay không; trường `side` của trade là bên chủ động?;
   đơn vị `timestamp` (giây/ms); kênh `orders` có cần trading token không; có số thứ tự message để phát hiện gap không.
 
+### 1.5 Giao dịch — SDK `dnse` 0.5.0 (`resources/orders.py`, `registration.py`, `accounts.py`, `deals.py`; đọc 08/11/2026) → `brokers/dnse.py`
+- **OTP / token** ✅: `POST /registration/send-email-otp` (không body; 2xx = đã gửi mail) → `POST /registration/trading-token`
+  body `{"otpType": "email_otp", "passcode": "<mã>"}` → `{"tradingToken": "…"}`. SDK chỉ thêm header `trading-token`
+  cho POST/PUT/DELETE có `/orders` trong path. Token hết hạn ⇒ HTTP 401 với `code`/`errorCode` = `INVALID_TRADING_TOKEN` ✅.
+  **Không có endpoint gia hạn token** trong SDK ⇒ "tự gia hạn" = xin OTP mới trước khi hết hạn và người dùng nhập lại.
+- **Retry trong SDK**: `orders.place/update/cancel` gọi `_send` trực tiếp (KHÔNG retry); chỉ `client.request()` chung mới
+  retry 429 (tối đa 3 lần) ✅ ⇒ adapter tự viết, không dùng đường có retry.
+- **Đặt lệnh** ✅: `POST /accounts/orders?marketType=DERIVATIVE&orderCategory=NORMAL`, body (camelCase, SDK gửi cả `null`)
+  `accountNo, symbol (KRX), side NB|NS, orderType LO|MTL|ATO|ATC|MOK|MAK, quantity, price (null nếu không phải LO), loanPackageId`
+  → `PlaceOrderResponse`: `id, accountNo, symbol, side, orderType, orderStatus, orderCategory, marketType, quantity,
+  fillQuantity, leaveQuantity, canceledQuantity, price, averagePrice, …`.
+- **Sổ lệnh** ✅: `GET /accounts/{acc}/orders?marketType&orderCategory` → `{"orders": [OrderItem]}`; một lệnh:
+  `GET /accounts/{acc}/orders/{id}` → `OrderItem`. `OrderItem` = các field trên + `priceSecure, loanPackageId, transDate,
+  createdDate, modifiedDate, metadata, error`. ⚠️ Server nhét JSON chưa escape vào chuỗi `metadata` — SDK sửa bằng regex
+  trước khi parse; adapter làm y như vậy (`sanitize_metadata`).
+- **Sửa** ✅: `PUT /accounts/{acc}/orders/{id}` body `{"price"?, "quantity"?}` (bỏ field null) → `OrderItem` của lệnh **MỚI**
+  (huỷ-rồi-đặt, id mới). **Huỷ** ✅: `DELETE /accounts/{acc}/orders/{id}` → 204.
+- **Vị thế** ✅: `GET /accounts/{acc}/positions?marketType=DERIVATIVE` → `{"deals": [DealItem], "total", "pageSize", …}`;
+  `DealItem`: `id, symbol, side ("BUY"|"SELL" theo chú thích SDK), status ("OPEN"), openQuantity, costPrice, …`.
+- **Tài khoản** ✅: `GET /accounts` → `{"accounts": [{"id", "dealAccount", "derivativeAccount"}], "investorId", …}`;
+  gói vay `GET /accounts/{acc}/loan-packages?marketType=DERIVATIVE&symbol=` → `{"loanPackages": [{id, name, …}]}`.
+- **Stream lệnh** (`orders`, T=`o`): model chỉ có `orderId, symbol, side, qty, price, status, timestamp` — KHÔNG có khối
+  lượng đã khớp ⇒ adapter đọc sổ lệnh REST mỗi `poll_seconds` để lấy khớp lệnh (stream để dành tối ưu sau).
+
+**Adapter `brokers/dnse.py` quyết định gì khi tài liệu chưa nói (❓ — kiểm bằng `scripts/dnse_trading_probe.py`):**
+| ❓ | Adapter đang làm | Cách chốt |
+|---|---|---|
+| Giá trị `orderStatus` (SDK không liệt kê) | suy từ `fillQuantity/leaveQuantity/canceledQuantity` trước, chuỗi sau; chuỗi lạ ⇒ coi còn sống + log cảnh báo | probe `--uat --order-test` in danh sách chuỗi thấy được |
+| `quantity` khi sửa lệnh là tổng hay phần còn lại | gửi **phần còn lại** (lệnh mới là lệnh riêng — gửi tổng có thể khớp quá số) | probe `--with-modify` trên lệnh đã khớp một phần (UAT) |
+| `side` của deal (`BUY/SELL` hay `NB/NS`) | nhận cả hai; giá trị lạ ⇒ lỗi, không đoán | probe đọc `/positions` |
+| deal `status` khác `OPEN` mà còn `openQuantity` | lỗi, không đoán | như trên |
+| Thời hạn trading token | `trading_token_ttl_seconds` (null ⇒ không chạy live) | hỏi DNSE / đo bằng probe |
+| Hạn mức rate limit cho đọc sổ lệnh mỗi giây | `poll_seconds: 1` | header `x-ratelimit-*` probe ghi lại |
+| Sổ lệnh trả cả lệnh đã xong trong ngày? | lệnh đang theo dõi mà vắng ⇒ đọc riêng theo id | probe |
+| Đơn vị `price` phái sinh (điểm) | gửi điểm, bước 0,1 | probe đọc secdef + đặt UAT |
+
 ## 2. SSI — FastConnect V3 (SDK `ssi-sdk`)
 
 **Nguồn:** mã nguồn gói PyPI `ssi-sdk` **3.3.2** (20/10/2026, tác giả "SSI Team", maintainer `ssi.developer`,
@@ -172,7 +208,7 @@ SignalR, `fc-tradeapi`) là thế hệ trước.
 
 1. `core/contracts.py`: bảng chữ năm A=2020 đã được hai nguồn độc lập xác nhận ⇒ giữ nguyên. Danh sách hợp đồng thật vẫn lấy từ `GET /instruments?marketId=DVX&securityGroupId=FU` (DNSE) / `masterdata` (SSI) lúc khởi động.
 2. `Order.client_order_id` ≤ 20 ký tự (giới hạn SSI) — đã thêm kiểm tra vào `core/models.py`.
-3. Adapter DNSE không có idempotency phía server ⇒ không auto-retry lệnh đặt; tra sổ lệnh trước khi gửi lại (P4.1).
+3. Adapter DNSE không có idempotency phía server ⇒ không auto-retry lệnh đặt; lệnh "không rõ" (timeout/5xx) được đối soát với sổ lệnh (lệnh MỚI xuất hiện sau lúc gửi, khớp mã/chiều/loại/KL/giá), quá `uncertain_resolve_seconds` không thấy ⇒ REJECTED — đã làm ở `brokers/dnse.py` (P4.1).
 4. Không đặt/huỷ được lệnh trong ATO/ATC ⇒ `flatten_time` (14:25) phải trước ATC đủ xa để còn huỷ/đặt lại trong phiên liên tục.
 5. Sửa lệnh DNSE trả orderId mới ⇒ broker adapter phải cập nhật ánh xạ `client_order_id → broker_order_id` sau mỗi lần sửa.
 6. Dữ liệu backtest thật: DNSE `/price/{symbol}/trades` (tick) và `/price/ohlc` (1 phút), SSI OHLC 1 phút lịch sử ⇒ thêm bước P1.6 tải lịch sử, tốt hơn nhiều so với dữ liệu snapshot import từ dashboard.
@@ -185,5 +221,6 @@ SignalR, `fc-tradeapi`) là thế hệ trước.
 - [ ] Biểu phí phái sinh hiện hành (môi giới, sở, VSDC) để điền `fees.*`.
 - [ ] ❓ DNSE/SSI có lệnh điều kiện (stop / stop-limit) cho phái sinh qua API không? Danh sách
   `orderType` ở §1.3 và §2.3 **không có** stop ⇒ hiện giả định bot phải tự giữ stop (theo dõi giá
-  rồi gửi MTL). `OrderType.STOP` chỉ có trong paper broker; P4 phải quyết cách giả lập để luật
-  "có stop đã xác nhận" của risk manager vẫn đúng (stop tự giữ không có xác nhận từ sàn).
+  rồi gửi MTL). **DNSE (P4.1):** adapter giữ `OrderType.STOP` ở bot (`broker_order_id = "local:…"`,
+  trạng thái PENDING ⇒ risk coi là stop đã xác nhận), tick chạm giá ⇒ gửi MTL cùng client id; phòng
+  stop mù bằng luật `flatten_on_feed_silence_seconds`. Nếu DNSE có lệnh điều kiện thật thì nên chuyển sang.

@@ -19,7 +19,8 @@ Báo cáo cuối ngày: lệnh, P&L sau phí, lệnh bị risk từ chối kèm 
 ghi `<report_dir>/daily_YYYY-MM-DD.txt`.
 
 Chạy: `python -m live.runner --assume-computed-contract` (paper). Live cần TRADING_MODE=live VÀ
-`--live`, và adapter broker thật (P4.1/P4.2 — chưa có ⇒ từ chối).
+`--live`; adapter DNSE đã có (P4.1) nhưng runner chưa nối live (chờ kiểm API + P4.2) ⇒ từ chối.
+Lệnh Telegram `/otp <mã>` chuyển mã OTP email cho broker cần trading token (DNSE), không nhắc lại mã.
 """
 from __future__ import annotations
 
@@ -56,7 +57,8 @@ from utils.atomic_io import write_text_atomic  # noqa: E402
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
 
-HELP = "/kill — huỷ lệnh chờ, đóng vị thế, dừng bot · /status — trạng thái · /pnl — lãi/lỗ hôm nay"
+HELP = ("/kill — huỷ lệnh chờ, đóng vị thế, dừng bot · /status — trạng thái · /pnl — lãi/lỗ hôm nay · "
+        "/otp <mã> — trading token DNSE (mã trong email)")
 
 
 @dataclass
@@ -215,8 +217,12 @@ class Runner:
                 self.state.last_prices[t.symbol] = mark
                 self.state.market_data_at = now          # luật mất dữ liệu khi có vị thế (golive #9)
             for b in self.brokers.values():
-                if isinstance(b, PaperBroker):
-                    b.on_tick(t)
+                # paper: khớp lệnh mô phỏng; DNSE: stop do bot giữ chạm giá ⇒ gửi MTL
+                handler = getattr(b, "on_tick", None)
+                if handler is not None:
+                    res = handler(t)
+                    if inspect.isawaitable(res):
+                        await res
             await self.execution.drain()      # từng tick: huỷ TP/stop còn lại TRƯỚC tick sau (golive #4)
             new_bars += self.bars.on_tick(t)
         healthy = getattr(self.feed, "healthy", None)
@@ -294,8 +300,28 @@ class Runner:
                 await self._say(self.pnl_text())
             elif c in ("help", "start"):
                 await self._say(HELP)
+            elif c == "otp" or c.startswith("otp "):
+                await self._otp(c[3:].strip())
             else:
                 await self._say(f"Lệnh /{c} không hỗ trợ. {HELP}")
+
+    async def _otp(self, code: str) -> None:
+        """`/otp <mã>` ⇒ trading token cho broker cần OTP (DNSE). KHÔNG bao giờ nhắc lại mã."""
+        targets = [b for b in self.brokers.values() if callable(getattr(b, "submit_otp", None))]
+        if not targets:
+            await self._say("Không broker nào cần OTP")
+            return
+        if not code:
+            await self._say("Cú pháp: /otp <mã trong email>")
+            return
+        for b in targets:
+            try:
+                ok = await b.submit_otp(code)
+            except Exception as exc:
+                log.warning("runner: submit_otp %s lỗi: %s", b.name, type(exc).__name__)
+                ok = False
+            if not ok:
+                await self._say(f"⚠️ {b.name}: OTP không được chấp nhận — xin mã mới rồi /otp lại")
 
     def status_text(self) -> str:
         now = self.clock.now()
@@ -449,7 +475,8 @@ def main(argv=None) -> int:
         except LiveTradingNotAllowed as exc:
             log.error("Từ chối: %s", exc)
             return 2
-        log.error("Chưa có adapter broker thật (P4.1 DNSE / P4.2 SSI) — không chạy live.")
+        log.error("Live chưa được nối: adapter DNSE (brokers/dnse.py) cần kiểm API trước "
+                  "(scripts/dnse_trading_probe.py ⇒ brokers.dnse.api_verified) và broker dự phòng SSI (P4.2).")
         return 2
 
     settings = load_settings()

@@ -119,3 +119,15 @@ def test_broker_ping_default_true():
     b = PaperBroker(PaperConfig(tick_size=0.1, slippage_ticks=1, fee_vnd_per_contract=0, latency_ms=0),
                     FakeClock(T0))
     assert asyncio.run(b.ping()) is True
+
+
+def test_parse_commands_keeps_argument_only_for_otp():
+    updates = [
+        {"update_id": 1, "message": {"chat": {"id": 111}, "text": "/otp 834521"}},
+        {"update_id": 2, "message": {"chat": {"id": 111}, "text": "/otp@my_bot 112233"}},
+        {"update_id": 3, "message": {"chat": {"id": 111}, "text": "/kill now please"}},
+        {"update_id": 4, "message": {"chat": {"id": 111}, "text": "/"}},
+        {"update_id": 5, "message": {"chat": {"id": 999}, "text": "/otp 000000"}},       # người lạ
+    ]
+    cmds, _ = parse_commands(updates, authorized_chat_id="111")
+    assert cmds == ["otp 834521", "otp 112233", "kill"]

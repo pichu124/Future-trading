@@ -167,7 +167,8 @@ def notify(text: str, channel: Optional[str] = "trading", **kwargs: Any) -> bool
 def parse_commands(updates: list, authorized_chat_id: str) -> tuple[list[str], Optional[int]]:
     """Kết quả getUpdates → (lệnh, offset kế tiếp). Chỉ nhận tin MỚI từ đúng chat được cấu hình.
 
-    "/status@ten_bot" ⇒ "status". Tin sửa (edited_message) bị bỏ: không chạy lại lệnh cũ.
+    "/status@ten_bot" ⇒ "status"; "/otp 123456" ⇒ "otp 123456" (lệnh duy nhất giữ tham số).
+    Tin sửa (edited_message) bị bỏ: không chạy lại lệnh cũ.
     """
     cmds: list[str] = []
     last_id: Optional[int] = None
@@ -182,7 +183,12 @@ def parse_commands(updates: list, authorized_chat_id: str) -> tuple[list[str], O
             continue
         text = str(msg.get("text") or "").strip()
         if text.startswith("/"):
-            cmds.append(text[1:].split()[0].split("@")[0].lower())
+            parts = text[1:].split()
+            if not parts:
+                continue
+            name = parts[0].split("@")[0].lower()
+            # chỉ /otp giữ tham số (mã OTP cho trading token DNSE); các lệnh khác bỏ tham số
+            cmds.append(f"{name} {parts[1]}" if name == "otp" and len(parts) > 1 else name)
     return cmds, (last_id + 1 if last_id is not None else None)
 
 

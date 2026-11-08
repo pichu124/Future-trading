@@ -57,17 +57,17 @@ Cột "Xác minh" là trạng thái lúc rà; trạng thái sửa ở bảng 1b.
 
 | Mục | Trạng thái |
 |---|---|
-| §2 Kiến trúc | Thiếu `brokers/dnse.py`, `brokers/ssi.py`, `brokers/tcbs.py`; **thiếu logger có cấu trúc (JSON)** trong `monitoring/`. Còn lại đủ |
+| §2 Kiến trúc | Thiếu `brokers/ssi.py`, `brokers/tcbs.py` (`brokers/dnse.py` đã có — P4.1, live khoá tới khi kiểm API); **thiếu logger có cấu trúc (JSON)** trong `monitoring/`. Còn lại đủ |
 | §2 Một code strategy cho backtest/paper/live | ✔ `ExecutionManager` + `RiskManager` dùng chung; chỉ đổi broker và nguồn dữ liệu |
 | §2 Giá trị null ⇒ từ chối chạy | ✔ (risk, paper, engine, runner); còn 10 khoá null — xem mục 5 |
-| §3 DNSE chính / SSI dự phòng, net tổng mọi broker | Feed: ✔ cả hai + composite. Broker: ✗ chưa có adapter. Net tổng: ✔ |
+| §3 DNSE chính / SSI dự phòng, net tổng mọi broker | Feed: ✔ cả hai + composite. Broker: DNSE ✔ (`brokers/dnse.py`, chưa nối live), SSI ✗. Net tổng: ✔ (adapter DNSE theo dõi cả lệnh đặt tay) |
 | §3 Đối chiếu feed (lệch/im) ⇒ ngừng mở vị thế | Code ✔ (`feeds/composite.py`), **chưa nối vào runner** (#13) |
 | §3b Hai chốt máy/khoá | ✔ runner + recorder. **Runner chưa kiểm `state_dir`/`data_dir` có nằm trong Dropbox** (chỉ recorder kiểm) |
 | §4 Đối chiếu mã hợp đồng với danh sách broker lúc khởi động | Feed có cơ chế, nhưng runner/recorder đang dùng `--assume-computed-contract`/`--krx` vì chưa có REST `/instruments` (P4.1) |
 | §4 Lịch nghỉ | `scripts/check_calendar.py`: 2026 và 2027 **thiếu ngày nghỉ** (Tết, Giỗ Tổ, nghỉ bù) |
 | §4 Phí trong settings | null ⇒ backtest/paper từ chối chạy (đúng thiết kế) |
 | §5 Luật rủi ro | Tất cả có trong `risk_manager` + unit test `approve/check`; nhưng **thực thi đầu-cuối có lỗ hổng** #1, #2, #4, #5, #7 |
-| §5 Stop ngay sau khi khớp | ✔ phía bot; ✗ **broker thật không có lệnh stop qua API** (❓ broker_notes §4) ⇒ live cần stop do bot giữ, sống sót qua lỗi (#3, #9) |
+| §5 Stop ngay sau khi khớp | ✔ phía bot; broker thật không có lệnh stop qua API (❓ broker_notes §4) ⇒ DNSE: stop do bot giữ trong adapter (chạm giá ⇒ MTL), chống stop mù bằng luật mất dữ liệu (#9) |
 | §5 Chống lệnh trùng | `client_order_id` ✔; DNSE không có idempotency ⇒ adapter phải không tự retry (chưa có adapter) |
 | §5 Mất kết nối broker ⇒ khẩn cấp | ✔ `live/emergency.py`, **nhưng hỏng khi có TP** (#1) và **chưa nối broker dự phòng trong `main`** |
 | §5 Kill-switch file + /kill | ✔ (cẩn thận #6: lộ token ⇒ người khác ăn mất /kill) |
