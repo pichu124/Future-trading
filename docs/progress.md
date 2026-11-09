@@ -5,7 +5,7 @@
 - Tải lại 06/11 với phân trang: **110.501 lệnh, `volume_gap` 0, không phút nào bị đánh dấu, 369 request** ⇒ không cần đổi luật "dữ liệu tin được" của robustness.
 - Hạn mức DNSE nhóm /price = 10.000 request / 24 giờ (reset đúng 24h sau) ⇒ ~27 ngày dữ liệu / ngày đêm nếu chia đôi cửa sổ.
 - Downloader: phân trang cho MỌI cửa sổ đầy (không chỉ giây ATO/ATC; ước ~3× ít request hơn), không được ⇒ chia đôi (thử phân trang đúng 1 lần mỗi tên); log tên tham số trang chạy được. Hết hạn mức (`Remaining 0` không `Retry-After`, hoặc `Retry-After` > 5 phút) ⇒ `QuotaExhausted`: dừng cả lượt, KHÔNG đánh dấu ngày dở, báo mốc reset, mã thoát 3; chạy lại để tải tiếp.
-- 7 test mới; thử phá 7 cơ chế ⇒ 2 sống ⇒ thêm 2 test ⇒ hết. 1238 test.
+- 7 test mới; thử phá 7 cơ chế ⇒ 2 sống ⇒ thêm 2 test ⇒ hết. 1237 test.
 
 ## 2026-11-09 — `limit` tối đa 1000; phân trang tự kiểm cho giây ATO/ATC
 
