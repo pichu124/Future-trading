@@ -15,7 +15,7 @@ import pandas as pd
 import pytest
 
 from scripts.download_history import (HistoryClient, HistoryError, bars_frame, download, fetch_ohlc_day,
-                                      fetch_trades_day, parse_trade_times, plan_days, ticks_table)
+                                      fetch_trades_day, parse_trade_times, plan_days, ticks_table, volume_gap)
 
 KEY, SECRET = "hist-key", "hist-secret-very-private"
 KRX = "41I1GB000"
@@ -50,6 +50,7 @@ class Server:
         self.need_query_sign = need_query_sign
         self.fail_next = []
         self.page = 3                          # số nến mỗi trang OHLC
+        self.max_limit = None                  # limit lớn hơn ⇒ 400 (giả lập server giới hạn limit)
 
     def get(self, url, params=None, headers=None, timeout=None):
         self.calls.append({"url": url, "params": dict(params or {}), "headers": dict(headers or {})})
@@ -75,7 +76,11 @@ class Server:
 
             def ts(x):
                 return int(datetime.strptime(x["time"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp())
-            rows = sorted([x for x in self.trades if f <= ts(x) <= t], key=ts, reverse=True)[:lim]
+            if self.max_limit is not None and lim > self.max_limit:
+                return Resp(400, {"status": 400, "code": "BAD_REQUEST", "message": "limit too large"})
+            # như server thật: MỚI NHẤT trước, kể cả trong cùng một giây (KL luỹ kế giảm dần — probe 09/11/2026)
+            rows = sorted([x for x in self.trades if f <= ts(x) <= t],
+                          key=lambda x: (ts(x), x.get("totalVolumeTraded") or 0), reverse=True)[:lim]
             return Resp(200, {"trades": rows, "nextPageToken": "tok" if len(rows) == lim else ""})
         return Resp(404, {"code": "OA-404", "message": "no route"})
 
@@ -308,8 +313,8 @@ def test_default_kinds_is_trades_only():
 
 def two_minute_trades(gap=False):
     """09:00: 1350 (2 HĐ), 1352 (1), 1349 (1); 09:01: 1351 (3). KL luỹ kế liên tục (gap ⇒ thiếu 1 lệnh)."""
-    rows = [trade(9, 0, 5, 1350.0, 2, 102), trade(9, 0, 20, 1352.0, 1, 103), trade(9, 0, 50, 1349.0, 1, 104),
-            trade(9, 1, 10, 1351.0, 3, 107 + (2 if gap else 0))]
+    rows = [trade(9, 0, 5, 1350.0, 2, 2), trade(9, 0, 20, 1352.0, 1, 3), trade(9, 0, 50, 1349.0, 1, 4),
+            trade(9, 1, 10, 1351.0, 3, 7 + (2 if gap else 0))]
     return rows
 
 
@@ -332,7 +337,7 @@ def test_bars_volume_unreliable_when_trades_missing(tmp_path):
     srv = Server(trades=two_minute_trades(gap=True))
     download(client(srv), [(DAY, "VN30F2611", KRX)], tmp_path)
     bars, _ = load_bars_parquet(tmp_path / "ohlc1m" / "VN30F2611" / "2026-11-09.parquet")
-    assert bars and not any(b.volume_reliable for b in bars)          # KL luỹ kế không khớp ⇒ không tin volume
+    assert {b.start.minute: b.volume_reliable for b in bars} == {0: False, 1: False}  # thiếu giữa 09:00 và 09:01
 
 
 def test_existing_trades_file_backfills_missing_bars_without_http(tmp_path):
@@ -354,3 +359,62 @@ def test_existing_bars_not_overwritten_unless_force(tmp_path):
     mtime = p.stat().st_mtime_ns
     s = download(c, [(DAY, "VN30F2611", KRX)], tmp_path)
     assert p.stat().st_mtime_ns == mtime and s["bars"] == 0
+
+
+# ------------------------------------------------------------------ giây khớp định kỳ ATO/ATC (probe 09/11/2026) ----
+
+def auction_second(h, m, n, start_total, price=1350.0):
+    """n lệnh 1 HĐ cùng giây (khớp định kỳ); KL luỹ kế start_total+1 … start_total+n."""
+    return [trade(h, m, 0, price, 1, start_total + i + 1) for i in range(n)]
+
+
+def test_saturated_second_retried_with_bigger_limit_gets_everything():
+    rows = auction_second(9, 0, 600, 0) + [trade(9, 1, 10, 1351.0, 2, 602)]
+    srv = Server(trades=rows)
+    got = fetch_trades_day(client(srv), KRX, DAY, limit=500)
+    assert len(got) == 601 and volume_gap(got) == 0
+    assert any(c["params"].get("limit") == 2000 for c in srv.calls)
+    assert not any(c["params"].get("limit") == 10000 for c in srv.calls)   # đủ ở 2000 ⇒ không xin thêm
+
+
+def test_bigger_limit_rejected_keeps_partial_and_flags_only_that_minute(tmp_path):
+    from backtest.engine import load_bars_parquet
+    rows = (auction_second(9, 0, 600, 0) + [trade(9, 1, 10, 1351.0, 2, 602), trade(9, 2, 10, 1352.0, 1, 603)])
+    srv = Server(trades=rows)
+    srv.max_limit = 500                                            # server không cho limit lớn hơn
+    download(client(srv), [(DAY, "VN30F2611", KRX)], tmp_path, trades_limit=500)
+    bars, _ = load_bars_parquet(tmp_path / "ohlc1m" / "VN30F2611" / "2026-11-09.parquet")
+    by_min = {b.start.minute: b.volume_reliable for b in bars}
+    assert by_min == {0: False, 1: True, 2: True}                  # chỉ phút ATO thiếu lệnh
+
+
+def test_gap_in_middle_flags_minute_of_the_trade_after_gap(tmp_path):
+    from backtest.engine import load_bars_parquet
+    rows = [trade(9, 0, 5, 1350.0, 1, 1), trade(9, 1, 5, 1351.0, 1, 2), trade(9, 2, 5, 1352.0, 1, 5),  # thiếu 2 HĐ
+            trade(9, 3, 5, 1353.0, 1, 6)]
+    srv = Server(trades=rows)
+    download(client(srv), [(DAY, "VN30F2611", KRX)], tmp_path)
+    bars, _ = load_bars_parquet(tmp_path / "ohlc1m" / "VN30F2611" / "2026-11-09.parquet")
+    # lệnh thiếu nằm GIỮA 09:01 và 09:02 ⇒ đánh dấu cả hai phút (thận trọng)
+    assert {b.start.minute: b.volume_reliable for b in bars} == {0: True, 1: False, 2: False, 3: True}
+
+
+def test_first_trade_total_above_its_qty_flags_first_minute(tmp_path):
+    """Cửa sổ cả ngày ⇒ lệnh đầu tiên phải có KL luỹ kế = KL của nó; lớn hơn ⇒ đã thiếu lệnh trước đó."""
+    from backtest.engine import load_bars_parquet
+    rows = [trade(9, 0, 5, 1350.0, 1, 40), trade(9, 1, 5, 1351.0, 1, 41)]
+    srv = Server(trades=rows)
+    download(client(srv), [(DAY, "VN30F2611", KRX)], tmp_path)
+    bars, _ = load_bars_parquet(tmp_path / "ohlc1m" / "VN30F2611" / "2026-11-09.parquet")
+    assert {b.start.minute: b.volume_reliable for b in bars} == {0: False, 1: True}
+
+
+def test_trades_without_running_total_make_all_bars_unreliable(tmp_path):
+    from backtest.engine import load_bars_parquet
+    rows = [trade(9, 0, 5, 1350.0, 1, None), trade(9, 1, 5, 1351.0, 1, None)]
+    srv = Server(trades=rows)
+    download(client(srv), [(DAY, "VN30F2611", KRX)], tmp_path)
+    bars, _ = load_bars_parquet(tmp_path / "ohlc1m" / "VN30F2611" / "2026-11-09.parquet")
+    assert bars and not any(b.volume_reliable for b in bars)          # không kiểm được KL ⇒ không tin
+    man = json.loads((tmp_path / "_manifest.json").read_text(encoding="utf-8"))
+    assert man["ohlc1m/VN30F2611/2026-11-09"]["unreliable_minutes"] is None

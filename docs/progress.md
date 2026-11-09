@@ -1,5 +1,13 @@
 # Tiến độ
 
+## 2026-11-09 — Tải thử 1 ngày: giây khớp định kỳ ATO/ATC bị cắt ⇒ xin lại limit lớn + đánh dấu theo phút
+
+- Người dùng tải 06/11/2026: 108.976 lệnh / 705 request, `volume_gap` 2.986 HĐ — chỉ ở giây 09:00:00 (ATO) và 14:45:00 (ATC), mỗi giây > 500 lệnh cùng lúc.
+- Hậu quả nếu để nguyên: cả ngày bị đánh dấu volume không tin được ⇒ ngày nào cũng vậy ⇒ `robustness` luôn "CHƯA ĐỦ".
+- Sửa: giây đầy ⇒ thử lại `limit` 2.000 rồi 10.000 (server từ chối ⇒ giữ phần đã có); `unreliable_minutes` đánh dấu đúng phút quanh chỗ hụt KL luỹ kế (cả phút trước và sau chỗ hụt; lệnh đầu ngày phải có luỹ kế = KL của nó); không có luỹ kế ⇒ cả ngày không tin. Manifest ghi `unreliable_minutes`. Server giả trong test trả mới-nhất-trước như thật.
+- 6 test mới; thử phá 8 cơ chế ⇒ 3 sống ⇒ thêm 2 test ⇒ hết. 1223 test.
+- Nếu DNSE không cho limit lớn: phút 09:00 và 14:45 (± phút liền kề) vẫn bị đánh dấu mỗi ngày ⇒ cần xem lại luật "dữ liệu tin được" của robustness (hiện yêu cầu 0 bar không tin được) — chờ kết quả tải lại.
+
 ## 2026-11-09 — Probe lịch sử DNSE trên dây: sửa đọc thời gian khớp lệnh
 
 - `dnse_history_probe.py`: trades nhận epoch giây (định dạng khác ⇒ 400); `time` là giờ VN CÓ mili-giây ⇒ downloader cũ sẽ lỗi ở MỌI cửa sổ khớp lệnh ⇒ đã sửa `parse_trade_times` (nhận có/không mili-giây), test với chuỗi thật. Lịch sử khớp lệnh: ≥ 6 tháng, < 12 tháng.

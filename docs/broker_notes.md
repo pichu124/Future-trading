@@ -91,6 +91,11 @@ lệnh đôi ⇒ adapter DNSE phải: không tự retry lệnh đặt; khi khôn
 - `/price/ohlc`: HĐ ĐÃ đáo hạn (vd 41I1GA000) ⇒ 400 `{"code": "BAD_REQUEST", "message": "invalid symbol"}`; HĐ hiện tại
   ⇒ 200 nhưng cột rỗng và `nextTime = from` ✅ ⇒ **không dùng được cho lịch sử**. Downloader dựng nến 1 phút từ khớp lệnh
   (mặc định `--kinds trades`), volume tin được chỉ khi KL luỹ kế khớp.
+- Tải thử 1 ngày (06/11/2026): 108.976 lệnh, 705 request; trong một giây khớp định kỳ — **09:00:00 (ATO)** và
+  **14:45:00 (ATC)** — có > 500 lệnh cùng thời điểm, không chia nhỏ hơn giây được ⇒ thiếu 2.986 HĐ (~1,4% KL ngày),
+  phiên liên tục đầy đủ. Downloader: giây đầy ⇒ xin lại với `limit` 2.000 / 10.000 (giới hạn `limit` tối đa của server ❓);
+  vẫn thiếu ⇒ chỉ đánh dấu volume không tin được cho đúng phút quanh chỗ hụt KL luỹ kế. Server trả lệnh trong cùng
+  giây theo KL luỹ kế GIẢM dần (mới nhất trước).
 - Trường của một lệnh khớp (thật): `marketId, boardId, isin, symbol, matchPrice, matchQtty, side (BUY/SELL), avgPrice,
   totalVolumeTraded (luỹ kế, giảm 1 mỗi lệnh 1 HĐ khi đọc ngược ⇒ khoá lọc trùng đúng), grossTradeAmount, highestPrice,
   lowestPrice, openPrice, time` ✅.

@@ -50,6 +50,7 @@ BASE_URL = "https://openapi.dnse.com.vn"
 VN = timezone(timedelta(hours=7))
 DAY_FROM, DAY_TO = (8, 30), (15, 0)          # cửa sổ tải mỗi ngày (giờ VN) — gồm ATO/ATC
 TRADE_WINDOW_S = 30 * 60
+BIG_LIMITS = (2000, 10000)                    # giây khớp định kỳ đầy `limit` dòng ⇒ thử lại với các limit này
 SOURCE = "dnse_history"
 
 
@@ -184,10 +185,32 @@ def bars_frame(rows: Sequence[dict], contract: str):
     return df
 
 
-def bars_from_trades(rows: Sequence[dict], contract: str, volume_reliable: bool):
+def unreliable_minutes(rows: Sequence[dict]) -> Optional[set]:
+    """Phút có lệnh bị thiếu theo KL luỹ kế: sắp theo `totalVolumeTraded`, lệnh i phải có luỹ kế = luỹ kế(i−1) +
+    KL(i) (lệnh đầu tiên của ngày: = KL của nó); lệch ⇒ phút của lệnh i−1 VÀ lệnh i đều bị đánh dấu. Thiếu luỹ kế ở bất kỳ dòng ⇒ None
+    (không kiểm được)."""
+    if not rows or any(r.get("totalVolumeTraded") is None for r in rows):
+        return None
+    def minute(r):
+        return r["ts"].replace(second=0, microsecond=0)
+    srt = sorted(rows, key=lambda r: int(r["totalVolumeTraded"]))
+    bad, prev_tv, prev_row = set(), 0, None
+    for r in srt:
+        tv, q = int(r["totalVolumeTraded"]), int(r.get("matchQtty") or 0)
+        if tv != prev_tv + q:
+            bad.add(minute(r))                 # lệnh thiếu nằm GIỮA lệnh trước và lệnh này ⇒ đánh dấu cả hai phút
+            if prev_row is not None:
+                bad.add(minute(prev_row))
+        prev_tv, prev_row = tv, r
+    return bad
+
+
+def bars_from_trades(rows: Sequence[dict], contract: str, volume_reliable: bool = True,
+                     bad_minutes: Optional[set] = None):
     """Nến 1 phút dựng từ khớp lệnh (rows có `ts`, `matchPrice`, `matchQtty`, theo thời gian) — cùng schema
     `bars_frame`. `/price/ohlc` của DNSE không dùng được (HĐ đã đáo hạn ⇒ "invalid symbol", HĐ hiện tại ⇒ rỗng;
-    probe 09/11/2026) nên nến lấy từ khớp lệnh như recorder. Volume chỉ tin được khi KL luỹ kế khớp (gap = 0)."""
+    probe 09/11/2026) nên nến lấy từ khớp lệnh như recorder. Volume của phút có lệnh bị thiếu (`bad_minutes`)
+    hoặc khi không kiểm được (`volume_reliable=False`) bị đánh dấu không tin được."""
     import pandas as pd
     groups: dict[datetime, list[dict]] = {}
     for r in rows:
@@ -201,7 +224,8 @@ def bars_from_trades(rows: Sequence[dict], contract: str, volume_reliable: bool)
         px = [float(r["matchPrice"]) for r in g]
         recs.append({"symbol": contract, "start": start, "open": px[0], "high": max(px), "low": min(px),
                      "close": px[-1], "volume": sum(int(r.get("matchQtty") or 0) for r in g), "interval_s": 60,
-                     "volume_reliable": bool(volume_reliable), "source": "dnse_trades"})
+                     "volume_reliable": bool(volume_reliable) and start not in (bad_minutes or set()),
+                     "source": "dnse_trades"})
     return pd.DataFrame(recs, columns=["symbol", "start", "open", "high", "low", "close", "volume", "interval_s",
                                        "volume_reliable", "source"])
 
@@ -257,7 +281,27 @@ def fetch_trades_day(client: HistoryClient, krx: str, d: date, limit: int = 500)
                 window(f, mid)
                 window(mid, t)
                 return
-            saturated_leaf += 1                         # ≥ limit lệnh trong ~1 giây: có thể thiếu
+            # ≥ limit lệnh trong 1 giây (khớp định kỳ ATO 09:00:00 / ATC 14:45:00 — probe 09/11/2026): không chia nhỏ
+            # hơn giây được ⇒ xin lại với limit lớn hơn; server từ chối ⇒ giữ phần đã có (phút đó bị đánh dấu thiếu)
+            full = False
+            for big in BIG_LIMITS:
+                if big <= limit:
+                    continue
+                try:
+                    more = client.get(f"/price/{krx}/trades",
+                                      {"boardId": "G1", "from": str(f), "to": str(t), "limit": big})
+                except HistoryError as exc:
+                    log.info("trades %s %s: limit %d bị từ chối (%s)", krx, d, big, exc)
+                    break
+                more_rows = more.get("trades") if isinstance(more, dict) else None
+                if not isinstance(more_rows, list):
+                    break
+                rows = [r for r in more_rows if isinstance(r, dict)]
+                if len(rows) < big:
+                    full = True
+                    break
+            if not full:
+                saturated_leaf += 1
         for r, ts in zip(rows, parse_trade_times(rows, f, t)):
             out.append({**r, "ts": ts})
 
@@ -337,9 +381,13 @@ def download(client: HistoryClient, plan: Iterable[tuple[date, str, str]], out_d
         if not rows or (bars_path.exists() and not (force and fresh)):
             return
         gap = volume_gap(rows)
-        write_dataframe_atomic(bars_from_trades(rows, name, volume_reliable=(gap == 0)), bars_path)
-        manifest[f"ohlc1m/{name}/{d.isoformat()}"] = {"rows": len(rows), "from": "trades", "volume_gap": gap,
-                                                      "at": datetime.now().isoformat(timespec="seconds")}
+        bad = unreliable_minutes(rows)
+        write_dataframe_atomic(bars_from_trades(rows, name, volume_reliable=bad is not None, bad_minutes=bad),
+                               bars_path)
+        manifest[f"ohlc1m/{name}/{d.isoformat()}"] = {
+            "rows": len(rows), "from": "trades", "volume_gap": gap,
+            "unreliable_minutes": None if bad is None else sorted(m.strftime("%H:%M") for m in bad),
+            "at": datetime.now().isoformat(timespec="seconds")}
         summary["bars"] += 1
 
     for d, name, krx in plan:
