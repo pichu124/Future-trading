@@ -1,5 +1,17 @@
 # Tiến độ
 
+## 2026-11-09 — Lượt đóng khẩn cấp tính là THUA
+
+**Quyết định của người dùng:** lượt kết thúc nhờ lệnh đối ứng khẩn cấp (broker chính mất kết nối) luôn tính là một lượt thua trong chuỗi thua.
+
+**Đã xong** (`risk/risk_manager.py` `record_fill`)
+- Lượt kết thúc bởi fill của lệnh tag `emergency`, hoặc đóng CHÉO broker (net mọi broker về 0 mà broker của fill vẫn còn vị thế) ⇒ `consecutive_losses += 1` bất kể P&L (P&L thật chưa chốt được khi hai chân còn mở). Không cộng hai lần khi vừa đối ứng vừa lỗ.
+- Sửa lỗi kèm theo: gỡ hedge (`unwind`) trước đây tạo một **lượt ma** (chân gỡ đầu làm net rời 0 ⇒ `trades_today` +1, chân sau kết thúc lượt và được tính thắng/thua theo một chân). Nay fill tag `unwind` — hoặc fill khi net = 0 mà còn chân mở — không mở/kết thúc lượt ⇒ cả đợt khẩn cấp = đúng MỘT lượt thua, `trades_today` không đổi. Lãi/lỗ thực hiện của các chân vẫn vào lãi/lỗ ngày (`daily_pnl_points`).
+- Sau khi `clear_emergency`, lượt khẩn cấp vẫn tính vào `max_consecutive_losses` (có test).
+- Test viết trước `tests/test_emergency_streak.py` (11). Thử phá 7 cơ chế ⇒ 1 sống (tag `emergency` thừa khi đã có nhận dạng đóng chéo) ⇒ thêm test tag-trên-cùng-broker ⇒ hết. 1189 test.
+
+**Giả định còn lại**: chân gỡ THỨ HAI mất tag (lệnh đã bị xoá khỏi sổ trước khi fill tới) sẽ bị coi là kết thúc một lượt — adapter luôn phát Fill trước cập nhật trạng thái nên không xảy ra trong luồng hiện tại.
+
 ## 2026-11-08 — Phí sở + phí bù trừ VSDC (`fees.*`)
 
 - `fees.exchange_fee_vnd_per_contract: 2700` (phí HNX HĐTL chỉ số, mỗi lượt mở/đóng — biểu phí công bố của nhiều CTCK) và `fees.clearing_fee_vnd_per_contract: 2550` (phí bù trừ VSDC sau KRX, FAQ KRX của DNSE; phí qua đêm hệ thống mới = 0). Ghi nguồn trong `settings.yaml`.
@@ -661,7 +673,7 @@
 
 **Giả định / rủi ro còn mở**
 - "Có stop" = lệnh `tag="stop"` ngược chiều mà broker **đã xác nhận** (PENDING/PARTIALLY_FILLED). Chưa biết DNSE/SSI có lệnh điều kiện (stop) cho phái sinh qua API không (❓ P4) — nếu stop do bot tự giữ thì P4 phải quyết cách biểu diễn để luật này vẫn đúng.
-- ~~Chuỗi thua tính theo điểm trước phí~~ ⇒ đã đổi sang SAU phí (phí mở + phí đóng) ở golive #11, test `test_11_consecutive_losses_count_fees`; lượt hoà không đổi bộ đếm; đặt lại mỗi ngày (`new_day`). Lượt bị đóng bằng lệnh đối ứng ở broker khác chưa có P&L thực hiện ⇒ tính như hoà.
+- ~~Chuỗi thua tính theo điểm trước phí~~ ⇒ đã đổi sang SAU phí (phí mở + phí đóng) ở golive #11, test `test_11_consecutive_losses_count_fees`; lượt hoà không đổi bộ đếm; đặt lại mỗi ngày (`new_day`). ~~Lượt bị đóng bằng lệnh đối ứng ⇒ tính như hoà~~ ⇒ nay luôn tính là THUA (09/11).
 - Thiếu giá đánh dấu cho vị thế đang mở: chặn mở lệnh mới, nhưng `check()` bỏ qua luật lỗ ngày (không tính được) — runner phải cảnh báo khi feed mất giá.
 - `AccountState` nằm trong bộ nhớ; P5.1 phải lưu/đối soát khi khởi động lại (mất `approved_order_ids` ⇒ hai lần chạy trong cùng một giây có thể sinh id trùng; InstanceLock giảm rủi ro này).
 - Ngày đáo hạn chặn mở vị thế với **mọi** hợp đồng (kể cả F2M sau roll) — thận trọng có chủ ý.

@@ -473,12 +473,22 @@ class RiskManager:
 
         Một "lượt" bắt đầu khi net (cộng mọi broker) rời 0 và kết thúc khi net về 0 hoặc đổi
         chiều. Lượt lỗ (< 0 điểm SAU PHÍ) tăng chuỗi thua; lãi đặt lại 0; hoà giữ nguyên.
+
+        Khẩn cấp (quyết định của người dùng): lượt kết thúc nhờ lệnh đối ứng (tag `emergency`, hoặc đóng
+        CHÉO broker: net về 0 mà broker của lần khớp vẫn còn vị thế) LUÔN là một lượt thua. Lệnh gỡ hedge
+        (tag `unwind`, hoặc khớp khi net = 0 mà còn chân mở) không mở/kết thúc lượt — cả đợt = một lượt thua;
+        lãi/lỗ thực hiện của các chân vẫn vào lãi/lỗ ngày.
         """
         if not fill.broker:
             raise ValueError("Fill thiếu broker — không biết cộng vào vị thế nào")
         key = f"{fill.broker}:{fill.symbol}"
         old = state.positions.get(key, Position(fill.symbol, broker=fill.broker))
         net_before = state.net_qty(fill.symbol)
+        tracked = state.working_orders.get(fill.client_order_id)
+        tag = tracked.tag if tracked is not None else ""
+        # gỡ hedge: theo tag, hoặc khớp khi net = 0 mà vẫn còn chân mở (đang ở trạng thái đối ứng)
+        unwinding = tag == "unwind" or (net_before == 0 and any(
+            p.qty != 0 for p in state.positions.values() if p.symbol == fill.symbol))
         new = old.apply(fill)
         state.positions[key] = new
         net_after = state.net_qty(fill.symbol)
@@ -488,14 +498,19 @@ class RiskManager:
         state.fees_points_today += fill.fee_vnd / self.limits.multiplier_vnd_per_point
 
         fee_pts = fill.fee_vnd / self.limits.multiplier_vnd_per_point
-        if net_before == 0:
+        if unwinding:
+            pass                                  # không phải lượt mới, không kết thúc lượt nào
+        elif net_before == 0:
             if net_after != 0:
                 self._start_round_trip(state, fill.symbol)
                 state.round_trip_points[fill.symbol] -= fee_pts
         else:
             rt = state.round_trip_points.get(fill.symbol, 0.0) + delta - fee_pts
             if net_after == 0 or _sign(net_after) != _sign(net_before):
-                if rt < -_EPS:
+                cross_broker = net_after == 0 and new.qty != 0
+                if tag == "emergency" or cross_broker:
+                    state.consecutive_losses += 1     # lượt đóng khẩn cấp: luôn là thua
+                elif rt < -_EPS:
                     state.consecutive_losses += 1
                 elif rt > _EPS:
                     state.consecutive_losses = 0
