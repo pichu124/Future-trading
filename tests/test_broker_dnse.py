@@ -54,6 +54,7 @@ class FakeTransport:
         self.orders: dict[str, dict] = {}         # id → OrderItem (camelCase như trên dây)
         self.deals: list[dict] = []
         self.deals_total = None
+        self.positions_body = None
         self.accounts = [{"id": ACC, "derivativeAccount": True}]
         self.fail_next: list = []                 # phần tử: Exception hoặc (status, body)
         self.next_id = 1000
@@ -131,6 +132,8 @@ class FakeTransport:
                                      price=b.get("price", it["price"]))
                 return ok(new)
         if path == f"/accounts/{ACC}/positions":
+            if self.positions_body is not None:                 # body nguyên văn (vd response thật)
+                return ok(self.positions_body)
             body = {"deals": self.deals}
             if self.deals_total is not None:
                 body["total"] = self.deals_total

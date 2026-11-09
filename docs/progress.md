@@ -3,7 +3,8 @@
 ## 2026-11-09 — Probe DNSE (chỉ đọc) chạy trên dây lần đầu
 
 - `dnse_trading_probe.py` trên production: 7/7 request 200 — chữ ký HMAC path không kèm query được chấp nhận; có 1 tiểu khoản phái sinh (số đặt ở `.env`); gói vay id 1306 (initialRate 0,1848) ⇒ `brokers.dnse.loan_package_id: 1306`; secdef nhận KRX 41I1GB000 (VN30F2611).
-- Còn ❓: chuỗi `orderStatus` thật (chưa có lệnh — cần UAT order test), `trading_token_ttl_seconds` (cần xin OTP), khuôn response balances/positions (chờ `summary.json`).
+- **Lỗi thật bắt được nhờ probe**: `/positions` trả khoá `positions` (không phải `deals` như SDK) ⇒ adapter cũ báo lỗi mỗi lần đọc vị thế (runner sẽ từ chối khởi động). Đã sửa (nhận cả hai, khuôn khác ⇒ lỗi rõ), probe cũng đọc `positions`; test với body thật `tests/test_dnse_real_responses.py` (7). Sổ lệnh `{"orders": []}` khớp; secdef xác nhận biên ±7%, đơn vị điểm. 1210 test.
+- Còn ❓: chuỗi `orderStatus` thật và trường của từng vị thế (cần UAT order test), `trading_token_ttl_seconds` (cần xin OTP).
 
 ## 2026-11-09 — Vốn + giới hạn rủi ro (người dùng chọn)
 

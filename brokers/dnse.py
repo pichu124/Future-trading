@@ -916,9 +916,12 @@ class DnseBroker(BrokerAdapter):
                                     params={"marketType": MARKET_TYPE, "pageSize": self.config.positions_page_size})
         if not r.ok:
             raise DnseApiError(r.status, r.body)
-        deals = r.body.get("deals") if isinstance(r.body, dict) else None
+        # Server thật (probe 09/11/2026): {"positions": [...], pageIndex, pageSize, pageNumber, total};
+        # SDK dnse 0.5.0 dùng "deals" — nhận cả hai, khuôn khác ⇒ không đoán.
+        body = r.body if isinstance(r.body, dict) else {}
+        deals = body.get("positions") if isinstance(body.get("positions"), list) else body.get("deals")
         if not isinstance(deals, list):
-            raise BrokerError("vị thế DNSE: response không có danh sách 'deals'")
+            raise BrokerError(f"vị thế DNSE: response không có danh sách 'positions'/'deals' (khoá: {sorted(body)})")
         total = r.body.get("total")
         if total is not None and int(total) > len(deals):
             raise BrokerError(f"vị thế DNSE có {total} deal, mới đọc {len(deals)} (thiếu trang) — không đoán")

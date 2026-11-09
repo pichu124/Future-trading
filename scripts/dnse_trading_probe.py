@@ -112,7 +112,7 @@ def summarize(records: list[dict]) -> dict:
                     if it.get("orderStatus") is not None:
                         statuses.add(str(it["orderStatus"]))
         if r["path"].endswith("/positions") and isinstance(body, dict):
-            for d in body.get("deals") or []:
+            for d in body.get("positions") or body.get("deals") or []:      # server thật: "positions"
                 if isinstance(d, dict):
                     deal_keys.update(d)
     return {"order_status_values": sorted(statuses), "order_item_keys": sorted(order_keys),
