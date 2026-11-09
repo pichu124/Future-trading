@@ -3,6 +3,8 @@
 - Thư mục ngày của recorder (`ticks.parquet` / `part-*.parquet`) ⇒ `recorder.tick_recorder.load_ticks` (gộp
   part, lọc trùng theo phiên ghi). File lẻ khác (vd downloader `data/history/trades/<HĐ>/<ngày>.parquet`) ⇒ đọc
   thẳng theo schema tick (dòng downloader không có phiên ⇒ không lọc trùng theo phiên).
+- `date_from`/`date_to`: file/thư mục tên `YYYY-MM-DD` ngoài khoảng ⇒ bỏ qua KHÔNG đọc (6 tháng khớp lệnh ~14 triệu
+  dòng — đọc hết rồi mới lọc thì cạn RAM); mọi dòng còn lại vẫn lọc theo ngày của `ts`.
 - Nhiều `source` mà không chỉ định ⇒ lỗi: trộn hai nguồn cho tick đôi và bar sai.
 - `fill_missing_quotes`: tick khớp không có bid lẫn ask (downloader) ⇒ bid/ask giả = last ∓ max(1, ⌈spread/2⌉)
   bước — cùng giả định bi quan với tick giả từ bar (`backtest.engine.synthetic_ticks`).
@@ -10,6 +12,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date
 from pathlib import Path
 from typing import Iterable, Optional, Sequence, Union
 
@@ -35,24 +38,46 @@ def _read_file(f: Path) -> list[Tick]:
     return [Tick(**{k: r[k] for k in _TICK_FIELDS}) for r in rows]
 
 
-def _collect(p: Path, out: list[Tick]) -> None:
+def _name_date(p: Path) -> Optional[date]:
+    try:
+        return date.fromisoformat(p.stem if p.suffix == ".parquet" else p.name)
+    except ValueError:
+        return None
+
+
+def _collect(p: Path, out: list[Tick], keep, seen: list) -> None:
     from recorder.tick_recorder import load_ticks
+    d = _name_date(p)
     if p.is_dir():
         if _is_recorder_day(p):
-            out.extend(load_ticks(p))
+            seen.append(p)
+            if d is None or keep(d):
+                out.extend(load_ticks(p))
             return
         for child in sorted(p.iterdir()):
             if child.is_dir() or child.suffix == ".parquet":
-                _collect(child, out)
+                _collect(child, out, keep, seen)
     elif p.suffix == ".parquet":
-        out.extend(_read_file(p))
+        seen.append(p)
+        if d is None or keep(d):
+            out.extend(_read_file(p))
 
 
-def load_tick_files(paths: Sequence[PathLike], source: Optional[str] = None) -> list[Tick]:
+def load_tick_files(paths: Sequence[PathLike], source: Optional[str] = None, date_from: Optional[date] = None,
+                    date_to: Optional[date] = None) -> list[Tick]:
+    def keep(d: date) -> bool:
+        return (date_from is None or d >= date_from) and (date_to is None or d <= date_to)
     ticks: list[Tick] = []
+    seen: list = []
     for p in paths:
-        _collect(Path(p), ticks)
+        _collect(Path(p), ticks, keep, seen)
+    if not seen:
+        raise ValueError(f"Không có file tick nào trong {', '.join(str(p) for p in paths)}")
+    if date_from is not None or date_to is not None:
+        ticks = [t for t in ticks if keep(t.ts.date())]
     if not ticks:
+        if date_from is not None or date_to is not None:
+            return []
         raise ValueError(f"Không có file tick nào trong {', '.join(str(p) for p in paths)}")
     sources = sorted({t.source or "?" for t in ticks})
     if source is not None:

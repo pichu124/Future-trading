@@ -1,5 +1,10 @@
 # Tiến độ
 
+## 2026-11-09 — Backtest tick: bỏ qua file ngoài khoảng ngày trước khi đọc
+
+- `backtest.ticks.load_tick_files(..., date_from, date_to)`: file/thư mục tên `YYYY-MM-DD` ngoài khoảng ⇒ không đọc; các dòng còn lại vẫn lọc theo ngày; lọc hết ⇒ danh sách rỗng (không lỗi). `backtest.engine --ticks --from/--to` dùng nó — trước đây đọc cả 6 tháng (~14 triệu dòng, vài GB RAM) rồi mới lọc.
+- Ước lượng RAM: ~240 B/tick ⇒ ~26 MB/ngày khớp lệnh, IS (~77 ngày) ≈ 2 GB, đỉnh ~4 GB lúc gắn báo giá giả. `backtest.robustness --ticks` vẫn đọc toàn bộ (cần cả OOS) — chưa đổi.
+
 ## 2026-11-09 — ORB #2 (lọc độ rộng biên / ADR) trên dữ liệu thật: KHÔNG CÓ EDGE
 
 - `backtest.robustness --set strategy.orb.range_filter.enabled=true` (OOS từ 01/09, n_trials 2): OOS −1.459.300đ, p = 0,588, trượt 2 tick −2.779.300đ, 0% biến thể ±20% lãi, 25% đoạn walk-forward lãi ⇒ **KHÔNG CÓ EDGE**. Ghi `research/log.md` dòng #2.

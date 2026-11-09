@@ -107,6 +107,28 @@ class TestLoad:
         with pytest.raises(ValueError, match="không phải file tick"):
             load_tick_files([tmp_path / "bars"])
 
+    def test_date_range_skips_files_by_name_without_reading(self, tmp_path, monkeypatch):
+        """File/thư mục tên YYYY-MM-DD ngoài khoảng ⇒ không đọc (6 tháng khớp lệnh ~14 triệu dòng, không nạp hết RAM)."""
+        import backtest.ticks as bt
+        downloader_file(tmp_path / SYM / "2026-11-09.parquet", [t(0, 1350.0)])
+        downloader_file(tmp_path / SYM / "2026-11-10.parquet", [t(0, 1360.0, day=date(2026, 11, 10))])
+        downloader_file(tmp_path / SYM / "2026-11-11.parquet", [t(0, 1370.0, day=date(2026, 11, 11))])
+        recorder_day(tmp_path / "raw", [t(0, 1380.0, day=date(2026, 11, 12))], day=date(2026, 11, 12))
+        read = []
+        orig = bt._read_file
+        monkeypatch.setattr(bt, "_read_file", lambda f: read.append(f.name) or orig(f))
+        ticks = load_tick_files([tmp_path], date_from=date(2026, 11, 10), date_to=date(2026, 11, 10))
+        assert [x.last for x in ticks] == [1360.0] and read == ["2026-11-10.parquet"]
+
+    def test_date_range_keeps_undated_files_and_filters_rows(self, tmp_path):
+        """Tên không phải ngày ⇒ vẫn đọc, rồi lọc từng dòng theo ngày."""
+        downloader_file(tmp_path / "gop.parquet", [t(0, 1350.0), t(0, 1360.0, day=date(2026, 11, 10))])
+        assert [x.last for x in load_tick_files([tmp_path], date_from=date(2026, 11, 10))] == [1360.0]
+
+    def test_date_range_leaving_nothing_returns_empty(self, tmp_path):
+        downloader_file(tmp_path / SYM / "2026-11-09.parquet", [t(0, 1350.0)])
+        assert load_tick_files([tmp_path], date_from=date(2026, 12, 1)) == []
+
     def test_nothing_found_raises(self, tmp_path):
         with pytest.raises(ValueError, match="Không có"):
             load_tick_files([tmp_path])

@@ -551,7 +551,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.ticks:
         from backtest.ticks import fill_missing_quotes, load_tick_files
         try:
-            ticks = [t for t in load_tick_files(args.ticks, source=args.source) if in_range(t.ts.date())]
+            ticks = load_tick_files(args.ticks, source=args.source,
+                                    date_from=date.fromisoformat(args.date_from) if args.date_from else None,
+                                    date_to=date.fromisoformat(args.date_to) if args.date_to else None)
         except ValueError as exc:
             print(f"❌ {exc}")
             return 2
