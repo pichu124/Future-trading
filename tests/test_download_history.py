@@ -54,6 +54,8 @@ class Server:
         self.page_param = None                 # tên tham số trang server hiểu (None ⇒ lờ mọi tham số trang)
         self.reject_params = ()                # tham số làm server trả 400
         self.always_token = False              # trả token cả ở trang cuối (ngắn hơn limit)
+        self.quota = None                      # số request /trades còn được phép (None = vô hạn)
+        self.max_pages = None                  # phân trang chỉ chạy được N trang
 
     def get(self, url, params=None, headers=None, timeout=None):
         self.calls.append({"url": url, "params": dict(params or {}), "headers": dict(headers or {})})
@@ -75,6 +77,12 @@ class Server:
             body["nextTime"] = rest[0][0] if rest else 0
             return Resp(200, body)
         if "/trades" in url:
+            if self.quota is not None:
+                if self.quota <= 0:                    # hết hạn mức ngày: như server thật (reset sau 24h)
+                    return Resp(429, {"message": "rate limit"},
+                                {"X-Ratelimit-Limit": "10000", "X-Ratelimit-Remaining": "0",
+                                 "X-Ratelimit-Reset": str(ep(23, 0))})
+                self.quota -= 1
             f, t, lim = int(p["from"]), int(p["to"]), int(p.get("limit", 100))
 
             def ts(x):
@@ -87,6 +95,8 @@ class Server:
             allrows = sorted([x for x in self.trades if f <= ts(x) <= t],
                              key=lambda x: (ts(x), x.get("totalVolumeTraded") or 0), reverse=True)
             off = int(p.get(self.page_param) or 0) if self.page_param else 0   # tham số trang khác ⇒ bị lờ
+            if self.max_pages is not None and off >= self.max_pages * lim:
+                off = 0                                # phân trang "hỏng" sau N trang ⇒ trả lại trang đầu
             rows = allrows[off:off + lim]
             more = off + lim < len(allrows) or (self.always_token and rows)
             return Resp(200, {"trades": rows, "nextPageToken": str(off + lim) if more else ""})
@@ -495,3 +505,72 @@ def test_older_and_disjoint_rejects_newer_or_overlapping_pages():
     assert not _older_and_disjoint([{"totalVolumeTraded": 99}, {"totalVolumeTraded": 101}], seen)   # trùng
     assert not _older_and_disjoint([{"totalVolumeTraded": None}], seen)
     assert not _older_and_disjoint([], seen)
+
+
+# ------------------------------------------------------------------ phân trang cho mọi cửa sổ đầy + hạn mức ngày ----
+
+PAGE_KEYS = ("nextPageToken", "pageToken")
+
+
+def test_full_window_is_paged_not_bisected_when_paging_works():
+    trades = [trade(9, m, sec, 1350.0, 1, m * 30 + sec // 2 + 1) for m in range(1, 11) for sec in range(0, 60, 2)]
+    srv = Server(trades=trades)
+    srv.page_param = "nextPageToken"
+    got = fetch_trades_day(client(srv), KRX, DAY, limit=50)
+    assert len(got) == 300 and volume_gap(got) == 0
+    windows = {(c["params"]["from"], c["params"]["to"]) for c in srv.calls}
+    assert len(windows) == 13                                       # chỉ 13 cửa sổ 30 phút — không chia đôi
+
+
+def test_paging_unsupported_tried_once_then_bisect_only():
+    trades = [trade(9, 0, sec, 1350.0, 1, 100 + sec) for sec in range(0, 50)]
+    srv = Server(trades=trades)                                     # lờ tham số trang
+    got = fetch_trades_day(client(srv), KRX, DAY, limit=8)
+    assert len(got) == 50
+    assert sum(1 for c in srv.calls if any(k in c["params"] for k in PAGE_KEYS)) == 2   # mỗi tên thử đúng 1 lần
+
+
+def test_quota_exhausted_stops_run_without_marking_days_and_resumes(tmp_path):
+    days = [date(2026, 11, 9), date(2026, 11, 10), date(2026, 11, 11)]
+    trades = [trade(9, 0, 1, 1350.0, 1, 1, ) for _ in range(1)]
+    srv = Server(trades=[{**trade(9, 0, 1, 1350.0, 1, 1), "time": utc_str(9, 0, 1, d=d)} for d in days])
+    srv.quota = 13                                                  # đủ đúng 1 ngày (13 cửa sổ)
+    sleeps = []
+    c = client(srv, sleep=sleeps.append)
+    plan = [(d, "VN30F2611", KRX) for d in days]
+    s1 = download(c, plan, tmp_path)
+    assert "hạn mức" in s1["stopped"] and "23:00" in s1["stopped"]
+    assert s1["written"] == 1 and s1["errors"] == 0 and sleeps == []           # không ngồi chờ, không ghi lỗi
+    man = json.loads((tmp_path / "_manifest.json").read_text(encoding="utf-8"))
+    assert "trades/VN30F2611/2026-11-10" not in man                             # ngày dở không bị đánh dấu
+    srv.quota = None
+    s2 = download(c, plan, tmp_path)
+    assert s2["written"] == 2 and s2["skipped"] >= 1 and "stopped" not in s2
+
+
+def test_quota_exhausted_raised_from_client():
+    from scripts.download_history import QuotaExhausted
+    srv = Server()
+    srv.fail_next = [(429, {}, {"X-Ratelimit-Remaining": "0", "X-Ratelimit-Reset": str(ep(23, 0))})]
+    with pytest.raises(QuotaExhausted, match="23:00"):
+        client(srv).get(f"/price/{KRX}/trades", {"boardId": "G1", "from": "1", "to": "2", "limit": 10})
+    srv.fail_next = [(429, {}, {"Retry-After": "86400"})]           # chờ quá lâu ⇒ cũng coi là hết hạn mức
+    with pytest.raises(QuotaExhausted):
+        client(srv).get(f"/price/{KRX}/trades", {"boardId": "G1", "from": "1", "to": "2", "limit": 10})
+
+
+def test_quota_exhausted_during_paging_not_swallowed():
+    from scripts.download_history import QuotaExhausted
+    srv = Server(trades=auction_second(9, 0, 1500, 0))
+    srv.page_param = "pageToken"
+    srv.quota = 2                                                   # trang đầu + 1 lần thử tham số trang
+    with pytest.raises(QuotaExhausted):
+        fetch_trades_day(client(srv), KRX, DAY)
+    assert len(srv.calls) == 3                                      # dừng ngay ở 429, không gửi thêm request
+
+
+def test_partial_paging_in_one_second_keeps_fetched_pages():
+    srv = Server(trades=auction_second(9, 0, 2500, 0))
+    srv.page_param, srv.max_pages = "nextPageToken", 2               # trang 3 hỏng
+    got = fetch_trades_day(client(srv), KRX, DAY)
+    assert len(got) == 2000                                         # giữ 2 trang đã lấy được, không chỉ trang đầu

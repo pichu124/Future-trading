@@ -11,7 +11,10 @@ docs/broker_notes.md §1.3):
   `time` "YYYY-MM-DD HH:MM:SS[.fff]": đặc tả ví dụ giờ UTC, server THẬT trả giờ VN có mili-giây (probe 09/11/2026)
   ⇒ KIỂM với cửa sổ đã hỏi (UTC rồi tới giờ VN), không khớp cách nào ⇒ lỗi. Trùng (cửa sổ chồng nhau) lọc theo `totalVolumeTraded` (luỹ kế trong ngày).
 - Chữ ký: thử ký đường dẫn KHÔNG kèm query (như SDK); 401 ⇒ thử kèm query một lần rồi nhớ cách được nhận.
-- HTTP 429 ⇒ chờ `Retry-After` rồi thử lại (GET, an toàn); lỗi khác ⇒ ghi nhận ngày đó lỗi, tải ngày khác tiếp.
+- HTTP 429 ngắn ⇒ chờ `Retry-After` rồi thử lại; HẾT HẠN MỨC NGÀY (DNSE: 10.000 request /price mỗi 24 giờ — `Remaining 0`
+  hoặc `Retry-After` > 5 phút) ⇒ dừng cả lượt, báo mốc reset, chạy lại sau đó để tải tiếp (mã thoát 3).
+- Cửa sổ đầy `limit` (tối đa 1000) ⇒ phân trang bằng `nextPageToken` (tên tham số tự kiểm); không được ⇒ chia đôi.
+- Lỗi khác ⇒ ghi nhận ngày đó lỗi, tải ngày khác tiếp.
 
 Đầu ra (ghi nguyên tử; chạy lại KHÔNG tải trùng — có file hoặc manifest ghi "rỗng" thì bỏ qua):
 - `<out>/ohlc1m/<VN30FYYMM>/<YYYY-MM-DD>.parquet` — schema bar của backtest (`load_bars_parquet`), dựng từ khớp lệnh
@@ -57,6 +60,11 @@ SOURCE = "dnse_history"
 
 class HistoryError(RuntimeError):
     pass
+
+
+class QuotaExhausted(HistoryError):
+    """Hết hạn mức request (DNSE: 10.000 request /price mỗi 24 giờ — probe 09/11/2026). Dừng cả lượt tải; chạy lại
+    sau mốc reset sẽ tải tiếp phần còn thiếu (ngày dở không bị đánh dấu)."""
 
 
 # ------------------------------------------------------------------ HTTP ----
@@ -116,11 +124,27 @@ class HistoryClient:
                     return resp.json()
                 except ValueError as exc:
                     raise HistoryError(f"GET {path}: response không phải JSON") from exc
+            if status == 429:
+                h = {k.lower(): v for k, v in (resp.headers or {}).items()}
+                ra = h.get("retry-after")
+                try:
+                    ra_s = float(ra) if ra is not None else None
+                except ValueError:
+                    ra_s = None
+                if (ra_s is None and str(h.get("x-ratelimit-remaining", "")).strip() == "0") or \
+                        (ra_s is not None and ra_s > 300):
+                    reset = h.get("x-ratelimit-reset")
+                    when = ""
+                    try:
+                        when = f" — reset lúc {_vn_naive(int(float(reset))):%Y-%m-%d %H:%M} (giờ VN)" if reset else \
+                            f" — chờ {ra_s / 3600:.1f} giờ"
+                    except (TypeError, ValueError, OverflowError):
+                        pass
+                    raise QuotaExhausted(f"Hết hạn mức request DNSE{when}")
             if status == 429 and n429 < self.max_retries_429:
                 n429 += 1
-                h = {k.lower(): v for k, v in (resp.headers or {}).items()}
                 try:
-                    wait = float(h.get("retry-after") or 5)
+                    wait = float(ra) if ra is not None else 5.0
                 except ValueError:
                     wait = 5.0
                 log.info("429 — chờ %.1fs", wait)
@@ -284,7 +308,8 @@ def _older_and_disjoint(new: list[dict], seen_totals: set) -> bool:
 def fetch_trades_day(client: HistoryClient, krx: str, d: date, limit: int = MAX_LIMIT) -> list[dict]:
     out: list[dict] = []
     saturated_leaf = 0
-    page_param: list = [None]                         # tên tham số trang đã kiểm là chạy được (nhớ cho các giây sau)
+    page_param: list = [None]                         # tên tham số trang đã kiểm là chạy được (nhớ cho các cửa sổ sau)
+    paging_ok: list = [None]                          # None = chưa biết, True/False sau lần thử đầu
 
     def get(f: int, t: int, extra: Optional[dict] = None):
         return _trades_page(client.get(f"/price/{krx}/trades",
@@ -303,13 +328,20 @@ def fetch_trades_day(client: HistoryClient, krx: str, d: date, limit: int = MAX_
             for name in names:
                 try:
                     more, nxt = get(f, t, {name: token})
+                except QuotaExhausted:
+                    raise
                 except HistoryError as exc:
                     log.info("trades %s %s: tham số trang %r bị từ chối (%s)", krx, d, name, exc)
                     continue
                 if _older_and_disjoint(more, seen):
+                    if page_param[0] is None:
+                        log.info("trades %s %s: phân trang chạy bằng tham số %r", krx, d, name)
                     got, page_param[0], names = (more, nxt), name, [name]
+                    paging_ok[0] = True
                     break
             if got is None:
+                if page_param[0] is None:
+                    paging_ok[0] = False                  # không tên nào chạy ⇒ các cửa sổ sau chỉ chia đôi
                 return rows, False
             rows = rows + got[0]
             token = got[1]
@@ -321,17 +353,27 @@ def fetch_trades_day(client: HistoryClient, krx: str, d: date, limit: int = MAX_
         nonlocal saturated_leaf
         try:
             rows, token = get(f, t)
+        except QuotaExhausted:
+            raise
         except HistoryError as exc:
             raise HistoryError(f"trades {krx} {d}: {exc}") from exc
         if len(rows) >= limit:
+            # cửa sổ đầy: phân trang trước (ít request hơn chia đôi ~3 lần); server không hỗ trợ ⇒ chia đôi theo giây
+            if paging_ok[0] is not False:
+                paged, full = page_rest(f, t, rows, token)
+                if full:
+                    rows = paged
+                    for r, ts in zip(rows, parse_trade_times(rows, f, t)):
+                        out.append({**r, "ts": ts})
+                    return
+                if t - f < 2:
+                    rows = paged
             if t - f >= 2:
                 mid = (f + t) // 2
                 window(f, mid)
                 window(mid, t)
                 return
-            rows, full = page_rest(f, t, rows, token)
-            if not full:
-                saturated_leaf += 1                   # phút này sẽ bị đánh dấu volume không tin được
+            saturated_leaf += 1                       # phút này sẽ bị đánh dấu volume không tin được
         for r, ts in zip(rows, parse_trade_times(rows, f, t)):
             out.append({**r, "ts": ts})
 
@@ -447,6 +489,11 @@ def download(client: HistoryClient, plan: Iterable[tuple[date, str, str]], out_d
                         write_table_atomic(ticks_table(rows, name), path)
                         write_bars(rows, name, d, fresh=True)
                     entry = {"rows": len(rows), "volume_gap": volume_gap(rows)}
+            except QuotaExhausted as exc:
+                summary["stopped"] = f"{exc} — chạy lại đúng lệnh này sau mốc đó để tải tiếp (ngày đã xong được bỏ qua)"
+                write_json_atomic(manifest, man_path)
+                log.warning("%s", summary["stopped"])
+                return summary
             except Exception as exc:
                 summary["errors"] += 1
                 log.error("%s: %s", key, exc)
@@ -498,6 +545,9 @@ def main(argv=None) -> int:
     client = HistoryClient(key, secret, base_url=args.base_url)
     s = download(client, plan, out, kinds=args.kinds, force=args.force, retry_empty=args.retry_empty)
     print(f"Xong: {s} · {client.requests} request · ký {'kèm' if client.sign_query else 'không kèm'} query · {out}")
+    if s.get("stopped"):
+        print(f"⏸  {s['stopped']}")
+        return 3
     return 1 if s["errors"] else 0
 
 

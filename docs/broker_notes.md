@@ -95,8 +95,11 @@ lệnh đôi ⇒ adapter DNSE phải: không tự retry lệnh đặt; khi khôn
   **14:45:00 (ATC)** — có > 500 lệnh cùng thời điểm, không chia nhỏ hơn giây được ⇒ thiếu 2.986 HĐ (~1,4% KL ngày),
   phiên liên tục đầy đủ. `limit` tối đa = **1000** ✅ (`400 "limit must be between 1 and 1000"`) ⇒ downloader dùng 1000.
   Giây đầy ⇒ đi tiếp bằng `nextPageToken`; tên tham số gửi token CHƯA có tài liệu ⇒ thử `nextPageToken` rồi `pageToken`,
-  chỉ nhận khi trang sau CŨ hơn và không trùng (tự kiểm) ❓ — chờ lần tải tiếp cho biết tên nào chạy; vẫn thiếu ⇒ chỉ
-  đánh dấu volume không tin được cho đúng phút quanh chỗ hụt KL luỹ kế (lần tải 06/11: 09:00, 14:29, 14:45). Server trả lệnh trong cùng
+  chỉ nhận khi trang sau CŨ hơn và không trùng (tự kiểm) — **lần tải thứ 3 (06/11) phân trang CHẠY**: 110.501 lệnh,
+  `volume_gap` 0, 369 request ✅ (tên tham số cụ thể sẽ hiện trong log lần tải tới: "phân trang chạy bằng tham số …").
+  Vẫn thiếu ⇒ chỉ đánh dấu volume không tin được cho đúng phút quanh chỗ hụt KL luỹ kế.
+- **Hạn mức nhóm /price: 10.000 request / 24 giờ** ✅ (`X-Ratelimit-Reset` = đúng 24 giờ sau). Downloader phân trang cho
+  MỌI cửa sổ đầy (ít request hơn chia đôi), hết hạn mức ⇒ dừng, báo mốc reset, chạy lại để tải tiếp. Server trả lệnh trong cùng
   giây theo KL luỹ kế GIẢM dần (mới nhất trước).
 - Trường của một lệnh khớp (thật): `marketId, boardId, isin, symbol, matchPrice, matchQtty, side (BUY/SELL), avgPrice,
   totalVolumeTraded (luỹ kế, giảm 1 mỗi lệnh 1 HĐ khi đọc ngược ⇒ khoá lọc trùng đúng), grossTradeAmount, highestPrice,
