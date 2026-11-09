@@ -10,26 +10,41 @@
 > còn lại là việc của bạn (lịch nghỉ, phí, giới hạn risk, khoá API, chạy script thăm dò). Live đã nối nhưng còn
 > KHOÁ (`api_verified`, giá trị null) — **chưa chạy live**. Bảng trạng thái mới nhất: mục 0 ngay dưới.
 
-## 0. Trạng thái mới nhất (08/11/2026, sau P4.1/P4.2/live/logger)
+## 0. Trạng thái mới nhất (09/11/2026)
 
 | Hạng mục | Trạng thái |
 |---|---|
-| Lỗi #1–#14 | ✅ tất cả đã sửa, mỗi lỗi có test tái hiện |
-| Adapter DNSE / SSI | ✅ có, live KHOÁ tới khi chạy `scripts/*_trading_probe.py` và đặt `api_verified` |
-| Nối live (DNSE chính + SSI dự phòng + feed tổng hợp) | ✅ `live/wiring.py`; chờ `/otp` rồi mới đối soát |
-| Đối chiếu mã hợp đồng với broker lúc khởi động (§4) | ✅ live: DNSE `/instruments` + `symbolType` phải khớp F1M/F2M/F1Q/F2Q bot tính, hợp đồng đang giao dịch phải có ⇒ lệch thì không giao dịch |
-| data/state/logs ngoài Dropbox (§3b) | ✅ runner kiểm cả ba lúc khởi động |
-| Logger JSON có cấu trúc | ✅ `monitoring/logger.py`, không lộ token/OTP/khoá |
-| Test trực tiếp `ExecutionManager` | ✅ `tests/test_execution.py` |
-| **Việc của bạn** | lịch nghỉ 2027 (2025–2026 đã điền + kiểm chéo dữ liệu; `check_calendar.py` báo 2027), `fees.broker_fee_vnd_per_contract` + `fees.tax_vnd_per_contract` (phí sở/VSDC đã điền), `risk.*`, `live.allowed_machine`, `backtest.initial_capital_vnd`; khoá API + chạy hai script thăm dò; dữ liệu lịch sử (P1.6) + backtest ORB; paper ≥ vài tuần |
-| Feed tổng hợp cho paper | ✅ `paper.composite_feed: true` (mặc định false) |
-| Adapter TCBS (tuỳ chọn) | ✅ `brokers/tcbs.py` theo tài liệu chính thức; TẮT (`brokers.tcbs_enabled: false`, `api_verified: false`), nối vào runner: chọn được làm chính/dự phòng (`brokers.primary`/`backup`) — CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định |
+| Lỗi #1–#14 (rà soát go-live) | ✅ tất cả đã sửa, mỗi lỗi có test tái hiện |
+| Adapter DNSE / SSI / TCBS | ✅ có; live KHOÁ tới khi chạy `scripts/*_trading_probe.py` và đặt `api_verified`; TCBS tắt mặc định |
+| Nối live (broker chính + dự phòng chọn được trong dnse/ssi/tcbs, feed tổng hợp DNSE+SSI) | ✅ `live/wiring.py`; chờ `/otp` rồi mới đối soát |
+| Đối chiếu mã hợp đồng với broker lúc khởi động (§4) | ✅ DNSE `/instruments` + `symbolType` phải khớp lịch đáo hạn bot tính |
+| data/state/logs ngoài Dropbox (§3b), logger JSON không lộ bí mật | ✅ |
+| Risk: chuỗi thua SAU phí; lượt đóng khẩn cấp = thua; gỡ hedge không tạo lượt ma | ✅ |
+| Dữ liệu: downloader lịch sử DNSE, recorder (+ HĐ kế tiếp ngày trước roll, sau cờ), kiểm định theo HĐ | ✅ code — CHƯA chạy trên dây (cần khoá) |
+| Backtest: bar + tick thật, nối chuỗi qua roll, back-adjust, % vốn; robustness trên bar/tick | ✅ |
+| Chiến lược: ORB #1 baseline, ORB #2 lọc biên/ADR (tắt) | ✅ code — **chưa có bằng chứng edge** (chưa chạy dữ liệu thật) |
+| Lịch nghỉ 2025–2026, phí sở + VSDC | ✅ (2026 kiểm chéo dữ liệu VN30) |
+
+### Việc của bạn (theo thứ tự)
+
+1. **Điền `config/settings.yaml`** (`python -m core.settings` liệt kê):
+   `fees.broker_fee_vnd_per_contract`, `fees.tax_vnd_per_contract`, `risk.max_daily_loss_points`,
+   `risk.max_trades_per_day`, `risk.max_consecutive_losses`, `backtest.initial_capital_vnd`,
+   `live.allowed_machine` (hostname máy chạy bot). `paths.dashboard_warehouse` chỉ cần nếu import dữ liệu cũ.
+2. **Khoá API** vào `.env` (DNSE, SSI; TCBS tuỳ chọn) rồi chạy thăm dò, gửi kết quả (không chứa khoá):
+   `dnse_feed_probe.py` (kèm `--extra-contract`), `dnse_history_probe.py`, `dnse_trading_probe.py`,
+   `ssi_trading_probe.py` ⇒ mình chốt các ❓ và điền `brokers.dnse.loan_package_id`,
+   `trading_token_ttl_seconds`, `brokers.ssi.order_symbol_format`, `market_order_type`, `api_verified`.
+3. **Dữ liệu**: `download_history.py` 1–2 ngày (kiểm), rồi cả dải; bật recorder hằng ngày (`docs/recorder_windows.md`).
+4. **Nghiên cứu**: chốt mốc chia IS/OOS trong `research/log.md`, chạy `backtest.robustness` cho ORB #1 (và #2 nếu muốn).
+5. **Lịch nghỉ 2027** khi HNX công bố (bắt buộc trước 2027).
+6. **Paper** ≥ vài tuần (`TRADING_MODE=paper`) — chỉ khi robustness nói CÓ edge mới tính tới live.
 
 ## Kết luận
 
-**KHÔNG được chạy live.** Thiếu adapter broker thật, chưa có dữ liệu thật, chiến lược chưa có bằng
-chứng edge, và còn **3 lỗi CRITICAL + 4 lỗi HIGH** trong đường đặt lệnh. **Không chạy cả paper**
-trước khi sửa CRITICAL/HIGH — kết quả paper sẽ sai (đóng vị thế hụt, đảo chiều ngoài ý muốn).
+**KHÔNG được chạy live.** Đường đặt lệnh đã sửa hết lỗi CRITICAL/HIGH của lượt rà soát và có test, nhưng:
+API broker chưa được gọi thử (live còn khoá), chưa có dữ liệu thật, và chiến lược **chưa có bằng chứng edge**.
+Paper chạy được sau bước 1 (settings) + khoá DNSE cho feed.
 
 ## 1. Lỗi phát hiện (theo mức độ)
 

@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0–P1.6, P2.1, P2.2, P3.1, P3.2, P3.3, P4.1, P4.2, P4.3, P5.1, P5.2 (P4.1/P4.2: adapter xong, live khoá tới khi kiểm API; P3.2/P3.3: code + luật kết luận xong, CHƯA chạy vì thiếu dữ liệu). Điểm nghẽn: API key DNSE/SSI (chốt ❓ của feed, bật recorder hằng ngày, chạy **P1.6** downloader). Lỗi #1–#12, #14 trong `docs/golive_checklist.md` đã xử lý (#13 đã nối cho live). Phần còn lại cần API key.
+> ✅ Đã làm: mọi bước P0.1–P5.2 (code + test). Chưa chạy với dữ liệu/API thật: live KHOÁ tới khi kiểm API (`api_verified`), backtest chưa có dữ liệu thật ⇒ chưa có bằng chứng edge. Trạng thái + việc của bạn: `docs/golive_checklist.md` mục 0.
 
 ---
 
