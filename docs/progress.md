@@ -1,5 +1,10 @@
 # Tiến độ
 
+## 2026-11-09 — Probe DNSE (chỉ đọc) chạy trên dây lần đầu
+
+- `dnse_trading_probe.py` trên production: 7/7 request 200 — chữ ký HMAC path không kèm query được chấp nhận; có 1 tiểu khoản phái sinh (số đặt ở `.env`); gói vay id 1306 (initialRate 0,1848) ⇒ `brokers.dnse.loan_package_id: 1306`; secdef nhận KRX 41I1GB000 (VN30F2611).
+- Còn ❓: chuỗi `orderStatus` thật (chưa có lệnh — cần UAT order test), `trading_token_ttl_seconds` (cần xin OTP), khuôn response balances/positions (chờ `summary.json`).
+
 ## 2026-11-09 — Vốn + giới hạn rủi ro (người dùng chọn)
 
 - `backtest.initial_capital_vnd: 100000000`, `risk.max_daily_loss_points: 15` (1,5 triệu/HĐ ≈ 1,5% vốn), `risk.max_trades_per_day: 2`, `risk.max_consecutive_losses: 2`.

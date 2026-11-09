@@ -140,8 +140,8 @@ brokers:
   dnse:                                 # brokers/dnse.py — số tiểu khoản đặt ở .env (DNSE_ACCOUNT_NO)
     base_url: https://openapi.dnse.com.vn   # UAT: https://openapi-uat.dnse.com.vn
     # Gói vay phái sinh: GET /accounts/{tiểu khoản}/loan-packages?marketType=DERIVATIVE
-    # (scripts/dnse_trading_probe.py in ra). null ⇒ không chạy live.
-    loan_package_id: null
+    # Probe 09/11/2026: id=1306 "Gói giao dịch 01", initialRate 0.1848 (= tỷ lệ ký quỹ 18,48% trong biểu phí).
+    loan_package_id: 1306
     otp_type: email_otp                 # OTP nhập tay qua Telegram: /otp <mã>
     # Thời hạn trading token — CHƯA biết (❓ broker_notes §1.1); hỏi DNSE / đo bằng probe. null ⇒ không chạy live.
     trading_token_ttl_seconds: null

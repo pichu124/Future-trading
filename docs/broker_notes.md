@@ -102,6 +102,10 @@ Còn ❓ trên dây — downloader **tự kiểm, không đoán** (sai ⇒ báo 
   `gross_trade_amount`, `highest_price`, `lowest_price`, `open_price`, `time` (chuỗi, định dạng ❓); trên dây
   nhiều khả năng camelCase (`matchPrice`…) ❓.
 - `/price/ohlc` **không có trong SDK** (chỉ có trong đặc tả OpenAPI) ⇒ tên field, kiểu bọc response ❓.
+- ✅ **Đã kiểm trên dây 09/11/2026** (`dnse_trading_probe.py`, production, chỉ đọc): ký path KHÔNG kèm query được
+  chấp nhận — `/accounts`, `/balances`, `/loan-packages?marketType=…`, `/orders`, `/orders/history`, `/positions`,
+  `/price/{KRX}/secdef` đều 200. Có 1 tiểu khoản phái sinh; gói vay id 1306 (initialRate 0,1848). KRX 41I1GB000 =
+  VN30F2611 được secdef nhận. Chưa có lệnh nào ⇒ chuỗi `orderStatus` thật vẫn ❓ (cần UAT order test).
 - ⚠️ Chữ ký: SDK ký `(request-target)` bằng **đường dẫn KHÔNG kèm query** (tham số gửi riêng), trái với dòng
   "path kèm query" ở §1.1 (lấy từ docstring SDK). Chưa biết server chấp nhận cách nào ❓.
 - Cả ba điểm trên được chốt bằng `scripts/dnse_history_probe.py` (thử 4 định dạng from/to, hôm qua + 1/3/6/12
