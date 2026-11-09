@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-09 — ORB #1 IS theo tick thật: +3,21tr (nến: −3,78tr) — kiểm mô hình khớp
+
+- Người dùng chạy `backtest.engine --ticks data/history/trades --to 2026-08-31`: 142 lệnh, +3.208.600đ sau phí.
+- Random walk (4 seed × 125 ngày): mô hình tick không tạo lãi giả; mô hình nến bi quan hơn 0,20–0,23 điểm/lệnh.
+  Ghi `research/log.md` mục "Mô hình khớp lệnh"; quyết định đánh giá lại #1/#2 bằng `robustness --ticks` (n_trials giữ 2).
+
 ## 2026-11-09 — Backtest tick: bỏ qua file ngoài khoảng ngày trước khi đọc
 
 - `backtest.ticks.load_tick_files(..., date_from, date_to)`: file/thư mục tên `YYYY-MM-DD` ngoài khoảng ⇒ không đọc; các dòng còn lại vẫn lọc theo ngày; lọc hết ⇒ danh sách rỗng (không lỗi). `backtest.engine --ticks --from/--to` dùng nó — trước đây đọc cả 6 tháng (~14 triệu dòng, vài GB RAM) rồi mới lọc.
