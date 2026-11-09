@@ -98,7 +98,9 @@ lệnh đôi ⇒ adapter DNSE phải: không tự retry lệnh đặt; khi khôn
   chỉ nhận khi trang sau CŨ hơn và không trùng (tự kiểm) — **lần tải thứ 3 (06/11) phân trang CHẠY**: 110.501 lệnh,
   `volume_gap` 0, 369 request ✅ (tên tham số cụ thể sẽ hiện trong log lần tải tới: "phân trang chạy bằng tham số …").
   Vẫn thiếu ⇒ chỉ đánh dấu volume không tin được cho đúng phút quanh chỗ hụt KL luỹ kế.
-- **Hạn mức nhóm /price: 10.000 request / 24 giờ** ✅ (`X-Ratelimit-Reset` = đúng 24 giờ sau). Downloader phân trang cho
+- **Hạn mức nhóm /price: 10.000 request / 24 giờ** ✅ (`X-Ratelimit-Reset` = đúng 24 giờ sau). Khi hết: HTTP 429
+  `[OA-400] Rate Limit Exceeded` **không kèm header X-Ratelimit-*** ✅ (tải 09/11/2026) ⇒ downloader nhớ `Remaining`
+  từ response thành công, còn 0 thì dừng trước khi gửi; 429 lặp lại sau các lần chờ ngắn ⇒ cũng dừng cả lượt. Downloader phân trang cho
   MỌI cửa sổ đầy (ít request hơn chia đôi), hết hạn mức ⇒ dừng, báo mốc reset, chạy lại để tải tiếp. Server trả lệnh trong cùng
   giây theo KL luỹ kế GIẢM dần (mới nhất trước).
 - Trường của một lệnh khớp (thật): `marketId, boardId, isin, symbol, matchPrice, matchQtty, side (BUY/SELL), avgPrice,

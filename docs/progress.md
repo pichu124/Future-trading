@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-09 — Tải cả dải lần 1: 108 ngày; sửa nhận diện hết hạn mức (429 không header)
+
+- Lượt tải 11/05–06/11: 108 ngày ghi xong (≈ 93 request/ngày nhờ phân trang), 10.024 request; 24 ngày lỗi `429 [OA-400] Rate Limit Exceeded` vì 429 thật KHÔNG kèm `X-Ratelimit-Remaining` ⇒ downloader cũ ghi lỗi từng ngày (ngày lỗi không bị đánh dấu xong ⇒ lần sau tải lại, không mất gì).
+- Sửa `HistoryClient`: nhớ `X-Ratelimit-Remaining/Reset` từ mọi response thành công; còn 0 ⇒ `QuotaExhausted` TRƯỚC khi gửi (qua mốc reset thì quên); 429 lặp lại sau các lần chờ ngắn ⇒ `QuotaExhausted` (dừng cả lượt) thay vì lỗi từng ngày.
+- 4 test mới (server giả gửi Remaining trên 200 và 429 không header như thật; đồng hồ tường cố định trong test). Thử phá 6 cơ chế ⇒ 0 sống. 1241 test.
+
 ## 2026-11-09 — Dữ liệu 1 ngày ĐẦY ĐỦ; phân trang mọi cửa sổ; dừng gọn khi hết hạn mức
 
 - Tải lại 06/11 với phân trang: **110.501 lệnh, `volume_gap` 0, không phút nào bị đánh dấu, 369 request** ⇒ không cần đổi luật "dữ liệu tin được" của robustness.

@@ -72,7 +72,8 @@ class QuotaExhausted(HistoryError):
 class HistoryClient:
     def __init__(self, api_key: str, api_secret: str, *, base_url: str = BASE_URL, session: Any = None,
                  sleep: Callable[[float], None] = _time.sleep, min_interval_s: float = 0.25,
-                 max_retries_429: int = 5, timeout: float = 30.0, now: Callable[[], float] = _time.monotonic):
+                 max_retries_429: int = 5, timeout: float = 30.0, now: Callable[[], float] = _time.monotonic,
+                 wall: Callable[[], float] = _time.time):
         if not api_key or not api_secret:
             raise ValueError("Thiếu DNSE_API_KEY / DNSE_API_SECRET")
         if session is None:
@@ -86,6 +87,9 @@ class HistoryClient:
         self._sign_decided = False
         self._last: Optional[float] = None
         self.requests = 0
+        self._wall = wall
+        self.rate_remaining: Optional[int] = None     # X-Ratelimit-Remaining của response gần nhất (nếu có)
+        self.rate_reset: Optional[int] = None         # X-Ratelimit-Reset (epoch giây)
 
     def __repr__(self) -> str:
         return f"HistoryClient(base_url={self.base_url!r}, sign_query={self.sign_query})"
@@ -97,9 +101,35 @@ class HistoryClient:
                 self._sleep(wait)
         self._last = self._now()
 
+    def _quota_error(self, reset=None, wait_s=None, why: str = "") -> "QuotaExhausted":
+        reset = reset if reset is not None else self.rate_reset
+        when = ""
+        try:
+            if reset:
+                when = f" — reset lúc {_vn_naive(int(float(reset))):%Y-%m-%d %H:%M} (giờ VN)"
+            elif wait_s:
+                when = f" — chờ {wait_s / 3600:.1f} giờ"
+        except (TypeError, ValueError, OverflowError):
+            pass
+        return QuotaExhausted(f"Hết hạn mức request DNSE{why}{when}")
+
+    def _remember_rate(self, h: dict) -> None:
+        try:
+            if h.get("x-ratelimit-remaining") is not None:
+                self.rate_remaining = int(float(h["x-ratelimit-remaining"]))
+            if h.get("x-ratelimit-reset") is not None:
+                self.rate_reset = int(float(h["x-ratelimit-reset"]))
+        except (TypeError, ValueError):
+            pass
+
     def get(self, path: str, params: dict) -> Any:
         n429 = 0
         while True:
+            if self.rate_remaining is not None and self.rate_remaining <= 0:
+                if self.rate_reset is not None and self._wall() >= self.rate_reset:
+                    self.rate_remaining = None                 # đã qua mốc reset ⇒ thử lại
+                else:
+                    raise self._quota_error(why=" (đã dùng hết theo header lần trước)")   # khỏi gửi request chắc hỏng
             self._pace()
             if self.sign_query:
                 target = f"{path}?{urllib.parse.urlencode(params)}"
@@ -114,6 +144,9 @@ class HistoryClient:
                 raise HistoryError(f"GET {path}: lỗi mạng {type(exc).__name__}: {str(exc)[:120]}") from exc
             self.requests += 1
             status = int(resp.status_code)
+            hdr = {k.lower(): v for k, v in (resp.headers or {}).items()}
+            if status != 429:
+                self._remember_rate(hdr)
             if status == 401 and not self.sign_query and not self._sign_decided:
                 log.warning("401 khi ký path không kèm query ⇒ thử ký kèm query")
                 self.sign_query = True
@@ -125,31 +158,24 @@ class HistoryClient:
                 except ValueError as exc:
                     raise HistoryError(f"GET {path}: response không phải JSON") from exc
             if status == 429:
-                h = {k.lower(): v for k, v in (resp.headers or {}).items()}
-                ra = h.get("retry-after")
+                # server thật: 429 "[OA-400] Rate Limit Exceeded" có thể KHÔNG kèm header nào (tải 09/11/2026)
+                ra = hdr.get("retry-after")
                 try:
                     ra_s = float(ra) if ra is not None else None
                 except ValueError:
                     ra_s = None
-                if (ra_s is None and str(h.get("x-ratelimit-remaining", "")).strip() == "0") or \
+                reset = hdr.get("x-ratelimit-reset")
+                if (ra_s is None and str(hdr.get("x-ratelimit-remaining", "")).strip() == "0") or \
                         (ra_s is not None and ra_s > 300):
-                    reset = h.get("x-ratelimit-reset")
-                    when = ""
-                    try:
-                        when = f" — reset lúc {_vn_naive(int(float(reset))):%Y-%m-%d %H:%M} (giờ VN)" if reset else \
-                            f" — chờ {ra_s / 3600:.1f} giờ"
-                    except (TypeError, ValueError, OverflowError):
-                        pass
-                    raise QuotaExhausted(f"Hết hạn mức request DNSE{when}")
-            if status == 429 and n429 < self.max_retries_429:
-                n429 += 1
-                try:
-                    wait = float(ra) if ra is not None else 5.0
-                except ValueError:
-                    wait = 5.0
-                log.info("429 — chờ %.1fs", wait)
-                self._sleep(wait)
-                continue
+                    raise self._quota_error(reset, ra_s)
+                if n429 < self.max_retries_429:
+                    n429 += 1
+                    wait = ra_s if ra_s is not None else 5.0
+                    log.info("429 — chờ %.1fs", wait)
+                    self._sleep(wait)
+                    continue
+                # 429 lặp lại sau mọi lần chờ ngắn ⇒ coi là hết hạn mức: dừng cả lượt thay vì ghi lỗi từng ngày
+                raise self._quota_error(reset, ra_s, why=f" (HTTP 429 lặp lại {n429 + 1} lần)")
             try:
                 body = resp.json()
             except ValueError:

@@ -56,6 +56,7 @@ class Server:
         self.always_token = False              # trả token cả ở trang cuối (ngắn hơn limit)
         self.quota = None                      # số request /trades còn được phép (None = vô hạn)
         self.max_pages = None                  # phân trang chỉ chạy được N trang
+        self.quota_headers = True              # 429 hết hạn mức có kèm header X-Ratelimit-* hay không
 
     def get(self, url, params=None, headers=None, timeout=None):
         self.calls.append({"url": url, "params": dict(params or {}), "headers": dict(headers or {})})
@@ -77,12 +78,15 @@ class Server:
             body["nextTime"] = rest[0][0] if rest else 0
             return Resp(200, body)
         if "/trades" in url:
+            rate = {}
             if self.quota is not None:
                 if self.quota <= 0:                    # hết hạn mức ngày: như server thật (reset sau 24h)
-                    return Resp(429, {"message": "rate limit"},
-                                {"X-Ratelimit-Limit": "10000", "X-Ratelimit-Remaining": "0",
-                                 "X-Ratelimit-Reset": str(ep(23, 0))})
+                    hdr = ({"X-Ratelimit-Limit": "10000", "X-Ratelimit-Remaining": "0",
+                            "X-Ratelimit-Reset": str(ep(23, 0))} if self.quota_headers else {})
+                    return Resp(429, {"status": 429, "code": "OA-400", "message": "Rate Limit Exceeded"}, hdr)
                 self.quota -= 1
+                rate = {"X-Ratelimit-Limit": "10000", "X-Ratelimit-Remaining": str(self.quota),
+                        "X-Ratelimit-Reset": str(ep(23, 0))}
             f, t, lim = int(p["from"]), int(p["to"]), int(p.get("limit", 100))
 
             def ts(x):
@@ -99,13 +103,14 @@ class Server:
                 off = 0                                # phân trang "hỏng" sau N trang ⇒ trả lại trang đầu
             rows = allrows[off:off + lim]
             more = off + lim < len(allrows) or (self.always_token and rows)
-            return Resp(200, {"trades": rows, "nextPageToken": str(off + lim) if more else ""})
+            return Resp(200, {"trades": rows, "nextPageToken": str(off + lim) if more else ""}, rate)
         return Resp(404, {"code": "OA-404", "message": "no route"})
 
 
 def client(srv, **kw):
+    # đồng hồ tường cố định 08:00 ngày DAY (trước mốc reset giả 23:00) ⇒ test không phụ thuộc giờ máy chạy test
     return HistoryClient(KEY, SECRET, base_url="https://x.test", session=srv, sleep=kw.pop("sleep", lambda s: None),
-                         min_interval_s=0, **kw)
+                         min_interval_s=0, wall=kw.pop("wall", lambda: float(ep(8, 0))), **kw)
 
 
 def trade(h, m, s, price, qty, total, side="BUY"):
@@ -544,7 +549,7 @@ def test_quota_exhausted_stops_run_without_marking_days_and_resumes(tmp_path):
     man = json.loads((tmp_path / "_manifest.json").read_text(encoding="utf-8"))
     assert "trades/VN30F2611/2026-11-10" not in man                             # ngày dở không bị đánh dấu
     srv.quota = None
-    s2 = download(c, plan, tmp_path)
+    s2 = download(client(srv, sleep=sleeps.append), plan, tmp_path)      # lần chạy sau = tiến trình mới
     assert s2["written"] == 2 and s2["skipped"] >= 1 and "stopped" not in s2
 
 
@@ -566,7 +571,7 @@ def test_quota_exhausted_during_paging_not_swallowed():
     srv.quota = 2                                                   # trang đầu + 1 lần thử tham số trang
     with pytest.raises(QuotaExhausted):
         fetch_trades_day(client(srv), KRX, DAY)
-    assert len(srv.calls) == 3                                      # dừng ngay ở 429, không gửi thêm request
+    assert len(srv.calls) == 2                                      # header báo còn 0 ⇒ không gửi request chắc hỏng
 
 
 def test_partial_paging_in_one_second_keeps_fetched_pages():
@@ -574,3 +579,53 @@ def test_partial_paging_in_one_second_keeps_fetched_pages():
     srv.page_param, srv.max_pages = "nextPageToken", 2               # trang 3 hỏng
     got = fetch_trades_day(client(srv), KRX, DAY)
     assert len(got) == 2000                                         # giữ 2 trang đã lấy được, không chỉ trang đầu
+
+
+# ------------------------------------------------------------------ 429 thật: không header (người dùng tải 09/11/2026) ----
+
+def test_real_style_429_without_headers_stops_run_cleanly(tmp_path):
+    """Server thật: 429 `[OA-400] Rate Limit Exceeded` KHÔNG kèm X-Ratelimit-Remaining ⇒ trước đây 24 ngày bị ghi lỗi.
+    Nay: client nhớ Remaining từ response thành công ⇒ còn 0 thì dừng ngay, không gửi request chắc chắn hỏng."""
+    days = [date(2026, 11, 9), date(2026, 11, 10), date(2026, 11, 11)]
+    srv = Server(trades=[{**trade(9, 0, 1, 1350.0, 1, 1), "time": utc_str(9, 0, 1, d=d)} for d in days])
+    srv.quota, srv.quota_headers = 13, False
+    sleeps = []
+    c = client(srv, sleep=sleeps.append)
+    s = download(c, [(d, "VN30F2611", KRX) for d in days], tmp_path)
+    assert s["written"] == 1 and s["errors"] == 0 and "hạn mức" in s["stopped"] and "23:00" in s["stopped"]
+    assert sleeps == []
+    assert sum(1 for x in srv.calls if "/trades" in x["url"]) == 13            # không gửi thêm request nào
+
+
+def test_persistent_429_without_any_headers_becomes_quota_stop():
+    from scripts.download_history import QuotaExhausted
+    srv = Server()
+    sleeps = []
+    c = client(srv, sleep=sleeps.append, max_retries_429=2)
+    srv.fail_next = [(429, {"code": "OA-400", "message": "Rate Limit Exceeded"}, {})] * 3
+    with pytest.raises(QuotaExhausted, match="429"):
+        c.get(f"/price/{KRX}/trades", {"boardId": "G1", "from": "1", "to": "2", "limit": 10})
+    assert sleeps == [5.0, 5.0]                                    # vẫn thử lại ngắn trước (có thể chỉ là nghẽn tức thời)
+
+
+def test_known_remaining_zero_refuses_before_sending():
+    from scripts.download_history import QuotaExhausted
+    srv = Server()
+    srv.fail_next = [(200, {"trades": []}, {"X-Ratelimit-Remaining": "0", "X-Ratelimit-Reset": str(ep(23, 0))})]
+    c = client(srv)
+    c.get(f"/price/{KRX}/trades", {"boardId": "G1", "from": "1", "to": "2", "limit": 10})
+    n = len(srv.calls)
+    with pytest.raises(QuotaExhausted, match="23:00"):
+        c.get(f"/price/{KRX}/trades", {"boardId": "G1", "from": "1", "to": "2", "limit": 10})
+    assert len(srv.calls) == n
+
+
+def test_remaining_zero_forgotten_after_reset_time():
+    srv = Server()
+    t = {"now": float(ep(22, 0))}
+    c = client(srv, wall=lambda: t["now"])
+    srv.fail_next = [(200, {"trades": []}, {"X-Ratelimit-Remaining": "0", "X-Ratelimit-Reset": str(ep(23, 0))})]
+    c.get(f"/price/{KRX}/trades", {"boardId": "G1", "from": "1", "to": "2", "limit": 10})
+    t["now"] = float(ep(23, 0, 1))                                   # đã qua mốc reset
+    srv.fail_next = [(200, {"trades": []}, {"X-Ratelimit-Remaining": "9999"})]
+    assert c.get(f"/price/{KRX}/trades", {"boardId": "G1", "from": "1", "to": "2", "limit": 10}) == {"trades": []}
