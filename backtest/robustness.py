@@ -104,6 +104,24 @@ def with_overrides(settings: Settings, overrides: dict) -> Settings:
     return Settings(data)
 
 
+def parse_sets(items) -> dict:
+    """["khoá.chấm=giá_trị", …] ⇒ {khoá: giá trị YAML} (true/false/số/chuỗi). Sai dạng ⇒ ValueError."""
+    import yaml
+    out = {}
+    for it in items or ():
+        key, eq, val = str(it).partition("=")
+        if not eq or not key.strip() or not val.strip():
+            raise ValueError(f"--set phải có dạng khoá.chấm=giá_trị, nhận {it!r}")
+        out[key.strip()] = yaml.safe_load(val.strip())
+    return out
+
+
+def apply_sets(settings: Settings, items) -> Settings:
+    """Bản sao settings với các `--set` (khoá phải tồn tại — KeyError khi gõ sai)."""
+    sets = parse_sets(items)
+    return with_overrides(settings, sets) if sets else settings
+
+
 def count_logged_trials(path: Path = REPO_ROOT / "research" / "log.md") -> int:
     """Số cấu hình đã ghi trong research/log.md (mỗi dòng bảng bắt đầu bằng ngày). Tối thiểu 1."""
     p = Path(path)
@@ -303,9 +321,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--n-trials", type=int, default=None,
                     help="mặc định = số dòng cấu hình trong research/log.md")
     ap.add_argument("--out", default="reports/orb_robustness.html")
+    ap.add_argument("--set", action="append", default=[], metavar="KHOÁ=GIÁ_TRỊ",
+                    help="đổi cấu hình CHỈ cho lần chạy này, vd strategy.orb.range_filter.enabled=true")
     args = ap.parse_args(argv)
 
-    settings = load_settings()
+    try:
+        settings = apply_sets(load_settings(), args.set)
+    except (ValueError, KeyError) as exc:
+        print(f"❌ --set: {exc}")
+        return 2
     try:
         BacktestEngine(settings, OpeningRangeBreakout.from_settings(settings))
     except MissingSetting as exc:
@@ -328,7 +352,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     rob = run_robustness(settings, OpeningRangeBreakout.from_settings, bars,
                          date.fromisoformat(args.split), params_for(settings), folds=args.folds,
                          n_trials=n_trials)
-    write_text_atomic(render_html(rob, title="ORB baseline — kiểm định độ bền"), Path(args.out))
+    rf = settings.get("strategy.orb.range_filter")
+    name = ("ORB #2 (lọc độ rộng biên / ADR)" if isinstance(rf, dict) and rf.get("enabled") is True
+            else "ORB baseline (#1)")
+    write_text_atomic(render_html(rob, title=f"{name} — kiểm định độ bền"), Path(args.out))
     print(f"Kết luận: {rob['verdict']}")
     for r in rob["verdict_reasons"]:
         print(f"  - {r}")

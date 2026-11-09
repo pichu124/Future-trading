@@ -521,9 +521,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--from", dest="date_from", help="YYYY-MM-DD")
     ap.add_argument("--to", dest="date_to", help="YYYY-MM-DD (gồm cả ngày này)")
     ap.add_argument("--out", default="reports/backtest.html")
+    ap.add_argument("--set", action="append", default=[], metavar="KHOÁ=GIÁ_TRỊ",
+                    help="đổi cấu hình CHỈ cho lần chạy này, vd strategy.orb.range_filter.enabled=true")
     args = ap.parse_args(argv)
 
-    settings = load_settings()
+    from backtest.robustness import apply_sets
+    try:
+        settings = apply_sets(load_settings(), args.set)
+    except (ValueError, KeyError) as exc:
+        print(f"❌ --set: {exc}")
+        return 2
     try:
         engine = BacktestEngine(settings, _load_strategy(args.strategy, settings))
     except MissingSetting as exc:

@@ -1,5 +1,10 @@
 # Tiến độ
 
+## 2026-11-09 — `--set` cho backtest/robustness (bật ORB #2 không cần sửa settings)
+
+- `backtest.engine` và `backtest.robustness` nhận `--set khoá.chấm=giá_trị` (lặp được; giá trị đọc như YAML; khoá phải tồn tại, sai ⇒ thoát 2). Đổi cấu hình CHỈ cho lần chạy — không bật `range_filter` trong `settings.yaml` (bật ở đó thì runner live/paper cũng đòi lịch sử). Tiêu đề báo cáo robustness ghi ORB #1/#2 theo cấu hình.
+- Test viết trước `tests/test_cli_set_override.py` (7). 1267 test.
+
 ## 2026-11-09 — ORB #1 trên dữ liệu thật: KHÔNG CÓ EDGE
 
 - In-sample (11/05–31/08): 141 lệnh, −3.784.700đ sau phí. `backtest.robustness` (OOS từ 01/09, n_trials 2): **KHÔNG CÓ EDGE** — OOS −2.292.700đ, p = 0,609, trượt 2 tick −3.652.700đ, 0% biến thể ±20% lãi, 25% đoạn walk-forward lãi. Ghi vào `research/log.md` dòng #1.
