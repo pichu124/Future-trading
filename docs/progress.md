@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-09 — Tải xong 6 tháng; `scripts/check_history.py`
+
+- Lượt 2: 24 mục còn lại tải xong, 0 lỗi ⇒ đủ 133 mục kế hoạch 11/05–06/11/2026 (≈127 ngày giao dịch + HĐ kế tiếp các ngày trước roll), tổng ~12.300 request qua 2 ngày hạn mức.
+- `scripts/check_history.py --start … --end …`: đối chiếu kho với `plan_days` — mục ok / rỗng / lỗi / thiếu, ngày thiếu lệnh hoặc có phút volume không tin được (chỉ báo), ngày đáng ngờ (< 150 nến, nến đầu sau 09:05, nến cuối trước 14:25; không kiểm độ phủ HĐ kế tiếp ngày trước roll). Mã thoát 0/1.
+- Test viết trước `tests/test_check_history.py` (9). Thử phá 9 cơ chế ⇒ 2 sống ⇒ thêm 2 test ⇒ hết. 1250 test.
+
 ## 2026-11-09 — Tải cả dải lần 1: 108 ngày; sửa nhận diện hết hạn mức (429 không header)
 
 - Lượt tải 11/05–06/11: 108 ngày ghi xong (≈ 93 request/ngày nhờ phân trang), 10.024 request; 24 ngày lỗi `429 [OA-400] Rate Limit Exceeded` vì 429 thật KHÔNG kèm `X-Ratelimit-Remaining` ⇒ downloader cũ ghi lỗi từng ngày (ngày lỗi không bị đánh dấu xong ⇒ lần sau tải lại, không mất gì).
