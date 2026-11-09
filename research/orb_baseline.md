@@ -35,7 +35,11 @@ chối chạy. Khi đã có:
 
 4. Ghi kết quả (kể cả xấu) vào `research/log.md`. Mỗi lần đổi tham số ⇒ thêm dòng, tăng `--n-trials`.
 
-## Kiểm định độ bền (P3.3) — kết luận hiện tại: CHƯA CÓ BẰNG CHỨNG EDGE
+## Kiểm định độ bền (P3.3) — kết luận (09/11/2026, dữ liệu thật 11/05–06/11/2026): KHÔNG CÓ EDGE
+
+Xem `research/log.md` dòng #1: OOS lỗ −2,29tr, p = 0,609, 0% biến thể ±20% lãi, 25% đoạn walk-forward lãi.
+
+### (Ghi chú cũ, trước khi có dữ liệu)
 
 **Chưa chạy được trên dữ liệu thật** (không có dữ liệu bar; `fees.*` / `risk.*` còn null). Vì vậy
 hiện tại **không có bằng chứng nào cho thấy ORB có edge** — mặc định coi là KHÔNG có cho tới khi

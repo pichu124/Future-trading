@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-09 — ORB #1 trên dữ liệu thật: KHÔNG CÓ EDGE
+
+- In-sample (11/05–31/08): 141 lệnh, −3.784.700đ sau phí. `backtest.robustness` (OOS từ 01/09, n_trials 2): **KHÔNG CÓ EDGE** — OOS −2.292.700đ, p = 0,609, trượt 2 tick −3.652.700đ, 0% biến thể ±20% lãi, 25% đoạn walk-forward lãi. Ghi vào `research/log.md` dòng #1.
+- Ước tính: phí ~46.700đ/lượt (≈ 0,47 điểm) ⇒ IS trước phí ≈ +2,8tr (≈ +0,2 điểm/lượt, đã gồm trượt + nửa spread giả) — chi phí ăn hết.
+- ⇒ ORB #1 KHÔNG được paper/live. Phần OOS 01/09–06/11 đã dùng cho #1.
+
 ## 2026-11-09 — Chốt mốc chia IS/OOS + luật dữ liệu ≤ 1% (người dùng chọn, trước khi xem kết quả)
 
 - `scripts/check_history.py` trên kho thật: 133/133 mục, 127 ngày, 32.053 nến, không ngày đáng ngờ; 53 ngày có vài phút thiếu lệnh (chủ yếu 09:00/14:45/13:00); 09/06 thiếu 452 HĐ lúc 09:39–09:43 (giữa phiên, thuộc IS).
