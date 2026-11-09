@@ -50,7 +50,8 @@ BASE_URL = "https://openapi.dnse.com.vn"
 VN = timezone(timedelta(hours=7))
 DAY_FROM, DAY_TO = (8, 30), (15, 0)          # cửa sổ tải mỗi ngày (giờ VN) — gồm ATO/ATC
 TRADE_WINDOW_S = 30 * 60
-BIG_LIMITS = (2000, 10000)                    # giây khớp định kỳ đầy `limit` dòng ⇒ thử lại với các limit này
+MAX_LIMIT = 1000                              # server: "limit must be between 1 and 1000" (probe 09/11/2026)
+PAGE_PARAMS = ("nextPageToken", "pageToken")  # tên tham số gửi token trang — CHƯA có trong tài liệu ⇒ thử + tự kiểm
 SOURCE = "dnse_history"
 
 
@@ -264,44 +265,73 @@ def parse_trade_times(rows: Sequence[dict], f: int, t: int, slack_s: int = 60) -
                        "đã hỏi cả khi coi là UTC lẫn giờ VN)")
 
 
-def fetch_trades_day(client: HistoryClient, krx: str, d: date, limit: int = 500) -> list[dict]:
+def _trades_page(body) -> tuple[list[dict], str]:
+    rows = body.get("trades") if isinstance(body, dict) else None
+    if not isinstance(rows, list):
+        raise HistoryError("trades: khuôn response lạ")
+    tok = body.get("nextPageToken") if isinstance(body, dict) else None
+    return [r for r in rows if isinstance(r, dict)], (str(tok) if tok else "")
+
+
+def _older_and_disjoint(new: list[dict], seen_totals: set) -> bool:
+    """Trang sau hợp lệ ⇔ mọi lệnh có KL luỹ kế, không trùng lệnh đã có, và CŨ hơn (luỹ kế nhỏ hơn) lệnh cũ nhất đã có."""
+    totals = [r.get("totalVolumeTraded") for r in new]
+    if not new or any(tv is None for tv in totals) or not seen_totals:
+        return False
+    return not (set(totals) & seen_totals) and max(int(x) for x in totals) < min(int(x) for x in seen_totals)
+
+
+def fetch_trades_day(client: HistoryClient, krx: str, d: date, limit: int = MAX_LIMIT) -> list[dict]:
     out: list[dict] = []
     saturated_leaf = 0
+    page_param: list = [None]                         # tên tham số trang đã kiểm là chạy được (nhớ cho các giây sau)
+
+    def get(f: int, t: int, extra: Optional[dict] = None):
+        return _trades_page(client.get(f"/price/{krx}/trades",
+                                       {"boardId": "G1", "from": str(f), "to": str(t), "limit": limit, **(extra or {})}))
+
+    def page_rest(f: int, t: int, rows: list[dict], token: str) -> tuple[list[dict], bool]:
+        """≥ limit lệnh trong 1 giây (khớp định kỳ ATO 09:00:00 / ATC 14:45:00): không chia nhỏ hơn giây được ⇒
+        đi tiếp bằng `nextPageToken`. Tên tham số gửi token chưa có tài liệu ⇒ thử từng tên, chỉ nhận khi trang
+        sau CŨ hơn và không trùng (tự kiểm); server lờ / từ chối ⇒ giữ phần đã có. Trả (rows, đủ hay chưa)."""
+        names = [page_param[0]] if page_param[0] else list(PAGE_PARAMS)
+        for _ in range(100):                          # chặn vòng lặp vô hạn
+            if not token:
+                return rows, True
+            seen = {r.get("totalVolumeTraded") for r in rows if r.get("totalVolumeTraded") is not None}
+            got = None
+            for name in names:
+                try:
+                    more, nxt = get(f, t, {name: token})
+                except HistoryError as exc:
+                    log.info("trades %s %s: tham số trang %r bị từ chối (%s)", krx, d, name, exc)
+                    continue
+                if _older_and_disjoint(more, seen):
+                    got, page_param[0], names = (more, nxt), name, [name]
+                    break
+            if got is None:
+                return rows, False
+            rows = rows + got[0]
+            token = got[1]
+            if len(got[0]) < limit:
+                return rows, True
+        return rows, False
 
     def window(f: int, t: int) -> None:
         nonlocal saturated_leaf
-        body = client.get(f"/price/{krx}/trades", {"boardId": "G1", "from": str(f), "to": str(t), "limit": limit})
-        rows = body.get("trades") if isinstance(body, dict) else None
-        if not isinstance(rows, list):
-            raise HistoryError(f"trades {krx} {d}: khuôn response lạ")
-        rows = [r for r in rows if isinstance(r, dict)]
+        try:
+            rows, token = get(f, t)
+        except HistoryError as exc:
+            raise HistoryError(f"trades {krx} {d}: {exc}") from exc
         if len(rows) >= limit:
             if t - f >= 2:
                 mid = (f + t) // 2
                 window(f, mid)
                 window(mid, t)
                 return
-            # ≥ limit lệnh trong 1 giây (khớp định kỳ ATO 09:00:00 / ATC 14:45:00 — probe 09/11/2026): không chia nhỏ
-            # hơn giây được ⇒ xin lại với limit lớn hơn; server từ chối ⇒ giữ phần đã có (phút đó bị đánh dấu thiếu)
-            full = False
-            for big in BIG_LIMITS:
-                if big <= limit:
-                    continue
-                try:
-                    more = client.get(f"/price/{krx}/trades",
-                                      {"boardId": "G1", "from": str(f), "to": str(t), "limit": big})
-                except HistoryError as exc:
-                    log.info("trades %s %s: limit %d bị từ chối (%s)", krx, d, big, exc)
-                    break
-                more_rows = more.get("trades") if isinstance(more, dict) else None
-                if not isinstance(more_rows, list):
-                    break
-                rows = [r for r in more_rows if isinstance(r, dict)]
-                if len(rows) < big:
-                    full = True
-                    break
+            rows, full = page_rest(f, t, rows, token)
             if not full:
-                saturated_leaf += 1
+                saturated_leaf += 1                   # phút này sẽ bị đánh dấu volume không tin được
         for r, ts in zip(rows, parse_trade_times(rows, f, t)):
             out.append({**r, "ts": ts})
 
@@ -311,7 +341,7 @@ def fetch_trades_day(client: HistoryClient, krx: str, d: date, limit: int = 500)
         window(a, b)
         a = b
     if saturated_leaf:
-        log.warning("trades %s %s: %d cửa sổ 1 giây vẫn đầy %d dòng — có thể thiếu", krx, d, saturated_leaf, limit)
+        log.warning("trades %s %s: %d giây vẫn đầy %d dòng sau khi thử phân trang — thiếu lệnh, phút đó đánh dấu volume không tin được", krx, d, saturated_leaf, limit)
     seen: dict = {}
     for r in out:
         key = r.get("totalVolumeTraded")
@@ -365,7 +395,7 @@ def plan_days(start: date, end: date, calendar: TradingCalendar, roll_days_befor
 
 def download(client: HistoryClient, plan: Iterable[tuple[date, str, str]], out_dir: Path | str, *,
              kinds: Sequence[str] = ("trades",), force: bool = False, retry_empty: bool = False,
-             trades_limit: int = 500) -> dict:
+             trades_limit: int = MAX_LIMIT) -> dict:
     """Khớp lệnh ⇒ `trades/…` + nến 1 phút dựng từ khớp lệnh ⇒ `ohlc1m/…` (không ghi đè nến đã có trừ khi
     `force`; thiếu nến mà đã có file khớp lệnh ⇒ dựng lại từ file, không gọi mạng). `ohlc` = endpoint OHLC của
     DNSE (tuỳ chọn; trên dây trả rỗng/"invalid symbol")."""

@@ -50,7 +50,10 @@ class Server:
         self.need_query_sign = need_query_sign
         self.fail_next = []
         self.page = 3                          # số nến mỗi trang OHLC
-        self.max_limit = None                  # limit lớn hơn ⇒ 400 (giả lập server giới hạn limit)
+        self.max_limit = 1000                  # server thật: "limit must be between 1 and 1000" (probe 09/11/2026)
+        self.page_param = None                 # tên tham số trang server hiểu (None ⇒ lờ mọi tham số trang)
+        self.reject_params = ()                # tham số làm server trả 400
+        self.always_token = False              # trả token cả ở trang cuối (ngắn hơn limit)
 
     def get(self, url, params=None, headers=None, timeout=None):
         self.calls.append({"url": url, "params": dict(params or {}), "headers": dict(headers or {})})
@@ -77,11 +80,16 @@ class Server:
             def ts(x):
                 return int(datetime.strptime(x["time"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp())
             if self.max_limit is not None and lim > self.max_limit:
-                return Resp(400, {"status": 400, "code": "BAD_REQUEST", "message": "limit too large"})
+                return Resp(400, {"status": 400, "code": "BAD_REQUEST", "message": "limit must be between 1 and 1000"})
+            if self.reject_params and any(k in p for k in self.reject_params):
+                return Resp(400, {"status": 400, "code": "BAD_REQUEST", "message": "unknown parameter"})
             # như server thật: MỚI NHẤT trước, kể cả trong cùng một giây (KL luỹ kế giảm dần — probe 09/11/2026)
-            rows = sorted([x for x in self.trades if f <= ts(x) <= t],
-                          key=lambda x: (ts(x), x.get("totalVolumeTraded") or 0), reverse=True)[:lim]
-            return Resp(200, {"trades": rows, "nextPageToken": "tok" if len(rows) == lim else ""})
+            allrows = sorted([x for x in self.trades if f <= ts(x) <= t],
+                             key=lambda x: (ts(x), x.get("totalVolumeTraded") or 0), reverse=True)
+            off = int(p.get(self.page_param) or 0) if self.page_param else 0   # tham số trang khác ⇒ bị lờ
+            rows = allrows[off:off + lim]
+            more = off + lim < len(allrows) or (self.always_token and rows)
+            return Resp(200, {"trades": rows, "nextPageToken": str(off + lim) if more else ""})
         return Resp(404, {"code": "OA-404", "message": "no route"})
 
 
@@ -368,24 +376,46 @@ def auction_second(h, m, n, start_total, price=1350.0):
     return [trade(h, m, 0, price, 1, start_total + i + 1) for i in range(n)]
 
 
-def test_saturated_second_retried_with_bigger_limit_gets_everything():
-    rows = auction_second(9, 0, 600, 0) + [trade(9, 1, 10, 1351.0, 2, 602)]
+def test_default_trades_limit_is_server_max():
+    import inspect
+    assert inspect.signature(fetch_trades_day).parameters["limit"].default == 1000
+    assert inspect.signature(download).parameters["trades_limit"].default == 1000
+
+
+def test_saturated_second_paged_with_next_page_token():
+    rows = auction_second(9, 0, 2500, 0) + [trade(9, 1, 10, 1351.0, 2, 2502)]
     srv = Server(trades=rows)
-    got = fetch_trades_day(client(srv), KRX, DAY, limit=500)
-    assert len(got) == 601 and volume_gap(got) == 0
-    assert any(c["params"].get("limit") == 2000 for c in srv.calls)
-    assert not any(c["params"].get("limit") == 10000 for c in srv.calls)   # đủ ở 2000 ⇒ không xin thêm
+    srv.page_param = "nextPageToken"
+    got = fetch_trades_day(client(srv), KRX, DAY)
+    assert len(got) == 2501 and volume_gap(got) == 0
+    assert any("nextPageToken" in c["params"] for c in srv.calls)
 
 
-def test_bigger_limit_rejected_keeps_partial_and_flags_only_that_minute(tmp_path):
+def test_falls_back_to_page_token_name_when_first_name_ignored():
+    rows = auction_second(9, 0, 1500, 0) + [trade(9, 1, 10, 1351.0, 2, 1502)]
+    srv = Server(trades=rows)
+    srv.page_param = "pageToken"                                    # "nextPageToken" bị lờ ⇒ trả lại trang đầu
+    got = fetch_trades_day(client(srv), KRX, DAY)
+    assert len(got) == 1501 and volume_gap(got) == 0
+    assert any("pageToken" in c["params"] for c in srv.calls)
+
+
+def test_paging_unsupported_keeps_partial_flags_minute_and_stops(tmp_path):
     from backtest.engine import load_bars_parquet
-    rows = (auction_second(9, 0, 600, 0) + [trade(9, 1, 10, 1351.0, 2, 602), trade(9, 2, 10, 1352.0, 1, 603)])
-    srv = Server(trades=rows)
-    srv.max_limit = 500                                            # server không cho limit lớn hơn
-    download(client(srv), [(DAY, "VN30F2611", KRX)], tmp_path, trades_limit=500)
+    rows = auction_second(9, 0, 1200, 0) + [trade(9, 1, 10, 1351.0, 2, 1202), trade(9, 2, 10, 1352.0, 1, 1203)]
+    srv = Server(trades=rows)                                       # lờ mọi tham số trang
+    download(client(srv), [(DAY, "VN30F2611", KRX)], tmp_path)
+    assert len(srv.calls) < 100                                     # không lặp vô hạn
     bars, _ = load_bars_parquet(tmp_path / "ohlc1m" / "VN30F2611" / "2026-11-09.parquet")
-    by_min = {b.start.minute: b.volume_reliable for b in bars}
-    assert by_min == {0: False, 1: True, 2: True}                  # chỉ phút ATO thiếu lệnh
+    assert {b.start.minute: b.volume_reliable for b in bars} == {0: False, 1: True, 2: True}   # chỉ phút ATO thiếu
+
+
+def test_paging_param_rejected_with_400_keeps_partial():
+    rows = auction_second(9, 0, 1200, 0)
+    srv = Server(trades=rows)
+    srv.reject_params = ("nextPageToken", "pageToken")
+    got = fetch_trades_day(client(srv), KRX, DAY)
+    assert len(got) == 1000                                         # giữ trang đầu, không ném lỗi
 
 
 def test_gap_in_middle_flags_minute_of_the_trade_after_gap(tmp_path):
@@ -418,3 +448,50 @@ def test_trades_without_running_total_make_all_bars_unreliable(tmp_path):
     assert bars and not any(b.volume_reliable for b in bars)          # không kiểm được KL ⇒ không tin
     man = json.loads((tmp_path / "_manifest.json").read_text(encoding="utf-8"))
     assert man["ohlc1m/VN30F2611/2026-11-09"]["unreliable_minutes"] is None
+
+
+def test_page_param_remembered_after_verification():
+    rows = auction_second(9, 0, 3500, 0)                            # 4 trang
+    srv = Server(trades=rows)
+    srv.page_param = "pageToken"
+    got = fetch_trades_day(client(srv), KRX, DAY)
+    assert len(got) == 3500
+    assert sum(1 for c in srv.calls if "nextPageToken" in c["params"]) == 1   # tên sai chỉ thử một lần
+
+
+def test_first_name_rejected_400_then_second_name_tried():
+    rows = auction_second(9, 0, 1500, 0)
+    srv = Server(trades=rows)
+    srv.page_param, srv.reject_params = "pageToken", ("nextPageToken",)
+    assert len(fetch_trades_day(client(srv), KRX, DAY)) == 1500
+
+
+def test_token_on_last_short_page_still_complete(tmp_path, caplog):
+    from backtest.engine import load_bars_parquet
+    rows = auction_second(9, 0, 1500, 0) + [trade(9, 1, 10, 1351.0, 1, 1501)]
+    srv = Server(trades=rows)
+    srv.page_param, srv.always_token = "nextPageToken", True
+    with caplog.at_level("WARNING"):
+        download(client(srv), [(DAY, "VN30F2611", KRX)], tmp_path)
+    bars, _ = load_bars_parquet(tmp_path / "ohlc1m" / "VN30F2611" / "2026-11-09.parquet")
+    assert all(b.volume_reliable for b in bars)
+    assert not any("vẫn đầy" in r.getMessage() for r in caplog.records)     # trang ngắn ⇒ đã đủ
+    assert sum(1 for c in srv.calls if c["params"].get("nextPageToken") == "2000") == 0   # không xin trang thừa
+
+
+def test_exactly_limit_rows_without_token_is_complete(caplog):
+    rows = auction_second(9, 0, 1000, 0)
+    srv = Server(trades=rows)
+    with caplog.at_level("WARNING"):
+        got = fetch_trades_day(client(srv), KRX, DAY)
+    assert len(got) == 1000 and not any("vẫn đầy" in r.getMessage() for r in caplog.records)
+
+
+def test_older_and_disjoint_rejects_newer_or_overlapping_pages():
+    from scripts.download_history import _older_and_disjoint
+    seen = {100, 101, 102}
+    assert _older_and_disjoint([{"totalVolumeTraded": 98}, {"totalVolumeTraded": 99}], seen)
+    assert not _older_and_disjoint([{"totalVolumeTraded": 103}], seen)          # mới hơn ⇒ không phải trang sau
+    assert not _older_and_disjoint([{"totalVolumeTraded": 99}, {"totalVolumeTraded": 101}], seen)   # trùng
+    assert not _older_and_disjoint([{"totalVolumeTraded": None}], seen)
+    assert not _older_and_disjoint([], seen)

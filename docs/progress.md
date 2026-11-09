@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-09 — `limit` tối đa 1000; phân trang tự kiểm cho giây ATO/ATC
+
+- Tải lại 06/11: server từ chối `limit` 2000 ("limit must be between 1 and 1000"); manifest đánh dấu đúng 3 phút 09:00, 14:29, 14:45 (thiếu 2.986 HĐ).
+- Downloader: `limit` mặc định = 1000 (giảm ~½ số request). Giây vẫn đầy ⇒ phân trang bằng `nextPageToken`: thử tên tham số `nextPageToken` rồi `pageToken`, chỉ nhận trang sau khi nó CŨ hơn + không trùng (`_older_and_disjoint`), nhớ tên đã chạy; server lờ / 400 ⇒ giữ phần đã có, phút đó bị đánh dấu. Tối đa 100 trang/giây.
+- 10 test mới (server giả có tham số trang cấu hình được, trả token cả trang cuối, từ chối tham số). Thử phá 8 cơ chế ⇒ 5 sống ⇒ thêm 6 test ⇒ hết. 1231 test.
+
 ## 2026-11-09 — Tải thử 1 ngày: giây khớp định kỳ ATO/ATC bị cắt ⇒ xin lại limit lớn + đánh dấu theo phút
 
 - Người dùng tải 06/11/2026: 108.976 lệnh / 705 request, `volume_gap` 2.986 HĐ — chỉ ở giây 09:00:00 (ATO) và 14:45:00 (ATC), mỗi giây > 500 lệnh cùng lúc.

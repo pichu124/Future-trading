@@ -93,8 +93,10 @@ lệnh đôi ⇒ adapter DNSE phải: không tự retry lệnh đặt; khi khôn
   (mặc định `--kinds trades`), volume tin được chỉ khi KL luỹ kế khớp.
 - Tải thử 1 ngày (06/11/2026): 108.976 lệnh, 705 request; trong một giây khớp định kỳ — **09:00:00 (ATO)** và
   **14:45:00 (ATC)** — có > 500 lệnh cùng thời điểm, không chia nhỏ hơn giây được ⇒ thiếu 2.986 HĐ (~1,4% KL ngày),
-  phiên liên tục đầy đủ. Downloader: giây đầy ⇒ xin lại với `limit` 2.000 / 10.000 (giới hạn `limit` tối đa của server ❓);
-  vẫn thiếu ⇒ chỉ đánh dấu volume không tin được cho đúng phút quanh chỗ hụt KL luỹ kế. Server trả lệnh trong cùng
+  phiên liên tục đầy đủ. `limit` tối đa = **1000** ✅ (`400 "limit must be between 1 and 1000"`) ⇒ downloader dùng 1000.
+  Giây đầy ⇒ đi tiếp bằng `nextPageToken`; tên tham số gửi token CHƯA có tài liệu ⇒ thử `nextPageToken` rồi `pageToken`,
+  chỉ nhận khi trang sau CŨ hơn và không trùng (tự kiểm) ❓ — chờ lần tải tiếp cho biết tên nào chạy; vẫn thiếu ⇒ chỉ
+  đánh dấu volume không tin được cho đúng phút quanh chỗ hụt KL luỹ kế (lần tải 06/11: 09:00, 14:29, 14:45). Server trả lệnh trong cùng
   giây theo KL luỹ kế GIẢM dần (mới nhất trước).
 - Trường của một lệnh khớp (thật): `marketId, boardId, isin, symbol, matchPrice, matchQtty, side (BUY/SELL), avgPrice,
   totalVolumeTraded (luỹ kế, giảm 1 mỗi lệnh 1 HĐ khi đọc ngược ⇒ khoá lọc trùng đúng), grossTradeAmount, highestPrice,
