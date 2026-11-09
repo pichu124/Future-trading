@@ -3,7 +3,7 @@
 ## 2026-11-09 — Probe lịch sử DNSE trên dây: sửa đọc thời gian khớp lệnh
 
 - `dnse_history_probe.py`: trades nhận epoch giây (định dạng khác ⇒ 400); `time` là giờ VN CÓ mili-giây ⇒ downloader cũ sẽ lỗi ở MỌI cửa sổ khớp lệnh ⇒ đã sửa `parse_trade_times` (nhận có/không mili-giây), test với chuỗi thật. Lịch sử khớp lệnh: ≥ 6 tháng, < 12 tháng.
-- OHLC: 0 dòng (ngày gần) / 400 (ngày cũ) — chờ body lỗi.
+- OHLC: HĐ đã đáo hạn ⇒ 400 "invalid symbol"; HĐ hiện tại ⇒ rỗng với `nextTime = from` (downloader cũ coi là lỗi "nextTime không tăng" ⇒ đã sửa). ⇒ **Nến 1 phút giờ dựng từ khớp lệnh** (`bars_from_trades`, mặc định `--kinds trades`, `source = dnse_trades`, `volume_reliable` = KL luỹ kế khớp); thiếu nến mà có file khớp lệnh ⇒ dựng lại không gọi mạng; không ghi đè nến có sẵn trừ `--force`. 6 test mới, thử phá 10 cơ chế ⇒ 0 sống. 1218 test.
 - Sửa test chập chờn `test_feed_down_is_unhealthy_immediately` (ngủ cứng 50ms ⇒ chờ điều kiện tối đa 2s). 1212 test.
 
 ## 2026-11-09 — Probe DNSE (chỉ đọc) chạy trên dây lần đầu

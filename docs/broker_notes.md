@@ -88,7 +88,12 @@ lệnh đôi ⇒ adapter DNSE phải: không tự retry lệnh đặt; khi khôn
 - `/price/{KRX}/trades`: chỉ **epoch giây** được nhận (ms/ISO/ngày ⇒ 400) ✅; `time` là **giờ VN có mili-giây**
   (`"2026-11-06 10:04:58.705"`) ✅ — đã sửa downloader (trước đó không đọc được phần mili-giây); trả 100 dòng = `limit`
   (mới nhất trước) ⇒ cần chia cửa sổ ✅; độ sâu lịch sử: có dữ liệu 6 tháng trước (05/2026), 12 tháng trước (11/2025) rỗng.
-- `/price/ohlc`: ngày gần nhất epoch giây ⇒ 200 nhưng 0 dòng; ngày cũ hơn ⇒ 400 ❓ (đang chờ body lỗi để chẩn đoán).
+- `/price/ohlc`: HĐ ĐÃ đáo hạn (vd 41I1GA000) ⇒ 400 `{"code": "BAD_REQUEST", "message": "invalid symbol"}`; HĐ hiện tại
+  ⇒ 200 nhưng cột rỗng và `nextTime = from` ✅ ⇒ **không dùng được cho lịch sử**. Downloader dựng nến 1 phút từ khớp lệnh
+  (mặc định `--kinds trades`), volume tin được chỉ khi KL luỹ kế khớp.
+- Trường của một lệnh khớp (thật): `marketId, boardId, isin, symbol, matchPrice, matchQtty, side (BUY/SELL), avgPrice,
+  totalVolumeTraded (luỹ kế, giảm 1 mỗi lệnh 1 HĐ khi đọc ngược ⇒ khoá lọc trùng đúng), grossTradeAmount, highestPrice,
+  lowestPrice, openPrice, time` ✅.
 
 Còn ❓ trên dây — downloader **tự kiểm, không đoán** (sai ⇒ báo lỗi ngày đó, không ghi file):
 | Mục | Cách downloader xử lý |

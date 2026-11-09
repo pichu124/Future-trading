@@ -2,9 +2,10 @@
 
 Theo đặc tả OpenAPI chính thức DNSE (`docs/dnseopenapi-en.yaml` của repo `dnse-tech/dnse-py`, đọc 08/11/2026 —
 docs/broker_notes.md §1.3):
-- OHLC 1 phút: `GET /price/ohlc?symbol=<KRX>&type=DERIVATIVE&resolution=1&from&to` — from/to epoch GIÂY; response
-  dạng cột `{t, o, h, l, c, v, nextTime}`; `nextTime` ≠ 0 ⇒ còn trang, gọi tiếp từ đó. `t` = thời điểm MỞ nến
-  (suy từ ví dụ trong đặc tả — ❓, `scripts/validate_day.py`/backtest sẽ lộ ra nếu lệch).
+- **Nến 1 phút dựng từ KHỚP LỆNH** (mặc định): probe 09/11/2026 cho thấy `GET /price/ohlc` không dùng được — HĐ đã
+  đáo hạn ⇒ 400 "invalid symbol", HĐ hiện tại ⇒ trang rỗng `nextTime = from`. Khớp lệnh thì có cả HĐ đã đáo hạn
+  (≥ 6 tháng) ⇒ nến dựng như recorder; volume chỉ "tin được" khi KL luỹ kế khớp (`volume_gap = 0`).
+  `--kinds ohlc` vẫn gọi endpoint OHLC (dạng cột `{t, o, h, l, c, v, nextTime}`, epoch giây) nếu sau này dùng được.
 - Khớp lệnh: `GET /price/{KRX}/trades?boardId=G1&from&to&limit` — `{trades: [...], nextPageToken}`, mới nhất trước.
   Tên tham số gửi `nextPageToken` KHÔNG có trong đặc tả (❓) ⇒ không dùng: cửa sổ trả đủ `limit` dòng thì chia đôi.
   `time` "YYYY-MM-DD HH:MM:SS[.fff]": đặc tả ví dụ giờ UTC, server THẬT trả giờ VN có mili-giây (probe 09/11/2026)
@@ -13,7 +14,8 @@ docs/broker_notes.md §1.3):
 - HTTP 429 ⇒ chờ `Retry-After` rồi thử lại (GET, an toàn); lỗi khác ⇒ ghi nhận ngày đó lỗi, tải ngày khác tiếp.
 
 Đầu ra (ghi nguyên tử; chạy lại KHÔNG tải trùng — có file hoặc manifest ghi "rỗng" thì bỏ qua):
-- `<out>/ohlc1m/<VN30FYYMM>/<YYYY-MM-DD>.parquet` — schema bar của backtest (`load_bars_parquet`), volume tin được;
+- `<out>/ohlc1m/<VN30FYYMM>/<YYYY-MM-DD>.parquet` — schema bar của backtest (`load_bars_parquet`), dựng từ khớp lệnh
+  (`source = "dnse_trades"`), `volume_reliable` theo kiểm KL luỹ kế;
 - `<out>/trades/<VN30FYYMM>/<YYYY-MM-DD>.parquet` — schema tick của recorder (`source = "dnse_history"`);
 - `<out>/_manifest.json` — số dòng từng mục, mục rỗng (vd hợp đồng đã đáo hạn quá xa), khối lượng thiếu (trades).
 
@@ -21,7 +23,7 @@ Mặc định mỗi ngày tải hợp đồng bot giao dịch; ngày trước ro
 back-adjust, `core/continuous.py`). `--all-listed` tải mọi hợp đồng đang niêm yết.
 
     python scripts/download_history.py --start 2026-10-01 --end 2026-11-06
-    python scripts/download_history.py --start 2026-01-01 --end 2026-11-06 --kinds ohlc --all-listed
+    python scripts/download_history.py --start 2026-05-01 --end 2026-11-06 --all-listed
 """
 from __future__ import annotations
 
@@ -164,6 +166,8 @@ def fetch_ohlc_day(client: HistoryClient, krx: str, d: date, resolution: str = "
         if nt == 0 or nt > to:
             break
         if nt <= f:
+            if not cols[0]:
+                break                                  # server thật: trang rỗng trả nextTime = from ⇒ không có nến
             raise HistoryError(f"OHLC {krx} {d}: nextTime {nt} không tăng (from {f})")
         f = nt
     else:
@@ -178,6 +182,35 @@ def bars_frame(rows: Sequence[dict], contract: str):
     df["interval_s"] = 60
     df["volume_reliable"] = True                       # khối lượng thật từ sở (khác dữ liệu snapshot dashboard)
     return df
+
+
+def bars_from_trades(rows: Sequence[dict], contract: str, volume_reliable: bool):
+    """Nến 1 phút dựng từ khớp lệnh (rows có `ts`, `matchPrice`, `matchQtty`, theo thời gian) — cùng schema
+    `bars_frame`. `/price/ohlc` của DNSE không dùng được (HĐ đã đáo hạn ⇒ "invalid symbol", HĐ hiện tại ⇒ rỗng;
+    probe 09/11/2026) nên nến lấy từ khớp lệnh như recorder. Volume chỉ tin được khi KL luỹ kế khớp (gap = 0)."""
+    import pandas as pd
+    groups: dict[datetime, list[dict]] = {}
+    for r in rows:
+        if r.get("matchPrice") is None:
+            continue
+        ts = r["ts"]
+        groups.setdefault(ts.replace(second=0, microsecond=0), []).append(r)
+    recs = []
+    for start in sorted(groups):
+        g = groups[start]
+        px = [float(r["matchPrice"]) for r in g]
+        recs.append({"symbol": contract, "start": start, "open": px[0], "high": max(px), "low": min(px),
+                     "close": px[-1], "volume": sum(int(r.get("matchQtty") or 0) for r in g), "interval_s": 60,
+                     "volume_reliable": bool(volume_reliable), "source": "dnse_trades"})
+    return pd.DataFrame(recs, columns=["symbol", "start", "open", "high", "low", "close", "volume", "interval_s",
+                                       "volume_reliable", "source"])
+
+
+def _trade_rows_from_file(path: Path) -> list[dict]:
+    import pyarrow.parquet as pq
+    out = [{"ts": r["ts"], "matchPrice": r["last"], "matchQtty": r["last_qty"], "totalVolumeTraded": r["total_volume"]}
+           for r in pq.read_table(path).to_pylist()]
+    return sorted(out, key=lambda r: (r["ts"], r.get("totalVolumeTraded") or 0))
 
 
 # ------------------------------------------------------------------ khớp lệnh ----
@@ -287,14 +320,28 @@ def plan_days(start: date, end: date, calendar: TradingCalendar, roll_days_befor
 
 
 def download(client: HistoryClient, plan: Iterable[tuple[date, str, str]], out_dir: Path | str, *,
-             kinds: Sequence[str] = ("ohlc", "trades"), force: bool = False, retry_empty: bool = False,
+             kinds: Sequence[str] = ("trades",), force: bool = False, retry_empty: bool = False,
              trades_limit: int = 500) -> dict:
+    """Khớp lệnh ⇒ `trades/…` + nến 1 phút dựng từ khớp lệnh ⇒ `ohlc1m/…` (không ghi đè nến đã có trừ khi
+    `force`; thiếu nến mà đã có file khớp lệnh ⇒ dựng lại từ file, không gọi mạng). `ohlc` = endpoint OHLC của
+    DNSE (tuỳ chọn; trên dây trả rỗng/"invalid symbol")."""
     from utils.atomic_io import read_json, write_dataframe_atomic, write_json_atomic, write_table_atomic
     out = Path(out_dir)
     man_path = out / "_manifest.json"
     manifest: dict = read_json(man_path, default={}) or {}
-    summary = {"written": 0, "empty": 0, "skipped": 0, "errors": 0}
+    summary = {"written": 0, "empty": 0, "skipped": 0, "errors": 0, "bars": 0}
     folder = {"ohlc": "ohlc1m", "trades": "trades"}
+
+    def write_bars(rows, name, d, fresh: bool) -> None:
+        bars_path = out / "ohlc1m" / name / f"{d.isoformat()}.parquet"
+        if not rows or (bars_path.exists() and not (force and fresh)):
+            return
+        gap = volume_gap(rows)
+        write_dataframe_atomic(bars_from_trades(rows, name, volume_reliable=(gap == 0)), bars_path)
+        manifest[f"ohlc1m/{name}/{d.isoformat()}"] = {"rows": len(rows), "from": "trades", "volume_gap": gap,
+                                                      "at": datetime.now().isoformat(timespec="seconds")}
+        summary["bars"] += 1
+
     for d, name, krx in plan:
         for kind in kinds:
             key = f"{folder[kind]}/{name}/{d.isoformat()}"
@@ -302,6 +349,13 @@ def download(client: HistoryClient, plan: Iterable[tuple[date, str, str]], out_d
             prev = manifest.get(key)
             if not force and (path.exists() or (prev is not None and prev.get("rows") == 0 and not retry_empty)):
                 summary["skipped"] += 1
+                if kind == "trades" and path.exists():
+                    try:
+                        write_bars(_trade_rows_from_file(path), name, d, fresh=False)   # nến thiếu ⇒ dựng lại
+                        write_json_atomic(manifest, man_path)
+                    except Exception as exc:
+                        summary["errors"] += 1
+                        log.error("%s: dựng nến từ file khớp lệnh lỗi: %s", key, exc)
                 continue
             try:
                 if kind == "ohlc":
@@ -313,6 +367,7 @@ def download(client: HistoryClient, plan: Iterable[tuple[date, str, str]], out_d
                     rows = fetch_trades_day(client, krx, d, limit=trades_limit)
                     if rows:
                         write_table_atomic(ticks_table(rows, name), path)
+                        write_bars(rows, name, d, fresh=True)
                     entry = {"rows": len(rows), "volume_gap": volume_gap(rows)}
             except Exception as exc:
                 summary["errors"] += 1
@@ -335,7 +390,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Tải lịch sử VN30F từ DNSE (OHLC 1 phút + khớp lệnh)")
     ap.add_argument("--start", required=True, help="YYYY-MM-DD")
     ap.add_argument("--end", help="YYYY-MM-DD (mặc định hôm qua)")
-    ap.add_argument("--kinds", nargs="+", choices=["ohlc", "trades"], default=["ohlc", "trades"])
+    ap.add_argument("--kinds", nargs="+", choices=["ohlc", "trades"], default=["trades"],
+                    help="trades (mặc định: khớp lệnh + nến 1 phút dựng từ khớp lệnh); ohlc = endpoint OHLC DNSE "
+                         "(trên dây trả rỗng / 'invalid symbol' với HĐ đã đáo hạn)")
     ap.add_argument("--all-listed", action="store_true", help="tải cả F2M/F1Q/F2Q, không chỉ hợp đồng giao dịch")
     ap.add_argument("--force", action="store_true", help="tải lại cả mục đã có")
     ap.add_argument("--retry-empty", action="store_true", help="thử lại các mục lần trước rỗng")

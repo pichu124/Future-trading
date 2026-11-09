@@ -53,7 +53,7 @@ thoát mã 2, KHÔNG giao dịch. Hợp đồng kế tiếp ngày trước roll 
   `dnse_feed_probe.py --krx <chính> <kế tiếp> --extra-contract <tên>` báo ✅ nhận tick của cả hai mã);
 - hoặc downloader (mặc định tải thêm hợp đồng kế tiếp hôm đó), vd sáng ngày roll:
 
-    python scripts/download_history.py --start <ngày trước roll> --end <ngày trước roll> --kinds ohlc
+    python scripts/download_history.py --start <ngày trước roll> --end <ngày trước roll>
 
 ## Điều kiện trước khi chạy paper
 - `config/settings.yaml`: đã điền `risk.*`, `fees.*`, `live.allowed_machine` (= hostname máy này,

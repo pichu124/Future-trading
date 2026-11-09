@@ -290,3 +290,67 @@ def test_real_time_format_with_milliseconds_in_vn_time():
 def test_garbage_time_still_rejected():
     with pytest.raises(HistoryError, match="thời gian lạ"):
         parse_trade_times([{"time": "10:04:58"}], 0, 10)
+
+
+# ------------------------------------------------------------------ OHLC thật trả rỗng; nến dựng từ khớp lệnh ----
+
+def test_ohlc_empty_page_with_next_time_equal_from_is_empty_not_error():
+    """Server thật: {"t": [], …, "nextTime": <from>} cho cửa sổ không có nến ⇒ ngày rỗng, KHÔNG phải lỗi."""
+    srv = Server()
+    srv.fail_next = [(200, {"t": [], "o": [], "h": [], "l": [], "c": [], "v": [], "nextTime": ep(8, 30)}, {})]
+    assert fetch_ohlc_day(client(srv), KRX, DAY) == [] and len(srv.calls) == 1
+
+
+def test_default_kinds_is_trades_only():
+    import inspect
+    assert inspect.signature(download).parameters["kinds"].default == ("trades",)
+
+
+def two_minute_trades(gap=False):
+    """09:00: 1350 (2 HĐ), 1352 (1), 1349 (1); 09:01: 1351 (3). KL luỹ kế liên tục (gap ⇒ thiếu 1 lệnh)."""
+    rows = [trade(9, 0, 5, 1350.0, 2, 102), trade(9, 0, 20, 1352.0, 1, 103), trade(9, 0, 50, 1349.0, 1, 104),
+            trade(9, 1, 10, 1351.0, 3, 107 + (2 if gap else 0))]
+    return rows
+
+
+def test_trades_download_also_writes_bars_built_from_trades(tmp_path):
+    from backtest.engine import load_bars_parquet
+    srv = Server(trades=two_minute_trades())
+    s = download(client(srv), [(DAY, "VN30F2611", KRX)], tmp_path)
+    p = tmp_path / "ohlc1m" / "VN30F2611" / "2026-11-09.parquet"
+    assert p.exists() and s["bars"] == 1
+    bars, skipped = load_bars_parquet(p)
+    assert skipped == 0
+    assert [(b.start.minute, b.open, b.high, b.low, b.close, b.volume) for b in bars] == \
+        [(0, 1350.0, 1352.0, 1349.0, 1349.0, 4), (1, 1351.0, 1351.0, 1351.0, 1351.0, 3)]
+    assert all(b.volume_reliable for b in bars) and {b.symbol for b in bars} == {"VN30F2611"}
+    assert pd.read_parquet(p)["source"].unique().tolist() == ["dnse_trades"]
+
+
+def test_bars_volume_unreliable_when_trades_missing(tmp_path):
+    from backtest.engine import load_bars_parquet
+    srv = Server(trades=two_minute_trades(gap=True))
+    download(client(srv), [(DAY, "VN30F2611", KRX)], tmp_path)
+    bars, _ = load_bars_parquet(tmp_path / "ohlc1m" / "VN30F2611" / "2026-11-09.parquet")
+    assert bars and not any(b.volume_reliable for b in bars)          # KL luỹ kế không khớp ⇒ không tin volume
+
+
+def test_existing_trades_file_backfills_missing_bars_without_http(tmp_path):
+    srv = Server(trades=two_minute_trades())
+    c = client(srv)
+    download(c, [(DAY, "VN30F2611", KRX)], tmp_path)
+    p = tmp_path / "ohlc1m" / "VN30F2611" / "2026-11-09.parquet"
+    p.unlink()
+    n = len(srv.calls)
+    s = download(c, [(DAY, "VN30F2611", KRX)], tmp_path)
+    assert p.exists() and len(srv.calls) == n and s["bars"] == 1
+
+
+def test_existing_bars_not_overwritten_unless_force(tmp_path):
+    srv = Server(trades=two_minute_trades())
+    c = client(srv)
+    download(c, [(DAY, "VN30F2611", KRX)], tmp_path)
+    p = tmp_path / "ohlc1m" / "VN30F2611" / "2026-11-09.parquet"
+    mtime = p.stat().st_mtime_ns
+    s = download(c, [(DAY, "VN30F2611", KRX)], tmp_path)
+    assert p.stat().st_mtime_ns == mtime and s["bars"] == 0
