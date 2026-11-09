@@ -228,6 +228,7 @@ class AccountState:
     emergency_reason: Optional[str] = None   # quy trình khẩn cấp (broker chính mất kết nối); xoá bằng tay
     round_trip_points: dict[str, float] = field(default_factory=dict)  # symbol → lãi/lỗ lượt đang mở
     unprotected_since: dict[str, datetime] = field(default_factory=dict)  # symbol → lúc mất stop
+    unwinding: set[str] = field(default_factory=set)  # symbol đang gỡ hedge dở (fill không tính là lượt)
 
     def net_qty(self, symbol: str) -> int:
         """Vị thế ròng của một hợp đồng cộng trên MỌI broker (CLAUDE.md mục 3)."""

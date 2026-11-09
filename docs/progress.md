@@ -10,7 +10,7 @@
 - Sau khi `clear_emergency`, lượt khẩn cấp vẫn tính vào `max_consecutive_losses` (có test).
 - Test viết trước `tests/test_emergency_streak.py` (11). Thử phá 7 cơ chế ⇒ 1 sống (tag `emergency` thừa khi đã có nhận dạng đóng chéo) ⇒ thêm test tag-trên-cùng-broker ⇒ hết. 1189 test.
 
-**Giả định còn lại**: chân gỡ THỨ HAI mất tag (lệnh đã bị xoá khỏi sổ trước khi fill tới) sẽ bị coi là kết thúc một lượt — adapter luôn phát Fill trước cập nhật trạng thái nên không xảy ra trong luồng hiện tại.
+~~Giả định: chân gỡ thứ hai mất tag sẽ bị coi là kết thúc lượt~~ ⇒ đã xử lý: `AccountState.unwinding` nhớ HĐ đang gỡ dở (giữ qua `new_day` chỉ khi còn chân mở), chân sau không tag vẫn không kết thúc lượt (3 test mới, thử phá 4 cơ chế ⇒ hết).
 
 ## 2026-11-08 — Phí sở + phí bù trừ VSDC (`fees.*`)
 

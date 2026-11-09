@@ -487,7 +487,7 @@ class RiskManager:
         tracked = state.working_orders.get(fill.client_order_id)
         tag = tracked.tag if tracked is not None else ""
         # gỡ hedge: theo tag, hoặc khớp khi net = 0 mà vẫn còn chân mở (đang ở trạng thái đối ứng)
-        unwinding = tag == "unwind" or (net_before == 0 and any(
+        unwinding = tag == "unwind" or fill.symbol in state.unwinding or (net_before == 0 and any(
             p.qty != 0 for p in state.positions.values() if p.symbol == fill.symbol))
         new = old.apply(fill)
         state.positions[key] = new
@@ -498,8 +498,11 @@ class RiskManager:
         state.fees_points_today += fill.fee_vnd / self.limits.multiplier_vnd_per_point
 
         fee_pts = fill.fee_vnd / self.limits.multiplier_vnd_per_point
-        if unwinding:
-            pass                                  # không phải lượt mới, không kết thúc lượt nào
+        if unwinding:                             # không phải lượt mới, không kết thúc lượt nào
+            if any(p.qty != 0 for p in state.positions.values() if p.symbol == fill.symbol):
+                state.unwinding.add(fill.symbol)  # nhớ cho chân sau (kể cả khi chân sau mất tag)
+            else:
+                state.unwinding.discard(fill.symbol)
         elif net_before == 0:
             if net_after != 0:
                 self._start_round_trip(state, fill.symbol)
@@ -557,6 +560,7 @@ class RiskManager:
         open_symbols = {p.symbol for p in state.positions.values() if p.qty != 0}
         state.round_trip_points = {s: v for s, v in state.round_trip_points.items()
                                    if s in open_symbols}
+        state.unwinding = {s for s in state.unwinding if s in open_symbols}
 
     def daily_pnl_points(self, state: AccountState) -> Optional[float]:
         """Lãi/lỗ trong ngày SAU phí, gồm phần chưa chốt. None nếu thiếu giá đánh dấu."""

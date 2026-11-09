@@ -121,3 +121,32 @@ def test_emergency_tag_alone_counts_even_on_same_broker(env):
     env.open_position(Side.BUY, price=1350.0, protect=False, broker="ssi")
     hedge(env, price=1360.0)                                  # chân ssi đóng hẳn ⇒ không phải đóng chéo
     assert env.state.net_qty(SYM) == 0 and env.state.consecutive_losses == 1
+
+
+def test_both_unwind_legs_untagged_still_no_ghost_round_trip(env):
+    """Cả hai chân gỡ đều mất tag: risk nhớ HĐ đang gỡ dở (state.unwinding) ⇒ chân thứ hai không kết thúc lượt."""
+    env.open_position(Side.BUY, price=1350.0, protect=False)
+    hedge(env, price=1345.0)
+    streak = env.state.consecutive_losses
+    env.rm.record_fill(env.state, Fill("X1", SYM, Side.SELL, 1, 1340.0, env.now, broker="dnse"))   # chân 1 lỗ
+    assert SYM in env.state.unwinding
+    env.rm.record_fill(env.state, Fill("X2", SYM, Side.BUY, 1, 1340.0, env.now, broker="ssi"))     # chân 2
+    assert env.state.trades_today == 1 and env.state.consecutive_losses == streak
+    assert SYM not in env.state.unwinding                         # mọi chân phẳng ⇒ hết trạng thái gỡ
+
+
+def test_new_round_trip_after_unwind_counts_normally(env):
+    env.open_position(Side.BUY, price=1350.0, protect=False)
+    hedge(env, price=1345.0)
+    unwind_legs(env)
+    env.open_position(Side.BUY, price=1350.0, protect=False)
+    env.fill(Side.SELL, price=1352.0)                             # lượt mới, lãi ⇒ đặt lại chuỗi
+    assert env.state.trades_today == 2 and env.state.consecutive_losses == 0
+
+
+def test_new_day_keeps_unwinding_only_for_open_legs(env):
+    from datetime import date
+    env.state.unwinding = {SYM, "VN30F2612"}                      # 2612 đã phẳng, SYM còn chân mở
+    env.open_position(Side.BUY, price=1350.0, protect=False)
+    env.rm.new_day(env.state, date(2026, 11, 10))
+    assert env.state.unwinding == {SYM}
