@@ -140,12 +140,24 @@ def kinds(actions) -> list[ActionKind]:
 # ---------------------------------------------------------------- cấu hình ----
 
 class TestConfig:
-    def test_repo_settings_with_null_risk_values_refuse_to_start(self, cal):
-        """settings.yaml hiện còn null ở max_daily_loss_points… ⇒ risk manager không được chạy."""
+    @pytest.mark.parametrize("key", ["max_daily_loss_points", "max_trades_per_day", "max_consecutive_losses"])
+    def test_repo_settings_with_null_risk_values_refuse_to_start(self, cal, key):
+        """Settings của repo nhưng một giới hạn rủi ro về null ⇒ risk manager không được chạy."""
+        import copy
         from core.settings import load_settings
-        mclock = MarketClock.from_settings(load_settings(), calendar=cal)
+        d = copy.deepcopy(load_settings()._data)
+        d["risk"][key] = None
+        mclock = MarketClock.from_settings(Settings(d), calendar=cal)
         with pytest.raises(MissingSetting):
-            RiskManager.from_settings(load_settings(), mclock)
+            RiskManager.from_settings(Settings(d), mclock)
+
+    def test_repo_risk_limits_are_users_choice(self, cal):
+        """Người dùng chọn 09/11/2026: lỗ ngày 15 điểm, 2 lượt/ngày, thua liên tiếp 2; vốn 100 triệu."""
+        from core.settings import load_settings
+        s = load_settings()
+        lim = RiskManager.from_settings(s, MarketClock.from_settings(s, calendar=cal)).limits
+        assert (lim.max_daily_loss_points, lim.max_trades_per_day, lim.max_consecutive_losses) == (15, 2, 2)
+        assert s.get("backtest.initial_capital_vnd") == 100_000_000
 
     @pytest.mark.parametrize("key", ["max_contracts", "max_daily_loss_points", "max_trades_per_day",
                                      "max_consecutive_losses", "no_entry_open_minutes",

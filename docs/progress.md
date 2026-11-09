@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-09 — Vốn + giới hạn rủi ro (người dùng chọn)
+
+- `backtest.initial_capital_vnd: 100000000`, `risk.max_daily_loss_points: 15` (1,5 triệu/HĐ ≈ 1,5% vốn), `risk.max_trades_per_day: 2`, `risk.max_consecutive_losses: 2`.
+- Test "null ⇒ từ chối" của engine/risk chuyển sang bản sao settings (từng khoá); thêm test khoá giá trị người dùng chọn. 1203 test.
+- Còn null: `live.allowed_machine` (người dùng), 4 khoá broker (sau khi có khoá API), `paths.dashboard_warehouse` (tuỳ chọn).
+
 ## 2026-11-09 — Phí + thuế theo biểu phí DNSE (01/05/2026)
 
 - Người dùng gửi biểu phí DNSE áp dụng từ 01/05/2026 ⇒ `fees`: môi giới 1.000đ (< 100 HĐ/ngày), sở 2.700đ, bù trừ VSDC 2.550đ, thuế TNCN ≈ 17.100đ/HĐ/chiều (0,1% × giá × 100.000 × 18,48% / 2 ở giá ~1.850). Tổng ≈ 23.350đ ≈ 0,23 điểm/chiều.

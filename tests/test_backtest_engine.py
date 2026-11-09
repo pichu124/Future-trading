@@ -89,9 +89,14 @@ def run(settings, cal, strategy, bars):
 
 # ------------------------------------------------------------------ cấu hình ----
 
-def test_repo_settings_with_nulls_refuse(cal):
+@pytest.mark.parametrize("key", [("risk", "max_daily_loss_points"), ("fees", "tax_vnd_per_contract")])
+def test_repo_settings_with_nulls_refuse(cal, key):
+    """Settings của repo nhưng một khoá bắt buộc về null ⇒ engine từ chối chạy (không tự đoán)."""
+    import copy
+    d = copy.deepcopy(load_settings()._data)
+    d[key[0]][key[1]] = None
     with pytest.raises(MissingSetting):
-        BacktestEngine(load_settings(), Script({}), calendar=cal)
+        BacktestEngine(Settings(d), Script({}), calendar=cal)
 
 
 def test_spread_setting_required(session_cfg, cal):
