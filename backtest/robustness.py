@@ -28,12 +28,12 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from backtest.engine import BacktestEngine, load_bars_parquet  # noqa: E402
+from backtest.engine import BacktestEngine, bars_from_ticks, load_bars_parquet  # noqa: E402
 from backtest.report import (_table, compute_metrics, make_section,  # noqa: E402
                              render_section)
 from backtest.validation import DEFAULT, Thresholds  # noqa: E402
 from core.calendar import TradingCalendar  # noqa: E402
-from core.models import Bar  # noqa: E402
+from core.models import Bar, Tick  # noqa: E402
 from core.settings import REPO_ROOT, MissingSetting, Settings, load_settings  # noqa: E402
 from strategy.base import Strategy  # noqa: E402
 from utils.atomic_io import write_text_atomic  # noqa: E402
@@ -111,14 +111,19 @@ def run_robustness(settings: Settings, make_strategy: Callable[[Settings], Strat
                    folds: int = 4, n_trials: int = 1, calendar: Optional[TradingCalendar] = None,
                    pct: float = 0.2, slippage_stress_ticks: int = 2,
                    rules: VerdictRules = RULES, thresholds: Thresholds = DEFAULT) -> dict:
-    bars = sorted(bars, key=lambda b: (b.start, b.symbol))
-    days = sorted({b.start.date() for b in bars})
+    # `bars` có thể là bar 1 phút HOẶC tick thật (--ticks): tick ⇒ run_events(bars_from_ticks), chia theo ngày tick
+    data = list(bars)
+    ticks_mode = bool(data) and isinstance(data[0], Tick)
+    day_of = (lambda x: x.ts.date()) if ticks_mode else (lambda x: x.start.date())
+    bars = sorted(data, key=(lambda t: t.ts) if ticks_mode else (lambda b: (b.start, b.symbol)))
+    days = sorted({day_of(x) for x in bars})
     if not days or not days[0] < split_date <= days[-1]:
         raise ValueError("split_date phải nằm trong khoảng dữ liệu (có cả IS lẫn OOS)")
-    is_bars = [b for b in bars if b.start.date() < split_date]
+    is_bars = [x for x in bars if day_of(x) < split_date]
 
-    def run(s: Settings, data: Sequence[Bar]):
-        return BacktestEngine(s, make_strategy(s), calendar=calendar).run_bars(data)
+    def run(s: Settings, data: Sequence):
+        engine = BacktestEngine(s, make_strategy(s), calendar=calendar)
+        return engine.run_events(bars_from_ticks(data)) if ticks_mode else engine.run_bars(data)
 
     def split(trades):
         return {"in_sample": make_section([t for t in trades if t.entry_ts.date() < split_date],
@@ -278,7 +283,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     from strategy.baseline_orb import OpeningRangeBreakout
 
     ap = argparse.ArgumentParser(description="Kiểm định độ bền chiến lược ORB + kết luận edge")
-    ap.add_argument("--bars", required=True, nargs="+", help="file/thư mục Parquet bar 1 phút (đọc đệ quy)")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--bars", nargs="+", help="file/thư mục Parquet bar 1 phút (đọc đệ quy)")
+    src.add_argument("--ticks", nargs="+", help="tick thật: data/raw/<ngày> (recorder) và/hoặc data/history/trades")
+    ap.add_argument("--source", help="với --ticks: chỉ dùng nguồn này (bắt buộc khi nhiều nguồn)")
     ap.add_argument("--split", required=True, help="ngày đầu out-of-sample (YYYY-MM-DD), chốt TRƯỚC khi chạy")
     ap.add_argument("--folds", type=int, default=4)
     ap.add_argument("--n-trials", type=int, default=None,
@@ -292,7 +300,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except MissingSetting as exc:
         print(f"❌ {exc.args[0]}\n   Chạy `python -m core.settings` để xem mọi khoá còn thiếu.")
         return 2
-    bars, skipped = load_bars_parquet(args.bars)
+    skipped = n_fake = 0
+    if args.ticks:
+        from backtest.ticks import fill_missing_quotes, load_tick_files
+        try:
+            data = load_tick_files(args.ticks, source=args.source)
+        except ValueError as exc:
+            print(f"❌ {exc}")
+            return 2
+        data, n_fake = fill_missing_quotes(data, float(settings.require("contract.tick_size_points")),
+                                           int(settings.require("backtest.synthetic_spread_ticks")))
+    else:
+        data, skipped = load_bars_parquet(args.bars)
+    bars = data
     n_trials = args.n_trials or count_logged_trials()
     rob = run_robustness(settings, OpeningRangeBreakout.from_settings, bars,
                          date.fromisoformat(args.split), params_for(settings), folds=args.folds,
@@ -303,6 +323,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"  - {r}")
     if skipped:
         print(f"  (bỏ {skipped} dòng bar hỏng khi đọc)")
+    if n_fake:
+        print(f"  ({n_fake} tick khớp không có bid/ask — khớp lệnh trên báo giá giả ∓ nửa spread)")
     print(f"→ {args.out}")
     return 0
 

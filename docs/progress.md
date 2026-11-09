@@ -1,5 +1,10 @@
 # Tiến độ
 
+## 2026-11-09 — `backtest.robustness` trên tick thật (`--ticks`)
+
+- `run_robustness` nhận tick thay cho bar: mỗi lần chạy = `run_events(bars_from_ticks(…))`; chia IS/OOS, walk-forward, độ nhạy (chỉ IS) theo ngày của tick. CLI `--ticks` (loại trừ `--bars`), `--source` khi nhiều nguồn; khớp lệnh downloader được gắn bid/ask giả (`fill_missing_quotes`) trước khi chạy, có dòng ghi chú.
+- Test viết trước `tests/test_robustness_ticks.py` (6). Thử phá 4 cơ chế ⇒ 1 sống (`--source` không được truyền) ⇒ thêm test ⇒ hết. 1198 test.
+
 ## 2026-11-09 — Lượt đóng khẩn cấp tính là THUA
 
 **Quyết định của người dùng:** lượt kết thúc nhờ lệnh đối ứng khẩn cấp (broker chính mất kết nối) luôn tính là một lượt thua trong chuỗi thua.
@@ -51,7 +56,7 @@
 **Rủi ro / giả định còn lại**
 - Khớp lệnh downloader không có báo giá ⇒ spread là GIẢ ĐỊNH (như bar); chỉ recorder cho bid/ask thật.
 - Khối lượng sổ lệnh coi như vô hạn khi tick không có `bid_qty/ask_qty`.
-- `backtest.robustness` vẫn chỉ chạy trên bar.
+- ~~`backtest.robustness` vẫn chỉ chạy trên bar~~ ⇒ có `--ticks` (09/11).
 
 ## 2026-11-08 — Chênh lệch roll = trung vị nhiều phút
 
