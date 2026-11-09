@@ -292,7 +292,12 @@ def test_feed_down_is_unhealthy_immediately(session_cfg, cal):
 
     async def go():
         task = asyncio.create_task(r.comp.run())
-        await asyncio.sleep(0.05)                          # đồng hồ giả vẫn ở T0: tick còn mới
+        # đồng hồ giả vẫn ở T0 (tick còn mới) ⇒ chỉ feed chết mới làm mất khoẻ; chờ tối đa 2s thay vì
+        # ngủ cứng 50ms (máy CI bận có thể chưa xử lý kịp ⇒ test chập chờn)
+        for _ in range(400):
+            if not r.comp.healthy:
+                break
+            await asyncio.sleep(0.005)
         healthy = r.comp.healthy
         await r.comp.stop()
         await asyncio.wait_for(task, 1)

@@ -272,3 +272,21 @@ def test_download_error_on_one_day_does_not_stop_others(tmp_path):
                  kinds=("ohlc",))
     assert s["errors"] == 1 and s["written"] == 1
     assert (tmp_path / "ohlc1m" / "VN30F2611" / "2026-11-10.parquet").exists()
+
+
+# ------------------------------------------------------------------ định dạng thật (probe 09/11/2026) ----
+
+def test_real_time_format_with_milliseconds_in_vn_time():
+    """Server thật: `time` = "2026-11-06 10:04:58.705" — GIỜ VN, có mili-giây (cửa sổ hỏi 10:00–10:05 VN)."""
+    d = date(2026, 11, 6)
+    f = int(datetime(2026, 11, 6, 10, 0, tzinfo=timezone(timedelta(hours=7))).timestamp())
+    t = f + 300
+    rows = [{"time": "2026-11-06 10:04:58.705"}, {"time": "2026-11-06 10:04:16.809"}, {"time": "2026-11-06 10:04:30"}]
+    ts = parse_trade_times(rows, f, t)
+    assert ts == [datetime(2026, 11, 6, 10, 4, 58, 705000), datetime(2026, 11, 6, 10, 4, 16, 809000),
+                  datetime(2026, 11, 6, 10, 4, 30)]
+
+
+def test_garbage_time_still_rejected():
+    with pytest.raises(HistoryError, match="thời gian lạ"):
+        parse_trade_times([{"time": "10:04:58"}], 0, 10)

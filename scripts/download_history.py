@@ -7,8 +7,8 @@ docs/broker_notes.md §1.3):
   (suy từ ví dụ trong đặc tả — ❓, `scripts/validate_day.py`/backtest sẽ lộ ra nếu lệch).
 - Khớp lệnh: `GET /price/{KRX}/trades?boardId=G1&from&to&limit` — `{trades: [...], nextPageToken}`, mới nhất trước.
   Tên tham số gửi `nextPageToken` KHÔNG có trong đặc tả (❓) ⇒ không dùng: cửa sổ trả đủ `limit` dòng thì chia đôi.
-  `time` "YYYY-MM-DD HH:MM:SS": ví dụ trong đặc tả là giờ UTC (❓) ⇒ KIỂM với cửa sổ đã hỏi (UTC rồi tới giờ VN),
-  không khớp cách nào ⇒ lỗi. Trùng (cửa sổ chồng nhau) lọc theo `totalVolumeTraded` (luỹ kế trong ngày).
+  `time` "YYYY-MM-DD HH:MM:SS[.fff]": đặc tả ví dụ giờ UTC, server THẬT trả giờ VN có mili-giây (probe 09/11/2026)
+  ⇒ KIỂM với cửa sổ đã hỏi (UTC rồi tới giờ VN), không khớp cách nào ⇒ lỗi. Trùng (cửa sổ chồng nhau) lọc theo `totalVolumeTraded` (luỹ kế trong ngày).
 - Chữ ký: thử ký đường dẫn KHÔNG kèm query (như SDK); 401 ⇒ thử kèm query một lần rồi nhớ cách được nhận.
 - HTTP 429 ⇒ chờ `Retry-After` rồi thử lại (GET, an toàn); lỗi khác ⇒ ghi nhận ngày đó lỗi, tải ngày khác tiếp.
 
@@ -183,13 +183,20 @@ def bars_frame(rows: Sequence[dict], contract: str):
 # ------------------------------------------------------------------ khớp lệnh ----
 
 def parse_trade_times(rows: Sequence[dict], f: int, t: int, slack_s: int = 60) -> list[datetime]:
-    """`time` không ghi múi giờ: thử UTC (theo ví dụ đặc tả) rồi giờ VN; phải nằm trong cửa sổ đã hỏi."""
+    """`time` không ghi múi giờ: thử UTC (theo ví dụ đặc tả) rồi giờ VN; phải nằm trong cửa sổ đã hỏi.
+
+    Server thật (probe 09/11/2026) trả GIỜ VN có mili-giây: "2026-11-06 10:04:58.705"; đặc tả ví dụ không có
+    mili-giây ⇒ nhận cả hai dạng "YYYY-MM-DD HH:MM:SS[.fff]".
+    """
     if not rows:
         return []
     raw = []
     for r in rows:
+        txt = str(r.get("time"))
         try:
-            raw.append(datetime.strptime(str(r.get("time")), "%Y-%m-%d %H:%M:%S"))
+            if len(txt) < 19 or txt[10] not in " T":
+                raise ValueError(txt)
+            raw.append(datetime.fromisoformat(txt))
         except ValueError as exc:
             raise HistoryError(f"trades: thời gian lạ {r.get('time')!r}") from exc
     for tz in (timezone.utc, VN):

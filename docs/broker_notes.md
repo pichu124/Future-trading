@@ -84,6 +84,12 @@ lệnh đôi ⇒ adapter DNSE phải: không tự retry lệnh đặt; khi khôn
   mới nhất trước; `time` dạng `"2026-03-12 04:29:57"`.
 - Lỗi: `{status, code ("OA-003", "OA-009"…), message}`.
 
+**Probe trên dây 09/11/2026** (`dnse_history_probe.py`, cửa sổ 10:00–10:05 VN):
+- `/price/{KRX}/trades`: chỉ **epoch giây** được nhận (ms/ISO/ngày ⇒ 400) ✅; `time` là **giờ VN có mili-giây**
+  (`"2026-11-06 10:04:58.705"`) ✅ — đã sửa downloader (trước đó không đọc được phần mili-giây); trả 100 dòng = `limit`
+  (mới nhất trước) ⇒ cần chia cửa sổ ✅; độ sâu lịch sử: có dữ liệu 6 tháng trước (05/2026), 12 tháng trước (11/2025) rỗng.
+- `/price/ohlc`: ngày gần nhất epoch giây ⇒ 200 nhưng 0 dòng; ngày cũ hơn ⇒ 400 ❓ (đang chờ body lỗi để chẩn đoán).
+
 Còn ❓ trên dây — downloader **tự kiểm, không đoán** (sai ⇒ báo lỗi ngày đó, không ghi file):
 | Mục | Cách downloader xử lý |
 |---|---|

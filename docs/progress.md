@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-09 — Probe lịch sử DNSE trên dây: sửa đọc thời gian khớp lệnh
+
+- `dnse_history_probe.py`: trades nhận epoch giây (định dạng khác ⇒ 400); `time` là giờ VN CÓ mili-giây ⇒ downloader cũ sẽ lỗi ở MỌI cửa sổ khớp lệnh ⇒ đã sửa `parse_trade_times` (nhận có/không mili-giây), test với chuỗi thật. Lịch sử khớp lệnh: ≥ 6 tháng, < 12 tháng.
+- OHLC: 0 dòng (ngày gần) / 400 (ngày cũ) — chờ body lỗi.
+- Sửa test chập chờn `test_feed_down_is_unhealthy_immediately` (ngủ cứng 50ms ⇒ chờ điều kiện tối đa 2s). 1212 test.
+
 ## 2026-11-09 — Probe DNSE (chỉ đọc) chạy trên dây lần đầu
 
 - `dnse_trading_probe.py` trên production: 7/7 request 200 — chữ ký HMAC path không kèm query được chấp nhận; có 1 tiểu khoản phái sinh (số đặt ở `.env`); gói vay id 1306 (initialRate 0,1848) ⇒ `brokers.dnse.loan_package_id: 1306`; secdef nhận KRX 41I1GB000 (VN30F2611).
