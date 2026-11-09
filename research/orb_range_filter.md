@@ -3,6 +3,10 @@
 Code: `strategy/baseline_orb.py` (`RangeFilter`) · tham số: `settings.strategy.orb.range_filter` ·
 test: `tests/test_strategy_orb_filter.py` · baseline: [orb_baseline.md](orb_baseline.md)
 
+## Kết luận (09/11/2026, dữ liệu thật 11/05–06/11/2026): KHÔNG CÓ EDGE
+
+OOS −1,46tr, p = 0,588, 0% biến thể ±20% lãi, 25% đoạn walk-forward lãi — xem `research/log.md` dòng #2.
+
 ## Giả thuyết (ghi TRƯỚC khi nhìn dữ liệu)
 
 Biên 15 phút đầu phiên so với biên độ ngày điển hình nói lên chất lượng của cú phá:

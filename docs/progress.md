@@ -1,5 +1,10 @@
 # Tiến độ
 
+## 2026-11-09 — ORB #2 (lọc độ rộng biên / ADR) trên dữ liệu thật: KHÔNG CÓ EDGE
+
+- `backtest.robustness --set strategy.orb.range_filter.enabled=true` (OOS từ 01/09, n_trials 2): OOS −1.459.300đ, p = 0,588, trượt 2 tick −2.779.300đ, 0% biến thể ±20% lãi, 25% đoạn walk-forward lãi ⇒ **KHÔNG CÓ EDGE**. Ghi `research/log.md` dòng #2.
+- Cả hai cấu hình ORB đã đăng ký đều thất bại; nguyên nhân chính: chi phí ~0,47 điểm/lượt (phí + thuế) + trượt/nửa spread lớn hơn lợi thế thô. Không paper/live.
+
 ## 2026-11-09 — `--set` cho backtest/robustness (bật ORB #2 không cần sửa settings)
 
 - `backtest.engine` và `backtest.robustness` nhận `--set khoá.chấm=giá_trị` (lặp được; giá trị đọc như YAML; khoá phải tồn tại, sai ⇒ thoát 2). Đổi cấu hình CHỈ cho lần chạy — không bật `range_filter` trong `settings.yaml` (bật ở đó thì runner live/paper cũng đòi lịch sử). Tiêu đề báo cáo robustness ghi ORB #1/#2 theo cấu hình.
