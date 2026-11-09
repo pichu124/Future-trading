@@ -189,10 +189,16 @@ def build_report(result, split_date: Optional[date] = None, n_trials: int = 1, t
                                                  n_trials, thresholds, capital)
     q = result.data_quality
     warnings = list(result.warnings)
-    if q.get("unreliable_volume_bars"):
-        warnings.insert(0, f"{q['unreliable_volume_bars']} bar có volume KHÔNG tin được (dữ liệu snapshot, "
-                           "vd import từ vnstock-dashboard) — chỉ để thử nhanh, không dùng để kết luận "
-                           "có edge (CLAUDE.md mục 6).")
+    bad, n_bars = int(q.get("unreliable_volume_bars") or 0), int(q.get("n_bars") or 0)
+    if bad:
+        from backtest.robustness import RULES
+        frac = bad / n_bars if n_bars else 1.0
+        if frac > RULES.max_unreliable_volume_frac:
+            warnings.insert(0, f"{bad}/{n_bars} bar ({frac:.1%}) có volume KHÔNG tin được (vd dữ liệu snapshot import "
+                               "từ vnstock-dashboard) — chỉ để thử nhanh, không dùng để kết luận có edge (CLAUDE.md mục 6).")
+        else:
+            warnings.append(f"{bad}/{n_bars} bar ({frac:.1%}) có volume không tin được (phút thiếu lệnh, thường ở "
+                            f"ATO/ATC) — dưới ngưỡng {RULES.max_unreliable_volume_frac:.0%}, vẫn dùng được để kết luận.")
     if open_trades:
         warnings.append(f"{len(open_trades)} lệnh còn mở cuối dữ liệu — đã tính vào số liệu theo giá cuối, "
                         "trừ ước phí đóng (chưa tính trượt giá khi đóng).")

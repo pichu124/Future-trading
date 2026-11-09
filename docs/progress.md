@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-09 — Chốt mốc chia IS/OOS + luật dữ liệu ≤ 1% (người dùng chọn, trước khi xem kết quả)
+
+- `scripts/check_history.py` trên kho thật: 133/133 mục, 127 ngày, 32.053 nến, không ngày đáng ngờ; 53 ngày có vài phút thiếu lệnh (chủ yếu 09:00/14:45/13:00); 09/06 thiếu 452 HĐ lúc 09:39–09:43 (giữa phiên, thuộc IS).
+- Người dùng chọn: **OOS từ 2026-09-01**; luật "dữ liệu tin được" = **≤ 1% nến** volume không tin được. Ghi vào `research/log.md` (mục riêng, không thêm dòng ⇒ `n_trials` vẫn 2).
+- `backtest/robustness.py`: `VerdictRules.max_unreliable_volume_frac = 0.01`, `data_reliable()`; HTML ghi tỉ lệ. `backtest/report.py`: cảnh báo mạnh chỉ khi > 1%, dưới ngưỡng thì ghi chú. 10 test mới; thử phá 4 cơ chế ⇒ 0 sống. 1260 test.
+
 ## 2026-11-09 — Tải xong 6 tháng; `scripts/check_history.py`
 
 - Lượt 2: 24 mục còn lại tải xong, 0 lỗi ⇒ đủ 133 mục kế hoạch 11/05–06/11/2026 (≈127 ngày giao dịch + HĐ kế tiếp các ngày trước roll), tổng ~12.300 request qua 2 ngày hạn mức.

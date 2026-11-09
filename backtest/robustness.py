@@ -62,9 +62,19 @@ class VerdictRules:
     min_oos_trades: int = DEFAULT.min_trades          # 30 — dưới mức này không kết luận gì
     sensitivity_min_positive_frac: float = 0.75       # ≥ 75% biến thể ±20% phải lãi sau phí (IS)
     folds_min_positive_frac: float = 0.5              # ≥ nửa số đoạn walk-forward lãi sau phí
+    # Dữ liệu "tin được" ⇔ tỉ lệ nến volume không tin được ≤ 1% (người dùng chọn 09/11/2026, TRƯỚC khi xem kết quả):
+    # khớp lệnh DNSE thật có vài phút ATO/ATC thiếu lệnh (~0,4% nến); snapshot dashboard (100%) vẫn bị chặn.
+    max_unreliable_volume_frac: float = 0.01
 
 
 RULES = VerdictRules()
+
+
+def data_reliable(quality: dict, rules: VerdictRules = RULES) -> bool:
+    """Tỉ lệ nến có volume không tin được ≤ ngưỡng; không có nến nào ⇒ không tin được."""
+    n = int(quality.get("n_bars") or 0)
+    bad = int(quality.get("unreliable_volume_bars") or 0)
+    return n > 0 and bad / n <= rules.max_unreliable_volume_frac + 1e-12
 
 
 # ---------------------------------------------------------------- tiện ích ----
@@ -161,7 +171,7 @@ def run_robustness(settings: Settings, make_strategy: Callable[[Settings], Strat
 
     oos = sections["out_of_sample"]
     summ = {
-        "data_reliable": base.data_quality.get("unreliable_volume_bars", 0) == 0,
+        "data_reliable": data_reliable(base.data_quality, rules),
         "oos": {"n_trades": oos["metrics"]["n_trades"], "pnl_vnd": oos["metrics"]["total_pnl_vnd"],
                 "passed": bool(oos["validation"]["passed"]),
                 "reasons": list(oos["validation"]["reasons"])},
@@ -186,8 +196,8 @@ def verdict(s: dict, rules: VerdictRules = RULES) -> tuple[str, list[str]]:
     oos = s["oos"]
     lean = " Hiện đang lỗ sau phí ⇒ nghiêng về KHÔNG có edge." if oos["pnl_vnd"] <= 0 else ""
     if not s["data_reliable"]:
-        return CHUA_DU, ["Dữ liệu snapshot / volume không tin được (vd import từ vnstock-dashboard) — "
-                         "CLAUDE.md mục 6 cấm dùng để kết luận có edge." + lean]
+        return CHUA_DU, [f"Quá {rules.max_unreliable_volume_frac:.0%} số nến có volume không tin được (vd dữ liệu "
+                         "snapshot import từ vnstock-dashboard) — CLAUDE.md mục 6 cấm dùng để kết luận có edge." + lean]
     if oos["n_trades"] < rules.min_oos_trades:
         return CHUA_DU, [f"Chỉ {oos['n_trades']} lệnh out-of-sample < {rules.min_oos_trades} — "
                          "chưa đủ mẫu." + lean]
@@ -243,7 +253,7 @@ def render_html(rob: dict, title: str = "Kiểm định độ bền") -> str:
                       [[k, slip[k]["metrics"]["n_trades"], f"{slip[k]['metrics']['total_pnl_vnd']:,.0f}"]
                        for k in ("in_sample", "out_of_sample")])
     rules = _table(["Luật kết luận (chốt trước khi có dữ liệu)", "Ngưỡng"], [
-        ["Dữ liệu phải tin được (không phải snapshot)", "bắt buộc"],
+        ["Tỉ lệ nến volume không tin được (snapshot / thiếu lệnh)", f"≤ {r.max_unreliable_volume_frac:.0%}"],
         ["Số lệnh out-of-sample tối thiểu", r.min_oos_trades],
         ["P&L out-of-sample sau phí", "> 0"],
         ["Kiểm định OOS (p-value sign-flip × n_trials, walk-forward theo lệnh)", "đạt"],
@@ -264,7 +274,8 @@ section{{border-top:2px solid #444;margin-top:24px}}
 </style></head><body>
 <h1>{html.escape(title)}</h1>
 <p>Dữ liệu {d0} → {d1} ({nd} ngày) · out-of-sample từ {rob['split_date']} · n_trials = {rob['n_trials']}
-· tick giả từ bar: {q.get('synthetic_ticks')} · bar volume không tin được: {q.get('unreliable_volume_bars')}</p>
+· tick giả từ bar: {q.get('synthetic_ticks')} · bar volume không tin được: {q.get('unreliable_volume_bars')} /
+{q.get('n_bars')}</p>
 <div class="verdict"><h2>Kết luận: {html.escape(rob['verdict'])}</h2><ul>{reasons}</ul></div>
 <h3>Áp theo luật kết luận cố định (chốt trong code, không chỉnh sau khi xem kết quả)</h3>
 {rules}

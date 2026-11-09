@@ -218,3 +218,39 @@ class TestRunRobustness:
         for needle in ("Kết luận", CO_EDGE, "Out-of-sample", "Walk-forward", "Độ nhạy ±20%",
                        "Trượt giá 2 tick", "range_minutes", "luật kết luận"):
             assert needle in html, needle
+
+
+# ------------------------------------------------------------------ luật dữ liệu ≤ 1% (người dùng chọn 09/11/2026) ----
+
+class TestDataReliableFraction:
+    """Dữ liệu thật (khớp lệnh DNSE) có vài phút ATO/ATC thiếu lệnh (~0,4% nến) ⇒ luật cũ "0 nến" luôn ra CHƯA ĐỦ.
+    Người dùng chọn (TRƯỚC khi xem kết quả): tin được khi tỉ lệ nến volume không tin được ≤ 1%."""
+
+    def test_rule_constant(self):
+        assert VerdictRules().max_unreliable_volume_frac == 0.01
+
+    @pytest.mark.parametrize("bad,total,ok", [(0, 1000, True), (4, 1000, True), (10, 1000, True), (11, 1000, False),
+                                              (1000, 1000, False), (0, 0, False)])
+    def test_data_reliable_fraction(self, bad, total, ok):
+        from backtest.robustness import data_reliable
+        assert data_reliable({"unreliable_volume_bars": bad, "n_bars": total}) is ok
+
+    def test_small_fraction_does_not_block_verdict(self, session_cfg, cal):
+        bars = dataset(cal, 44, planted=True, seed=1)
+        n_bad = len(bars) // 300                                   # ~0,33% nến đánh dấu
+        bars = [b if i >= n_bad else Bar(b.symbol, b.start, b.open, b.high, b.low, b.close, b.volume, b.interval_s,
+                                         False) for i, b in enumerate(bars)]
+        split = sorted({b.start.date() for b in bars})[22]
+        rob = run_robustness(orb_settings(session_cfg), make_orb, bars, split, ORB_PARAMS[:1], folds=4, n_trials=1,
+                             calendar=cal)
+        assert rob["summary"]["data_reliable"] is True
+
+
+@pytest.mark.parametrize("bad,expect", [(4, "dưới ngưỡng"), (500, "không dùng để kết luận")])
+def test_report_warning_follows_threshold(bad, expect):
+    from backtest.report import build_report
+    from tests.test_report_capital import Result
+    r = Result([])
+    r.data_quality = {"unreliable_volume_bars": bad, "n_bars": 1000}
+    rep = build_report(r)
+    assert any(expect in w for w in rep["warnings"])
