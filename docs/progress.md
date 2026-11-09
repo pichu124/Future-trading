@@ -661,7 +661,7 @@
 
 **Giả định / rủi ro còn mở**
 - "Có stop" = lệnh `tag="stop"` ngược chiều mà broker **đã xác nhận** (PENDING/PARTIALLY_FILLED). Chưa biết DNSE/SSI có lệnh điều kiện (stop) cho phái sinh qua API không (❓ P4) — nếu stop do bot tự giữ thì P4 phải quyết cách biểu diễn để luật này vẫn đúng.
-- Chuỗi thua tính theo điểm **trước phí**; lượt hoà không đổi bộ đếm; đặt lại mỗi ngày (`new_day`). Lượt bị đóng bằng lệnh đối ứng ở broker khác chưa có P&L thực hiện ⇒ tính như hoà.
+- ~~Chuỗi thua tính theo điểm trước phí~~ ⇒ đã đổi sang SAU phí (phí mở + phí đóng) ở golive #11, test `test_11_consecutive_losses_count_fees`; lượt hoà không đổi bộ đếm; đặt lại mỗi ngày (`new_day`). Lượt bị đóng bằng lệnh đối ứng ở broker khác chưa có P&L thực hiện ⇒ tính như hoà.
 - Thiếu giá đánh dấu cho vị thế đang mở: chặn mở lệnh mới, nhưng `check()` bỏ qua luật lỗ ngày (không tính được) — runner phải cảnh báo khi feed mất giá.
 - `AccountState` nằm trong bộ nhớ; P5.1 phải lưu/đối soát khi khởi động lại (mất `approved_order_ids` ⇒ hai lần chạy trong cùng một giây có thể sinh id trùng; InstanceLock giảm rủi ro này).
 - Ngày đáo hạn chặn mở vị thế với **mọi** hợp đồng (kể cả F2M sau roll) — thận trọng có chủ ý.
