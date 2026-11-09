@@ -70,8 +70,19 @@ def rig():
 
 class TestConfig:
     def test_repo_settings_with_null_fees_refuse(self):
+        """Settings của repo nhưng một khoản phí bị xoá về null ⇒ paper/backtest từ chối chạy."""
+        import copy
+        d = copy.deepcopy(load_settings()._data)
+        d["fees"]["tax_vnd_per_contract"] = None
         with pytest.raises(MissingSetting):
-            PaperConfig.from_settings(load_settings())
+            PaperConfig.from_settings(Settings(d))
+
+    def test_repo_fees_match_dnse_schedule(self):
+        """Biểu phí DNSE 01/05/2026: 1.000 + 2.700 + 2.550 + thuế ~17.100 (giá ~1.850, ký quỹ 18,48%)."""
+        f = load_settings().get("fees")
+        assert (f["broker_fee_vnd_per_contract"], f["exchange_fee_vnd_per_contract"],
+                f["clearing_fee_vnd_per_contract"]) == (1000, 2700, 2550)
+        assert 15_000 <= f["tax_vnd_per_contract"] <= 19_000
 
     def test_from_settings_sums_fees_per_contract_side(self):
         s = Settings({

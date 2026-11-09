@@ -10,10 +10,11 @@ T = datetime(2026, 11, 9, 9, 30)
 
 
 class TestSettings:
-    def test_repo_settings_load_and_report_missing_fees(self):
+    def test_repo_settings_load_and_report_missing(self):
         s = load_settings()
         assert s.get("contract.multiplier_vnd_per_point") == 100000
-        assert "fees.broker_fee_vnd_per_contract" in s.missing()
+        assert "live.allowed_machine" in s.missing()          # khoá còn null được liệt kê
+        assert "fees.broker_fee_vnd_per_contract" not in s.missing()   # đã điền theo biểu phí DNSE
 
     def test_require_raises_on_null(self):
         s = Settings({"fees": {"broker": None}, "risk": {"max_contracts": 1}})

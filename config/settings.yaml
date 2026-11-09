@@ -35,18 +35,21 @@ session:
   close: "14:45"
 
 # Phí & thuế tính theo VNĐ / hợp đồng / MỘT CHIỀU (mở hoặc đóng).
-# Điền theo biểu phí của broker bạn dùng. Backtest từ chối chạy khi còn null.
+# Nguồn: "Biểu phí dịch vụ giao dịch chứng khoán phái sinh tại DNSE", áp dụng từ 01/05/2026 (người dùng gửi 09/11/2026).
+# Tổng một chiều ≈ 1.000 + 2.700 + 2.550 + 17.100 = 23.350đ/HĐ (≈ 0,23 điểm). KIỂM LẠI khi DNSE đổi biểu phí.
+# Không tính ở đây: phí quản lý tài sản ký quỹ VSDC 0,0024%/tháng (tối thiểu 100.000đ, tối đa 1.600.000đ/tháng/tài
+# khoản) và phí nộp/rút ký quỹ 11.000đ/lần — không theo hợp đồng.
 fees:
-  broker_fee_vnd_per_contract: null     # VIỆC CỦA BẠN: theo hợp đồng/gói phí tài khoản (DNSE/SSI…)
-  # Phí sở (HNX) HĐTL chỉ số: 2.700đ/HĐ mỗi lượt mở hoặc đóng — biểu phí công bố của nhiều CTCK (KBSV, DSC, PHS,
-  # SSI…), 08/11/2026. Kiểm lại biểu phí hiện hành của broker.
+  # Phí giao dịch DNSE: < 100 HĐ khớp/ngày ⇒ 1.000đ/HĐ/chiều (100–<1.000 HĐ: 800đ; bot giao dịch ít ⇒ bậc thấp nhất).
+  broker_fee_vnd_per_contract: 1000
+  # Phí DNSE thu hộ sở: HĐ tương lai chỉ số 2.700đ/HĐ.
   exchange_fee_vnd_per_contract: 2700
-  # Phí bù trừ VSDC sau KRX: 2.550đ/HĐ mỗi giao dịch (FAQ KRX của DNSE; tài liệu CTCK ghi "hệ thống mới": phí qua đêm
-  # 0đ, thay bằng phí bù trừ theo HĐ). Phí quản lý tài sản ký quỹ (0,0024%/tháng) KHÔNG tính ở đây.
+  # Phí DNSE thu hộ VSDC — dịch vụ bù trừ vị thế: 2.550đ/HĐ cho 1 chiều Mua/Bán.
   clearing_fee_vnd_per_contract: 2550
-  # VIỆC CỦA BẠN: thuế TNCN = 0,1% × giá trị chuyển nhượng (= giá × 100.000 × tỷ lệ ký quỹ ban đầu / 2 mỗi chiều
-  # — kiểm lại quy định); phụ thuộc giá + tỷ lệ ký quỹ ⇒ điền ước lượng VNĐ/HĐ ở mức giá thường gặp.
-  tax_vnd_per_contract: null
+  # Thuế TNCN mỗi chiều = 0,1% × (số HĐ × giá × 100.000 × tỷ lệ ký quỹ ban đầu VSD) / 2; tỷ lệ ký quỹ 18,48%
+  # ⇒ ≈ 9,24đ × giá. Ước lượng cố định ở giá ~1.850 điểm (giá 1.700 ⇒ ~15.700đ, 2.000 ⇒ ~18.500đ).
+  # Cập nhật khi giá đi xa mức này hoặc tỷ lệ ký quỹ đổi.
+  tax_vnd_per_contract: 17100
 
 backtest:
   slippage_ticks: 1                     # trượt giá tối thiểu mỗi lần khớp

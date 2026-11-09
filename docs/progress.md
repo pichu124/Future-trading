@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-09 — Phí + thuế theo biểu phí DNSE (01/05/2026)
+
+- Người dùng gửi biểu phí DNSE áp dụng từ 01/05/2026 ⇒ `fees`: môi giới 1.000đ (< 100 HĐ/ngày), sở 2.700đ, bù trừ VSDC 2.550đ, thuế TNCN ≈ 17.100đ/HĐ/chiều (0,1% × giá × 100.000 × 18,48% / 2 ở giá ~1.850). Tổng ≈ 23.350đ ≈ 0,23 điểm/chiều.
+- Thuế phụ thuộc giá (≈ 9,24đ × giá) — đang ước lượng cố định; cập nhật khi giá đi xa ~1.850 hoặc tỷ lệ ký quỹ đổi.
+- Hai test cũ giả định phí trong repo còn null ⇒ đổi sang kiểm "null ⇒ từ chối" trên bản sao settings; thêm test khoá giá trị biểu phí. 1199 test.
+
 ## 2026-11-09 — `backtest.robustness` trên tick thật (`--ticks`)
 
 - `run_robustness` nhận tick thay cho bar: mỗi lần chạy = `run_events(bars_from_ticks(…))`; chia IS/OOS, walk-forward, độ nhạy (chỉ IS) theo ngày của tick. CLI `--ticks` (loại trừ `--bars`), `--source` khi nhiều nguồn; khớp lệnh downloader được gắn bid/ask giả (`fill_missing_quotes`) trước khi chạy, có dòng ghi chú.

@@ -27,8 +27,8 @@
 
 ### Việc của bạn (theo thứ tự)
 
-1. **Điền `config/settings.yaml`** (`python -m core.settings` liệt kê):
-   `fees.broker_fee_vnd_per_contract`, `fees.tax_vnd_per_contract`, `risk.max_daily_loss_points`,
+1. **Điền `config/settings.yaml`** (`python -m core.settings` liệt kê; phí + thuế đã điền theo biểu phí DNSE 01/05/2026):
+   `risk.max_daily_loss_points`,
    `risk.max_trades_per_day`, `risk.max_consecutive_losses`, `backtest.initial_capital_vnd`,
    `live.allowed_machine` (hostname máy chạy bot). `paths.dashboard_warehouse` chỉ cần nếu import dữ liệu cũ.
 2. **Khoá API** vào `.env` (DNSE, SSI; TCBS tuỳ chọn) rồi chạy thăm dò, gửi kết quả (không chứa khoá):
