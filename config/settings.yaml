@@ -170,7 +170,7 @@ brokers:
 live:
   # Hostname DUY NHẤT được chạy bot (Windows: biến COMPUTERNAME). Máy khác từ chối khởi động
   # ⇒ không bao giờ có hai máy cùng đặt lệnh. Xem CLAUDE.md mục 3b.
-  allowed_machine: null
+  allowed_machine: CFA-BINHLD-LT          # laptop (10/11/2026); Desktop chỉ backtest/tải dữ liệu
   lock_stale_after_seconds: 120
   # Live: sau khi kết nối, chờ /otp <broker> <mã> cho DNSE + SSI tối đa N giây; quá ⇒ thoát, không giao dịch.
   otp_wait_seconds: 600

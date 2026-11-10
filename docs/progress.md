@@ -1,5 +1,10 @@
 # Tiến độ
 
+## 2026-11-10 — Laptop setup; `live.allowed_machine = CFA-BINHLD-LT`
+
+- Laptop: repo ở `D:\Future-trading`, `.venv`, pytest qua hết. Chỉ laptop được chạy runner paper/live; Desktop chỉ backtest / tải dữ liệu / probe.
+- Còn null: `paths.dashboard_warehouse` (không cần), `brokers.dnse.trading_token_ttl_seconds` (sau UAT), `brokers.ssi.*` (khi có khoá SSI).
+
 ## 2026-11-09 — ORB #1 IS theo tick thật: +3,21tr (nến: −3,78tr) — kiểm mô hình khớp
 
 - Người dùng chạy `backtest.engine --ticks data/history/trades --to 2026-08-31`: 142 lệnh, +3.208.600đ sau phí.

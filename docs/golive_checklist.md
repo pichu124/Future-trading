@@ -28,7 +28,7 @@
 ### Việc của bạn (theo thứ tự)
 
 1. **Điền `config/settings.yaml`** — ✅ phí/thuế (biểu phí DNSE 01/05/2026), vốn 100 triệu, lỗ ngày 15 điểm, 2 lượt/ngày, thua liên tiếp 2.
-   Còn: `live.allowed_machine` (hostname máy chạy bot). `paths.dashboard_warehouse` chỉ cần nếu import dữ liệu cũ.
+   `live.allowed_machine` = `CFA-BINHLD-LT` (laptop, 10/11/2026). `paths.dashboard_warehouse` chỉ cần nếu import dữ liệu cũ.
 2. **Khoá API** vào `.env` (DNSE, SSI; TCBS tuỳ chọn) rồi chạy thăm dò, gửi kết quả (không chứa khoá):
    `dnse_feed_probe.py` (kèm `--extra-contract`), `dnse_history_probe.py`, `dnse_trading_probe.py`,
    `ssi_trading_probe.py` ⇒ mình chốt các ❓ và điền `brokers.dnse.loan_package_id`,

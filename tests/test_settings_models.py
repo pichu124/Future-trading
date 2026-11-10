@@ -13,7 +13,11 @@ class TestSettings:
     def test_repo_settings_load_and_report_missing(self):
         s = load_settings()
         assert s.get("contract.multiplier_vnd_per_point") == 100000
-        assert "live.allowed_machine" in s.missing()          # khoá còn null được liệt kê
+        assert s.get("live.allowed_machine") == "CFA-BINHLD-LT"           # máy DUY NHẤT chạy bot (laptop)
+        import copy
+        raw = copy.deepcopy(s.raw)
+        raw["live"]["allowed_machine"] = None
+        assert "live.allowed_machine" in Settings(raw).missing()          # khoá còn null được liệt kê
         assert "fees.broker_fee_vnd_per_contract" not in s.missing()   # đã điền theo biểu phí DNSE
 
     def test_require_raises_on_null(self):
