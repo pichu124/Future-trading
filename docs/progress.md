@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-10 — Robustness tick #3/#4/#5: CHƯA ĐỦ (mẫu nhỏ); #5 rõ ràng không có edge
+
+- #3 IS +8,80tr (33 lệnh) / OOS +1,49tr (25 lệnh, p 0,389), độ nhạy 6/6, walk-forward 2/4. #4 IS +2,57tr (11) / OOS +1,99tr (13, p 0,373), độ nhạy 4/6. #5 IS −10,79tr / OOS −5,16tr ⇒ dừng.
+- Kế hoạch (research/log.md): kéo dài OOS bằng dữ liệu mới, không đổi tham số; kết luận khi OOS ≥ 30 lệnh.
+- Nhận xét phụ: báo cáo robustness để trống "Max drawdown %" và "Lợi nhuận / vốn" (không truyền `initial_capital_vnd` như `backtest.engine`).
+
 ## 2026-11-10 — Chiến lược #5 đảo chiều về VWAP (`strategy/vwap_reversion.py`)
 
 - Theo đăng ký trước: VWAP ngày = Σ(TP × KL)/ΣKL nến từ 09:00 (bỏ KL 0); xét nến giờ mở 09:29…13:59, BỎ nến đóng đúng 11:30 (risk chặn mở — làm rõ thực thi, ghi log); |đóng − VWAP| ≥ 0,40·ADR10 và phẳng ⇒ vào ngược chiều, TP = VWAP, stop 0,25·ADR10 xa thêm; ≤ 2 tín hiệu vào/ngày; EXIT khi nến ≥ 14:19 đóng. `settings.strategy.vwap_reversion`.
