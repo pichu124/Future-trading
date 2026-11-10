@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-10 — Runner paper chạy chiến lược chọn bằng `--strategy` (#3)
+
+- Runner đã có `--strategy module:Class` + nạp lịch sử nhiều phiên cho chiến lược `history_days > 0`. Thêm: sai module/class ⇒ log rõ + thoát 2 (trước đây văng traceback); cấu hình chiến lược sai (`ValueError`) ⇒ thoát 2; tin khởi động ghi tên chiến lược (`TITLE` / tên class).
+- Test `tests/test_runner_strategy_choice.py`: #3 chạy cả ngày qua runner + PaperBroker thật (tick → nến → Long sau 13:01, stop 0,30·ADR, EXIT sau 14:20), tin khởi động, `--strategy` sai.
+- `docs/runner.md`: lệnh paper #3 + điều kiện lịch sử (đủ tới phiên hôm qua; ngày trước roll cần HĐ kế tiếp — 18/11/2026 ⇒ tải VN30F2612 ngày 18/11 trước phiên 19/11).
+
 ## 2026-11-10 — Tải bù 09–10/11 (Desktop); chốt ❓ tham số phân trang DNSE
 
 - `download_history.py --start 2026-11-07 --end 2026-11-10`: 09/11 103.726 dòng, 10/11 109.197 dòng, 0 lỗi, 230 request. Phân trang chạy bằng `nextPageToken` ⇒ chốt ❓ trong broker_notes. Dữ liệu này hiện chỉ ở Desktop (laptop còn tới 06/11).

@@ -66,6 +66,16 @@ thoát mã 2, KHÔNG giao dịch. Hợp đồng kế tiếp ngày trước roll 
 ```bat
 .venv\Scripts\python.exe -m live.runner --assume-computed-contract
 ```
+Chọn chiến lược bằng `--strategy module:Class` (mặc định ORB #1). Tin Telegram lúc khởi động ghi tên chiến lược.
+Ví dụ paper chiến lược #3 (đà sáng → chiều — CHƯA có bằng chứng edge, paper để kiểm vận hành):
+```bat
+.venv\Scripts\python.exe -m live.runner --assume-computed-contract --strategy strategy.morning_momentum:MorningMomentum
+```
+#3/#4/#5 cần lịch sử 10 phiên (ADR) ⇒ trước mỗi ngày paper, `data/history/ohlc1m` + `data/bars` phải có đủ tới
+phiên HÔM QUA (recorder hằng ngày ghi `data/bars/<ngày>`; thiếu ngày nào thì `download_history.py` ngày đó) và
+ngày trước roll phải có cả HĐ kế tiếp (mục trên). Thiếu ⇒ runner báo và thoát 2, không giao dịch.
+Runner chạy MỘT chiến lược mỗi lần (một broker chính, CLAUDE.md §3) — không chạy hai runner song song.
+
 Runner: khoá phiên (máy được phép + file khoá) → đối soát vị thế → mỗi giây: tick → bar → strategy →
 risk → paper broker; heartbeat khoá mỗi `monitoring.heartbeat_seconds`; tự thoát sau 14:45 kèm báo cáo.
 

@@ -323,7 +323,7 @@ def test_main_refuses_live_flag_in_paper_mode(monkeypatch):
 def test_main_paper_refuses_without_allowed_machine(monkeypatch):
     from live.runner import main
     monkeypatch.setenv("TRADING_MODE", "paper")
-    assert main(["--assume-computed-contract"]) == 2        # settings.live.allowed_machine còn null
+    assert main(["--assume-computed-contract"]) == 2        # máy chạy test ≠ live.allowed_machine
 
 
 def test_feed_silence_with_position_flattens(rig):

@@ -235,7 +235,8 @@ class Runner:
         self._last_heartbeat = now
         self.state.market_data_at = now                  # mốc chờ dữ liệu đầu tiên sau khởi động
         self._save()
-        await self._say(f"🤖 Runner {self.mode} khởi động {now:%Y-%m-%d %H:%M:%S}")
+        name = getattr(self.strategy, "TITLE", None) or type(self.strategy).__name__
+        await self._say(f"🤖 Runner {self.mode} khởi động {now:%Y-%m-%d %H:%M:%S} · chiến lược {name}")
         return None
 
     def _otp_targets(self) -> dict[str, Any]:
@@ -669,10 +670,18 @@ def main(argv=None) -> int:
         mclock = MarketClock.from_settings(settings)
         risk = RiskManager.from_settings(settings, mclock)
         mod, _, cls = args.strategy.partition(":")
-        strat_cls = getattr(importlib.import_module(mod), cls)
+        try:
+            strat_cls = getattr(importlib.import_module(mod), cls)
+        except (ImportError, AttributeError, ValueError) as exc:
+            log.error("--strategy %s không dùng được: %s (dạng module:Class, vd "
+                      "strategy.morning_momentum:MorningMomentum)", args.strategy, exc)
+            return 2
         strategy = strat_cls.from_settings(settings) if hasattr(strat_cls, "from_settings") else strat_cls()
     except MissingSetting as exc:
         log.error("%s — chạy `python -m core.settings`", exc)
+        return 2
+    except ValueError as exc:
+        log.error("Cấu hình chiến lược %s sai: %s", args.strategy, exc)
         return 2
 
     async def lister():
