@@ -1,5 +1,12 @@
 # Tiến độ
 
+## 2026-11-10 — Chiến lược #4 ngày xu hướng (`strategy/trend_day.py`)
+
+- Theo đăng ký trước: m = đóng nến quyết định (đầu tiên trong [09:59, 10:04)) − mở nến đầu [09:00, 09:05); |m| ≥ 0,35·ADR10 và phẳng ⇒ theo m lúc 10:00, stop 0,30·ADR10, không TP; quyết định MỘT lần (giờ đầu yếu ⇒ cả ngày không vào); EXIT khi nến ≥ 14:19 đóng. `settings.strategy.trend_day`; `TITLE`/`ROBUSTNESS_PARAMS` cho robustness.
+- Test `tests/test_strategy_trend_day.py` (25, gồm tích hợp engine vào 10:00/thoát 14:20, CLI robustness); mutation (đảo hướng, bỏ chốt một-lần) ⇒ đỏ.
+- **Chạy thật (người dùng):** `python -m backtest.robustness --ticks data/history/trades --split 2026-09-01 --strategy strategy.trend_day:TrendDay --out reports/s4_robust_ticks.html`.
+- Làm #4 trước khi có kết quả #3 — không ảnh hưởng: tham số #4 đã chốt trong đăng ký trước.
+
 ## 2026-11-10 — Chiến lược #3 đà sáng → chiều (`strategy/morning_momentum.py`) + robustness `--strategy`
 
 - Đăng ký trước #3/#4/#5 trong `research/log.md` (tham số chốt trước khi viết code; `n_trials` = 5).

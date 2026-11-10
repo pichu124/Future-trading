@@ -111,6 +111,15 @@ strategy:
     exit_bar: "14:19"                   # nến 14:19 đóng (14:20) ⇒ thoát nếu còn vị thế
     qty: 1
 
+  # Cấu hình #4 — ngày xu hướng (strategy/trend_day.py). ĐĂNG KÝ TRƯỚC 10/11/2026 (research/log.md).
+  trend_day:
+    adr_days: 10
+    min_move_adr: 0.35                  # |đóng 09:59 − mở 09:00| ≥ 0,35 × ADR ⇒ vào theo hướng lúc 10:00
+    stop_adr: 0.30                      # stop = đóng nến 09:59 ∓ 0,30 × ADR
+    decision_bar: "09:59"
+    exit_bar: "14:19"
+    qty: 1
+
 # Ghi tick ra data/raw/YYYY-MM-DD/ (recorder/, scripts/record_today.py).
 recorder:
   flush_seconds: 5                      # crash mất tối đa ngần này giây dữ liệu chưa ghi
