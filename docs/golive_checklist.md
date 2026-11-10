@@ -10,7 +10,7 @@
 > còn lại là việc của bạn (lịch nghỉ, phí, giới hạn risk, khoá API, chạy script thăm dò). Live đã nối nhưng còn
 > KHOÁ (`api_verified`, giá trị null) — **chưa chạy live**. Bảng trạng thái mới nhất: mục 0 ngay dưới.
 
-## 0. Trạng thái mới nhất (09/11/2026)
+## 0. Trạng thái mới nhất (10/11/2026)
 
 | Hạng mục | Trạng thái |
 |---|---|
@@ -26,18 +26,32 @@
 | Lịch nghỉ 2025–2026, phí sở + VSDC | ✅ (2026 kiểm chéo dữ liệu VN30) |
 | Đóng vị thế ngoài phiên liên tục (chạm lỗ ngày / kill / EXIT lúc nghỉ trưa, ATC) | ✅ 10/11/2026: hoãn tới phiên liên tục, giữ stop/TP, không gửi lệnh; `/kill` trưa không thoát; báo Telegram (`TestOutsideContinuous`, `test_kill_at_lunch_…`) |
 
-### Việc của bạn (theo thứ tự)
+### Việc của bạn (theo thứ tự) — cập nhật 10/11/2026
 
-1. **Điền `config/settings.yaml`** — ✅ phí/thuế (biểu phí DNSE 01/05/2026), vốn 100 triệu, lỗ ngày 15 điểm, 2 lượt/ngày, thua liên tiếp 2.
-   `live.allowed_machine` = `CFA-BINHLD-LT` (laptop, 10/11/2026). `paths.dashboard_warehouse` chỉ cần nếu import dữ liệu cũ.
-2. **Khoá API** vào `.env` (DNSE, SSI; TCBS tuỳ chọn) rồi chạy thăm dò, gửi kết quả (không chứa khoá):
-   `dnse_feed_probe.py` (kèm `--extra-contract`), `dnse_history_probe.py`, `dnse_trading_probe.py`,
-   `ssi_trading_probe.py` ⇒ mình chốt các ❓ và điền `brokers.dnse.loan_package_id`,
-   `trading_token_ttl_seconds`, `brokers.ssi.order_symbol_format`, `market_order_type`, `api_verified`.
-3. **Dữ liệu**: `download_history.py` 1–2 ngày (kiểm), rồi cả dải; bật recorder hằng ngày (`docs/recorder_windows.md`).
-4. **Nghiên cứu**: chốt mốc chia IS/OOS trong `research/log.md`, chạy `backtest.robustness` cho ORB #1 (và #2 nếu muốn).
-5. **Lịch nghỉ 2027** khi HNX công bố (bắt buộc trước 2027).
-6. **Paper** ≥ vài tuần (`TRADING_MODE=paper`) — chỉ khi robustness nói CÓ edge mới tính tới live.
+**Việc tiếp theo (11/11/2026, trên LAPTOP `D:\Future-trading`, máy ghi dữ liệu + chạy bot):**
+
+1. **`.env` trên laptop**: chép các dòng DNSE từ `.env` của Desktop (USB; KHÔNG chép đè cả file nếu laptop đã có
+   dòng Telegram; không gửi qua chat/Dropbox/Zalo). Giữ `TRADING_MODE=paper`. Kiểm: `python scripts/dnse_trading_probe.py`
+   (chỉ đọc) ⇒ thấy số tiểu khoản + loan package 1306. Lỗi 401/403 ⇒ có thể VPN/proxy công ty — gửi lỗi.
+2. **Thử feed trong giờ giao dịch** (09:15–11:30 hoặc 13:00–14:25):
+   `python scripts/dnse_feed_probe.py --krx 41I1GB000 --seconds 120` (41I1GB000 = VN30F2611; từ 19/11 là
+   41I1GC000 = VN30F2612) ⇒ gửi phần tổng kết.
+3. **Chạy tay recorder 10–15 phút**: `python scripts/record_today.py --assume-computed-contract` ⇒ kiểm
+   `data\raw\<ngày>\part-*.parquet` + `logs\`; Ctrl+C không mất dữ liệu.
+4. **Hẹn giờ** (cmd): `schtasks /Create /F /TN "VN30F Recorder" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 08:20 /TR
+   "\"D:\Future-trading\.venv\Scripts\python.exe\" \"D:\Future-trading\scripts\record_today.py\" --assume-computed-contract"`
+   rồi chỉnh Properties theo `docs/recorder_windows.md` §2; tắt Sleep khi cắm sạc. Laptop phải bật + có mạng
+   08:20–15:00 ngày thường (gập nắp / ngủ / IT khởi động lại = mất dữ liệu ngày đó; bù bằng `download_history.py`).
+5. **Telegram** (làm lúc nào cũng được): @BotFather ⇒ token; nhắn bot; lấy chat id; điền
+   `TELEGRAM_TRADING_BOT_TOKEN/_CHAT_ID` vào `.env`; gửi tin thử.
+
+**Đã xong:** settings (phí, vốn 100tr, lỗ ngày 15 điểm, 2 lượt, thua 2, `allowed_machine = CFA-BINHLD-LT`);
+probe DNSE chỉ đọc + lịch sử (trên Desktop); tải 6 tháng lịch sử (+ chép sang laptop, check 133/133);
+ORB #1/#2 robustness nến + tick ⇒ KHÔNG CÓ EDGE.
+
+**Sau đó:** chiến lược #3 (đăng ký giả thuyết trong `research/log.md` TRƯỚC khi chạy; kiểm trên dữ liệu recorder
+MỚI); SSI probe khi có khoá; UAT đặt lệnh thử (hướng dẫn riêng); lịch nghỉ 2027 khi HNX công bố;
+paper ≥ vài tuần chỉ khi có chiến lược CÓ EDGE.
 
 ## Kết luận
 
