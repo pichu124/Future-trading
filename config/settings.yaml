@@ -120,6 +120,17 @@ strategy:
     exit_bar: "14:19"
     qty: 1
 
+  # Cấu hình #5 — đảo chiều về VWAP (strategy/vwap_reversion.py). ĐĂNG KÝ TRƯỚC 10/11/2026 (research/log.md).
+  vwap_reversion:
+    adr_days: 10
+    entry_dev_adr: 0.40                 # |đóng − VWAP| ≥ 0,40 × ADR ⇒ vào ngược chiều, chốt lời = VWAP
+    stop_adr: 0.25                      # stop = đóng ± 0,25 × ADR (xa thêm về phía lệch)
+    window_start: "09:29"               # xét nến giờ mở 09:29 … 13:59 (bỏ nến đóng 11:30 — nghỉ trưa)
+    window_end: "13:59"
+    max_trades_per_day: 2
+    exit_bar: "14:19"
+    qty: 1
+
 # Ghi tick ra data/raw/YYYY-MM-DD/ (recorder/, scripts/record_today.py).
 recorder:
   flush_seconds: 5                      # crash mất tối đa ngần này giây dữ liệu chưa ghi

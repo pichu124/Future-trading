@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-10 — Chiến lược #5 đảo chiều về VWAP (`strategy/vwap_reversion.py`)
+
+- Theo đăng ký trước: VWAP ngày = Σ(TP × KL)/ΣKL nến từ 09:00 (bỏ KL 0); xét nến giờ mở 09:29…13:59, BỎ nến đóng đúng 11:30 (risk chặn mở — làm rõ thực thi, ghi log); |đóng − VWAP| ≥ 0,40·ADR10 và phẳng ⇒ vào ngược chiều, TP = VWAP, stop 0,25·ADR10 xa thêm; ≤ 2 tín hiệu vào/ngày; EXIT khi nến ≥ 14:19 đóng. `settings.strategy.vwap_reversion`.
+- Test `tests/test_strategy_vwap_reversion.py` (29, gồm tích hợp engine: Short chốt lời ở VWAP; CLI robustness); mutation (đảo chiều, bỏ chặn nến 11:30, bỏ giới hạn lượt) ⇒ đỏ.
+- **Chạy thật (người dùng):** `python -m backtest.robustness --ticks data/history/trades --split 2026-09-01 --strategy strategy.vwap_reversion:VwapReversion --out reports/s5_robust_ticks.html`.
+
 ## 2026-11-10 — Chiến lược #4 ngày xu hướng (`strategy/trend_day.py`)
 
 - Theo đăng ký trước: m = đóng nến quyết định (đầu tiên trong [09:59, 10:04)) − mở nến đầu [09:00, 09:05); |m| ≥ 0,35·ADR10 và phẳng ⇒ theo m lúc 10:00, stop 0,30·ADR10, không TP; quyết định MỘT lần (giờ đầu yếu ⇒ cả ngày không vào); EXIT khi nến ≥ 14:19 đóng. `settings.strategy.trend_day`; `TITLE`/`ROBUSTNESS_PARAMS` cho robustness.
