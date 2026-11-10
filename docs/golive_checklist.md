@@ -42,8 +42,7 @@
    "\"D:\Future-trading\.venv\Scripts\python.exe\" \"D:\Future-trading\scripts\record_today.py\" --assume-computed-contract"`
    rồi chỉnh Properties theo `docs/recorder_windows.md` §2; tắt Sleep khi cắm sạc. Laptop phải bật + có mạng
    08:20–15:00 ngày thường (gập nắp / ngủ / IT khởi động lại = mất dữ liệu ngày đó; bù bằng `download_history.py`).
-5. **Telegram** (làm lúc nào cũng được): @BotFather ⇒ token; nhắn bot; lấy chat id; điền
-   `TELEGRAM_TRADING_BOT_TOKEN/_CHAT_ID` vào `.env`; gửi tin thử.
+5. **Telegram** — ✅ 10/11/2026: bot `@binh_vn30f_bot`, `TELEGRAM_TRADING_*` trong `.env` laptop, gửi tin thử OK.
 
 **Đã xong:** settings (phí, vốn 100tr, lỗ ngày 15 điểm, 2 lượt, thua 2, `allowed_machine = CFA-BINHLD-LT`);
 probe DNSE chỉ đọc + lịch sử (trên Desktop); tải 6 tháng lịch sử (+ chép sang laptop, check 133/133);

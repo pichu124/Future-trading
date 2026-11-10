@@ -1,5 +1,9 @@
 # Tiến độ
 
+## 2026-11-10 — Telegram kênh trading đã cài (laptop)
+
+- Bot `@binh_vn30f_bot`; `TELEGRAM_TRADING_BOT_TOKEN/_CHAT_ID` trong `.env` laptop (không commit); `monitoring.telegram.send_message` gửi thử thành công. `/kill`, `/status`, `/pnl`, `/otp` chỉ nhận từ chat id này.
+
 ## 2026-11-10 — ORB #1/#2 kiểm định theo tick thật: vẫn KHÔNG CÓ EDGE
 
 - `backtest.robustness --ticks` (laptop, 10,99 triệu tick): #1 OOS −1.302.700đ (p 0,553, trượt 2 tick −2.772.700đ); #2 OOS −669.300đ (p 0,551, trượt 2 tick −1.829.300đ). Độ nhạy và walk-forward đạt ngưỡng nhưng OOS lỗ + p không đạt ⇒ KHÔNG CÓ EDGE.
