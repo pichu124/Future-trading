@@ -40,7 +40,44 @@ là `n_trials` khi gọi `backtest.validation.apply_selection_penalty` (CLAUDE.m
 - Mô hình tick vẫn còn giả định: báo giá giả (dữ liệu tải về không có bid/ask), thanh khoản vô hạn, độ trễ
   300–500 ms. Tick thật có bid/ask từ recorder sẽ chính xác hơn.
 
+## Đăng ký trước #3, #4, #5 (10/11/2026 — TRƯỚC khi viết code / chạy trên dữ liệu)
+
+Người dùng chọn thử cả ba ý tưởng ⇒ `n_trials` = 5 (2 ORB + 3 mới), `apply_selection_penalty` tính theo 5. Tham số
+dưới đây CHỐT từ suy luận (chi phí ~0,9 điểm/lượt ⇒ ít lệnh, biên độ lớn), KHÔNG chỉnh sau khi xem kết quả. Đổi
+bất kỳ con số nào = cấu hình MỚI (thêm dòng, tăng `n_trials`).
+
+Chung cho cả ba:
+- Nến 1 phút đã đóng; lệnh khớp ở tick kế tiếp; mô hình khớp **tick** (`--ticks`); phí/thuế/trượt như ORB.
+- ADR10 = trung bình (đỉnh − đáy) 10 phiên TRƯỚC (lịch sử nối chuỗi back-adjust); thiếu lịch sử ⇒ không giao dịch.
+- Giờ mở 09:00 = giá mở nến 09:00. Thoát theo giờ: EXIT ở nến 14:19 đóng (14:20); risk vẫn `flatten_time` 14:25.
+- Luật rủi ro cứng giữ nguyên (lỗ ngày 15 điểm, 2 lượt/ngày, thua liên tiếp 2, 1 HĐ).
+- Kiểm định: `backtest.robustness --ticks`, mốc chia 01/09/2026 như #1/#2, luật kết luận cố định. Mốc này đã bị
+  nhìn qua kết quả ORB (không qua tham số của #3–#5 — các tham số này chốt không nhìn dữ liệu) ⇒ dùng làm kết
+  luận chính; **CÓ EDGE vẫn phải xác nhận lại trên dữ liệu recorder MỚI** trước khi paper.
+
+**#3 — Đà sáng → chiều** (`strategy/morning_momentum.py`). Giả thuyết: biến động phiên sáng dự báo hướng phiên chiều
+(intraday momentum, Gao et al. 2018 — "first half-hour predicts last half-hour", ở đây áp cho phiên sáng/chiều).
+- m = đóng nến 11:29 − mở 09:00. Quyết định khi nến 13:00 đóng (13:01; 11:30 đã nghỉ trưa, risk chặn mở).
+- |m| ≥ 0,25 × ADR10 ⇒ vào theo dấu m. Stop = đóng nến 13:00 ∓ 0,30 × ADR10. Không chốt lời. Tối đa 1 lệnh/ngày.
+- Tham số kiểm độ nhạy: `adr_days` 10, `min_move_adr` 0,25, `stop_adr` 0,30.
+
+**#4 — Ngày xu hướng** (`strategy/trend_day.py`). Giả thuyết: giờ đầu đi mạnh (so với ADR) ⇒ ngày xu hướng, theo đến cuối phiên.
+- m = đóng nến 09:59 − mở 09:00. Quyết định khi nến 09:59 đóng (10:00).
+- |m| ≥ 0,35 × ADR10 ⇒ vào theo dấu m. Stop = đóng nến 09:59 ∓ 0,30 × ADR10. Không chốt lời. Tối đa 1 lệnh/ngày.
+- Tham số kiểm độ nhạy: `adr_days` 10, `min_move_adr` 0,35, `stop_adr` 0,30.
+
+**#5 — Đảo chiều về VWAP** (`strategy/vwap_reversion.py`). Giả thuyết: lệch xa VWAP trong ngày (so với ADR) ⇒ quay về VWAP.
+- VWAP từ nến 09:00: Σ((H+L+C)/3 × KL) / ΣKL (bỏ nến KL = 0). Quyết định ở nến đóng từ 09:30 tới 14:00 (nến 09:29…13:59).
+- d = đóng − VWAP; |d| ≥ 0,40 × ADR10 và đang phẳng ⇒ vào NGƯỢC dấu d. Chốt lời = VWAP lúc ra tín hiệu.
+  Stop = đóng ± 0,25 × ADR10 (xa thêm về phía lệch). Tối đa 2 lệnh/ngày.
+- Tham số kiểm độ nhạy: `adr_days` 10, `entry_dev_adr` 0,40, `stop_adr` 0,25.
+
+Thứ tự làm: #3 → #4 → #5, mỗi chiến lược một module (test trước), chạy robustness xong mới làm cái tiếp theo.
+
 | Ngày | Chiến lược | Tham số | Dữ liệu (IS/OOS) | Kết quả sau phí | p / p_adj | Ghi chú |
 |---|---|---|---|---|---|---|
 | 2026-11-08 | ORB baseline (`strategy/baseline_orb.py`) — cấu hình #1 | biên 15′, TP 1.5R, stop cạnh đối diện, ≤2 lệnh/ngày | IS 11/05→31/08 · OOS 01/09→06/11/2026 — **chạy 09/11/2026** | IS: 141 lệnh, −3.784.700đ; OOS: −2.292.700đ; trượt 2 tick OOS −3.652.700đ | OOS p = 0,609 | **KHÔNG CÓ EDGE** (robustness): OOS lỗ, p không đạt, 0% biến thể ±20% lãi, 25% đoạn walk-forward lãi. Theo tick (10/11): OOS −1.302.700đ, p 0,553 ⇒ vẫn KHÔNG CÓ EDGE. Phí ~46.700đ/lượt ⇒ 141 lượt IS ≈ 6,58tr phí ⇒ trước phí IS ≈ +2,8tr (≈ +0,2 điểm/lượt) — lợi thế thô (nếu có) nhỏ hơn chi phí. KHÔNG paper/live. |
 | 2026-11-08 | ORB + lọc độ rộng biên (`strategy.orb.range_filter`) — cấu hình #2 | như #1 + chỉ giao dịch khi (đỉnh − đáy biên 15′) / ADR10 ∈ [0,10; 0,60] | như #1 — **chạy 09/11/2026** (`--set strategy.orb.range_filter.enabled=true`) | OOS: −1.459.300đ; trượt 2 tick OOS −2.779.300đ | OOS p = 0,588 | **KHÔNG CÓ EDGE** (robustness): OOS lỗ (ít hơn #1 nhưng vẫn lỗ), p không đạt, 0% biến thể ±20% lãi (gồm cả 3 tham số lọc), 25% đoạn walk-forward lãi. Theo tick (10/11): OOS −669.300đ, p 0,551 ⇒ vẫn KHÔNG CÓ EDGE. KHÔNG paper/live. |
+| 2026-11-10 | Đà sáng → chiều (`strategy/morning_momentum.py`) — cấu hình #3 | m = C(11:29) − O(09:00); \|m\| ≥ 0,25·ADR10 ⇒ theo m lúc 13:01; stop 0,30·ADR10; EXIT 14:20; 1 lệnh/ngày | IS 11/05→31/08 · OOS 01/09→06/11/2026 (tick) | chưa chạy | — | Đăng ký trước 10/11/2026. |
+| 2026-11-10 | Ngày xu hướng (`strategy/trend_day.py`) — cấu hình #4 | m = C(09:59) − O(09:00); \|m\| ≥ 0,35·ADR10 ⇒ theo m lúc 10:00; stop 0,30·ADR10; EXIT 14:20; 1 lệnh/ngày | như #3 | chưa chạy | — | Đăng ký trước 10/11/2026. |
+| 2026-11-10 | Đảo chiều VWAP (`strategy/vwap_reversion.py`) — cấu hình #5 | \|C − VWAP\| ≥ 0,40·ADR10 (09:30–14:00) ⇒ ngược chiều, TP = VWAP, stop 0,25·ADR10 xa thêm; EXIT 14:20; ≤ 2 lệnh/ngày | như #3 | chưa chạy | — | Đăng ký trước 10/11/2026. |
