@@ -1,5 +1,10 @@
 # Tiến độ
 
+## 2026-11-10 — ORB #1/#2 kiểm định theo tick thật: vẫn KHÔNG CÓ EDGE
+
+- `backtest.robustness --ticks` (laptop, 10,99 triệu tick): #1 OOS −1.302.700đ (p 0,553, trượt 2 tick −2.772.700đ); #2 OOS −669.300đ (p 0,551, trượt 2 tick −1.829.300đ). Độ nhạy và walk-forward đạt ngưỡng nhưng OOS lỗ + p không đạt ⇒ KHÔNG CÓ EDGE.
+- 4/4 lần xem OOS (nến + tick, #1 + #2) đều lỗ ⇒ dừng ORB; OOS hiện tại đã "bẩn", cần dữ liệu recorder mới. Ghi `research/log.md`.
+
 ## 2026-11-10 — Sửa: đóng vị thế lúc nghỉ trưa (stop bị huỷ + gửi MTL mỗi vòng)
 
 - **Lỗi** (phát hiện khi đo RAM `TickStore`): chạm lỗ ngày/khoá ngay trước 11:30 ⇒ `_close` huỷ stop/TP và xoá kế hoạch RỒI gửi MTL ⇒ MTL bị từ chối (ngoài phiên liên tục) ⇒ vị thế không stop suốt giờ trưa; vòng sau "không có kế hoạch ⇒ đóng" ⇒ MTL mới mỗi vòng (live mỗi giây ⇒ ~5.400 lệnh bị từ chối gửi lên DNSE). `/kill` lúc trưa ⇒ runner thoát sau `kill_flat_timeout_s` ⇒ mất luôn stop do bot giữ.
