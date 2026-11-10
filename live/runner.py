@@ -46,7 +46,7 @@ from brokers.base import BrokerAdapter  # noqa: E402
 from brokers.paper import PaperBroker  # noqa: E402
 from monitoring.logger import log_event, setup_logging  # noqa: E402
 from core.bars import BarBuilder  # noqa: E402
-from core.clock import MarketClock  # noqa: E402
+from core.clock import MarketClock, SessionState  # noqa: E402
 from core.execution import ExecutionManager  # noqa: E402
 from core.models import AccountState, Bar, Tick  # noqa: E402
 from core.settings import Settings  # noqa: E402
@@ -120,6 +120,8 @@ class Runner:
         self._last_heartbeat: Optional[datetime] = None
         self._last_commands: Optional[datetime] = None
         self._kill_seen_at: Optional[datetime] = None
+        self._kill_paused = False                      # /kill ngoài phiên liên tục: tạm dừng đếm giờ
+        self._events_seen = 0                          # số sự kiện execution đã xem (chuyển 'deferred' lên Telegram)
         self._alerts: list[str] = []
         self._halted = False
         self._reported = False
@@ -145,6 +147,14 @@ class Runner:
                 await res
         except Exception:
             log.exception("runner: gửi thông báo lỗi")
+
+    async def _forward_deferred(self) -> None:
+        """Execution hoãn đóng (ngoài phiên liên tục) ⇒ báo Telegram (mỗi lần hoãn chỉ có MỘT sự kiện)."""
+        events = self.execution.events
+        for e in events[self._events_seen:]:
+            if e.kind == "deferred":
+                await self._say(f"⚠️ {e.symbol}: {e.message}")
+        self._events_seen = len(events)
 
     def _flat(self) -> bool:
         return (not any(p.qty != 0 for p in self.state.positions.values())
@@ -360,13 +370,19 @@ class Runner:
                 self.risk.broker_alive(self.state, self.broker.name):
             await self.emergency.unwind()
 
+        await self._forward_deferred()
         if self.state.kill_reason and self._kill_seen_at is None:
             self._kill_seen_at = now
         if self._kill_seen_at is not None:
             if self._flat():
                 await self._finish(now, "kill-switch")
                 return 0
-            if (now - self._kill_seen_at).total_seconds() >= self.config.kill_flat_timeout_s:
+            if self.clock.session_state(now) is not SessionState.CONTINUOUS:
+                # nghỉ trưa/ATC: chưa đóng được ⇒ KHÔNG thoát (stop do bot giữ sẽ mất); đếm lại từ phiên kế tiếp
+                self._kill_paused = True
+            elif self._kill_paused:
+                self._kill_paused, self._kill_seen_at = False, now
+            elif (now - self._kill_seen_at).total_seconds() >= self.config.kill_flat_timeout_s:
                 await self._finish(now, "kill-switch (quá hạn chờ đóng vị thế)")
                 return 1
         if now.time() >= self.clock.schedule.close:

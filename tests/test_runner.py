@@ -423,3 +423,24 @@ def test_otp_without_name_ambiguous_is_refused(session_cfg, cal, tmp_path):
     r2, d2, s2 = _two_otp_brokers(session_cfg, cal, tmp_path, False, False)
     r2.run(r2.runner._otp("445566"))
     assert d2.got == [] and s2.got == []
+
+
+def test_kill_at_lunch_waits_for_pm_open_instead_of_timing_out(rig):
+    """/kill lúc nghỉ trưa: không đóng được tới 13:00. Thoát sau 60s (kill_flat_timeout) ⇒ mất stop do BOT GIỮ
+    (DNSE không có lệnh stop) ⇒ vị thế trần. Bộ đếm chỉ chạy trong phiên liên tục; báo Telegram giờ sẽ đóng."""
+    rig.start()
+    rig.open_position()
+    lunch = datetime(2026, 11, 9, 11, 45)
+    rig.at(lunch)
+    rig.kill_file.write_text("")
+    for m in (0, 5, 30, 74):
+        rig.at(lunch + timedelta(minutes=m))
+        assert rig.step() is None                                    # không thoát giữa trưa
+    assert rig.state.net_qty(SYM) == 1
+    assert [o for o in rig.state.working_orders.values() if o.tag == "stop"]
+    assert any("13:00" in n for n in rig.notes)
+    rig.at(datetime(2026, 11, 9, 13, 0, 1))
+    assert rig.step() is None                                        # vào phiên chiều: gửi MTL đóng
+    rig.at(datetime(2026, 11, 9, 13, 0, 2))
+    rig.trade(1351.0)
+    assert rig.step() == 0 and rig.state.net_qty(SYM) == 0

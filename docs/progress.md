@@ -1,5 +1,13 @@
 # Tiến độ
 
+## 2026-11-10 — Sửa: đóng vị thế lúc nghỉ trưa (stop bị huỷ + gửi MTL mỗi vòng)
+
+- **Lỗi** (phát hiện khi đo RAM `TickStore`): chạm lỗ ngày/khoá ngay trước 11:30 ⇒ `_close` huỷ stop/TP và xoá kế hoạch RỒI gửi MTL ⇒ MTL bị từ chối (ngoài phiên liên tục) ⇒ vị thế không stop suốt giờ trưa; vòng sau "không có kế hoạch ⇒ đóng" ⇒ MTL mới mỗi vòng (live mỗi giây ⇒ ~5.400 lệnh bị từ chối gửi lên DNSE). `/kill` lúc trưa ⇒ runner thoát sau `kill_flat_timeout_s` ⇒ mất luôn stop do bot giữ.
+- **Sửa** `core/execution.py`: ngoài phiên liên tục `_close` hoãn (không huỷ, không gửi, giữ kế hoạch), sự kiện `deferred` MỘT lần (nói giờ sẽ đóng); `maintain()` đứng yên; hành động risk lặp lại chỉ ghi ≤ 1 lần/phút.
+- **Sửa** `live/runner.py`: chuyển `deferred` lên Telegram (⚠️); bộ đếm chờ đóng sau `/kill` tạm dừng ngoài phiên liên tục, đếm lại từ lúc vào phiên.
+- Test: `tests/test_execution.py::TestOutsideContinuous` (6), `tests/test_runner.py::test_kill_at_lunch_waits_for_pm_open_instead_of_timing_out`; mutation (bỏ chốt) ⇒ đỏ. Kịch bản giả cũ: 27.331 lệnh bị từ chối ⇒ 0.
+- Còn ❓: sở có nhận LO/huỷ trong giờ trưa không (broker_notes §3.8) — hiện không dựa vào. Sau 14:30 (ATC) mà còn vị thế ⇒ báo "KHÔNG còn phiên liên tục — xử lý tay" (flatten_time 14:25 vốn để tránh tình huống này).
+
 ## 2026-11-10 — `TickStore`: backtest/robustness `--ticks` đọc dần theo ngày (RAM ~1 ngày thay cho cả kho)
 
 - Đo thực tế ~570 B/tick ⇒ kho 6 tháng (~14,5 triệu tick) ≈ 8 GB nếu nạp hết; laptop 15 GB không đủ an toàn.

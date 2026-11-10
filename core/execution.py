@@ -14,6 +14,10 @@ Luồng:
   dừng nhận tín hiệu. EMERGENCY_HEDGE ⇒ `live.emergency.EmergencyHandler` (đối ứng trên broker
   dự phòng); không có handler thì đóng trên chính broker. Đóng vị thế mà net = 0 nhưng còn vị thế
   chéo broker (sau đối ứng) ⇒ nhờ handler gỡ cả hai chân.
+- Ngoài phiên liên tục (nghỉ trưa, ATO/ATC, ngoài giờ) MTL không đặt được ⇒ `_close` HOÃN: không huỷ stop/TP,
+  không xoá kế hoạch, không gửi gì; báo MỘT lần (`deferred`); vào phiên liên tục kế tiếp mới đóng. `maintain()`
+  đứng yên ngoài phiên. (Lỗi 10/11/2026: huỷ stop rồi MTL bị từ chối ⇒ vị thế trần cả giờ trưa + gửi MTL mỗi vòng.)
+- Hành động risk lặp lại (vd FLATTEN_ALL mỗi vòng khi đã khoá) chỉ ghi sự kiện tối đa mỗi phút một lần.
 - Mọi lệnh đi qua `risk.approve` — không có đường tắt.
 """
 from __future__ import annotations
@@ -21,11 +25,11 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, time
 from typing import Awaitable, Callable, Optional
 
 from brokers.base import BrokerAdapter, BrokerError
-from core.clock import Clock
+from core.clock import Clock, SessionState
 from core.models import (AccountState, Fill, Order, OrderStatus, OrderType, Side, Signal,
                          SignalAction)
 from monitoring.logger import log_event
@@ -41,7 +45,7 @@ PROTECT_TAGS = ("stop", "take_profit")
 @dataclass
 class ExecEvent:
     ts: datetime
-    kind: str            # "rejected" | "broker_rejected" | "cancel_failed" | "action" | "info"
+    kind: str            # "rejected" | "broker_rejected" | "cancel_failed" | "action" | "info" | "deferred"
     message: str
     symbol: str = ""
 
@@ -73,6 +77,8 @@ class ExecutionManager:
         self._last_down_event: Optional[datetime] = None
         self._targets: dict[str, _Targets] = {}
         self._queue: deque[Callable[[], Awaitable[None]]] = deque()
+        self._deferred: dict[str, tuple] = {}         # symbol → (ngày, trạng thái phiên) đã báo hoãn
+        self._action_logged: dict[tuple, datetime] = {}  # (loại, lý do) → lần ghi gần nhất
         broker.on_fill(self._on_fill)
         broker.on_order_update(self._on_update)
 
@@ -138,10 +144,10 @@ class ExecutionManager:
                 self.halted = True
                 await self._flatten_everything()
             elif a.kind is ActionKind.FLATTEN_ALL:
-                self._event("action", f"FLATTEN_ALL: {a.reason}")
+                self._action_event(a, f"FLATTEN_ALL: {a.reason}")
                 await self._flatten_everything()
             elif a.kind is ActionKind.FLATTEN_SYMBOL:
-                self._event("action", f"FLATTEN_SYMBOL: {a.reason}", a.symbol or "")
+                self._action_event(a, f"FLATTEN_SYMBOL: {a.reason}", a.symbol or "")
                 await self._close(a.symbol, "flatten")
             elif a.kind is ActionKind.EMERGENCY_HEDGE:
                 self._event("action", f"EMERGENCY_HEDGE ({a.broker}): {a.reason}")
@@ -149,6 +155,45 @@ class ExecutionManager:
                     await self.emergency.on_action(a)
                 elif a.broker == self.broker.name:
                     await self._flatten_everything()
+
+    def _action_event(self, a: RiskAction, message: str, symbol: str = "") -> None:
+        """risk.check phát lại cùng hành động mỗi vòng tới khi phẳng ⇒ ghi tối đa mỗi phút một lần."""
+        now = self.clock.now()
+        key = (a.kind, a.reason, symbol)
+        last = self._action_logged.get(key)
+        if last is None or (now - last).total_seconds() >= 60:
+            self._action_logged[key] = now
+            self._event("action", message, symbol)
+
+    # ------------------------------------------------------------------ phiên ----
+
+    def _continuous(self) -> bool:
+        session_state = getattr(self.risk.clock, "session_state", None)
+        return session_state is None or session_state(self.clock.now()) is SessionState.CONTINUOUS
+
+    def _next_continuous_open(self) -> Optional[time]:
+        sched = getattr(self.risk.clock, "schedule", None)
+        if sched is None:
+            return None
+        t = self.clock.now().time()
+        if t < sched.continuous_am_start:
+            return sched.continuous_am_start
+        if t < sched.continuous_pm_start:
+            return sched.continuous_pm_start
+        return None                                     # đã qua phiên liên tục cuối ngày
+
+    def _defer_close(self, symbol: str, tag: str) -> None:
+        now = self.clock.now()
+        state = self.risk.clock.session_state(now)
+        key = (now.date(), state)
+        if self._deferred.get(symbol) == key:
+            return
+        self._deferred[symbol] = key
+        nxt = self._next_continuous_open()
+        when = (f"đóng lúc {nxt:%H:%M}" if nxt is not None
+                else "KHÔNG còn phiên liên tục hôm nay — CÒN VỊ THẾ, xử lý tay")
+        self._event("deferred", f"Chưa đóng được ({tag}): đang {state.value}, MTL chỉ đặt trong phiên liên tục — "
+                                f"giữ nguyên stop/chốt lời, {when}", symbol)
 
     async def _flatten_everything(self) -> None:
         symbols = {p.symbol for p in self.state.positions.values() if p.qty != 0}
@@ -164,9 +209,16 @@ class ExecutionManager:
                 and (tags is None or o.tag in tags)]
 
     async def _close(self, symbol: str, tag: str) -> None:
-        """Huỷ mọi lệnh chờ của hợp đồng rồi MTL đóng net. Đang có lệnh đóng chờ ⇒ không làm gì."""
+        """Huỷ mọi lệnh chờ của hợp đồng rồi MTL đóng net. Đang có lệnh đóng chờ ⇒ không làm gì.
+
+        Ngoài phiên liên tục ⇒ hoãn (không huỷ, không gửi) — xem docstring module."""
         if self._working(symbol, CLOSE_TAGS):
             return
+        if not self._continuous():
+            if self.state.net_qty(symbol) != 0 or self._working(symbol):
+                self._defer_close(symbol, tag)
+            return
+        self._deferred.pop(symbol, None)
         for o in self._working(symbol):
             await self._cancel(o)
         self._targets.pop(symbol, None)
@@ -186,6 +238,8 @@ class ExecutionManager:
           mất) ⇒ huỷ và đóng lại bằng MTL cho phần còn lại (golive #2).
         - Vị thế đang mở mà không có lệnh đóng ⇒ đảm bảo bảo vệ (đặt lại stop nếu lần trước lỗi).
         """
+        if not self._continuous():
+            return                                      # nghỉ trưa/ATC: không huỷ, không đặt lại gì
         now = self.clock.now()
         symbols = {p.symbol for p in self.state.positions.values() if p.qty != 0}
         symbols |= {o.symbol for o in self.state.working_orders.values() if o.broker == self.broker.name}
@@ -295,6 +349,6 @@ class ExecutionManager:
     def _event(self, kind: str, message: str, symbol: str = "", **fields) -> None:
         self.events.append(ExecEvent(self.clock.now(), kind, message, symbol))
         level = logging.WARNING if kind in ("rejected", "broker_rejected", "cancel_failed", "broker_error",
-                                            "broker_down") else logging.INFO
+                                            "broker_down", "deferred") else logging.INFO
         log.log(level, "%s %s", kind, message,
                 extra={"event": f"exec_{kind}", "symbol": symbol or None, "detail": message, **fields})

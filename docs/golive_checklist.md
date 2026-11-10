@@ -24,7 +24,7 @@
 | Backtest: bar + tick thật, nối chuỗi qua roll, back-adjust, % vốn; robustness trên bar/tick | ✅ |
 | Chiến lược: ORB #1 baseline, ORB #2 lọc biên/ADR (tắt) | ✅ code — **chưa có bằng chứng edge** (chưa chạy dữ liệu thật) |
 | Lịch nghỉ 2025–2026, phí sở + VSDC | ✅ (2026 kiểm chéo dữ liệu VN30) |
-| **MỞ (10/11/2026)**: chạm lỗ ngày / khoá ngay trước 11:30 ⇒ stop bị huỷ, MTL đóng bị từ chối giờ nghỉ trưa, `risk.check` gửi MTL mới mỗi vòng ⇒ vị thế không stop suốt giờ trưa + bắn lệnh liên tục lên broker | ❌ **phải sửa trước paper** (`core/execution.py` / `risk`) — xem `docs/progress.md` 10/11 |
+| Đóng vị thế ngoài phiên liên tục (chạm lỗ ngày / kill / EXIT lúc nghỉ trưa, ATC) | ✅ 10/11/2026: hoãn tới phiên liên tục, giữ stop/TP, không gửi lệnh; `/kill` trưa không thoát; báo Telegram (`TestOutsideContinuous`, `test_kill_at_lunch_…`) |
 
 ### Việc của bạn (theo thứ tự)
 

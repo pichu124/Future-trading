@@ -364,6 +364,7 @@ CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định ⇒ adapter có sẵn nh�
 5. Sửa lệnh DNSE trả orderId mới ⇒ broker adapter phải cập nhật ánh xạ `client_order_id → broker_order_id` sau mỗi lần sửa.
 6. Dữ liệu backtest thật: DNSE `/price/{symbol}/trades` (tick) và `/price/ohlc` (1 phút), SSI OHLC 1 phút lịch sử ⇒ thêm bước P1.6 tải lịch sử, tốt hơn nhiều so với dữ liệu snapshot import từ dashboard.
 7. Refresh token SSI chỉ dùng MỘT lần ⇒ `SsiTokenManager` (P4.2) bỏ refresh token khỏi bộ nhớ TRƯỚC khi gửi; lỗi mạng giữa chừng ⇒ coi như đã dùng, xin OTP. Token chỉ ở bộ nhớ (không ghi đĩa) ⇒ khởi động lại cần OTP, đổi lại không bao giờ có token cũ trên đĩa để bị gửi lại.
+8. Nghỉ trưa (11:30–13:00) / ATO / ATC: bot KHÔNG gửi MTL đóng và KHÔNG huỷ stop/chốt lời — hoãn tới phiên liên tục kế tiếp (`core/execution.py`, 10/11/2026). ❓ Sở có nhận lệnh LO / lệnh huỷ trong giờ nghỉ trưa không (nếu nhận LO thì có thể xếp hàng đóng sẵn cho 13:00) — chưa xác minh, hiện KHÔNG dựa vào; kiểm bằng UAT trước khi đổi.
 
 ## 4. Việc cần người dùng xác nhận khi đăng ký API
 - [ ] DNSE: base URL production, thời hạn trading token, hạn mức rate limit, có kênh sổ lệnh nhiều bước giá không.
