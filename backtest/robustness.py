@@ -320,13 +320,15 @@ section{{border-top:2px solid #444;margin-top:24px}}
 # ----------------------------------------------------------------------- CLI ----
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    from strategy.baseline_orb import OpeningRangeBreakout
+    import importlib
 
-    ap = argparse.ArgumentParser(description="Kiểm định độ bền chiến lược ORB + kết luận edge")
+    ap = argparse.ArgumentParser(description="Kiểm định độ bền chiến lược + kết luận edge")
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--bars", nargs="+", help="file/thư mục Parquet bar 1 phút (đọc đệ quy)")
     src.add_argument("--ticks", nargs="+", help="tick thật: data/raw/<ngày> (recorder) và/hoặc data/history/trades")
     ap.add_argument("--source", help="với --ticks: chỉ dùng nguồn này (bắt buộc khi nhiều nguồn)")
+    ap.add_argument("--strategy", default="strategy.baseline_orb:OpeningRangeBreakout",
+                    help="module:Class (mặc định ORB). Class có ROBUSTNESS_PARAMS ⇒ kiểm độ nhạy trên các khoá đó")
     ap.add_argument("--split", required=True, help="ngày đầu out-of-sample (YYYY-MM-DD), chốt TRƯỚC khi chạy")
     ap.add_argument("--folds", type=int, default=4)
     ap.add_argument("--n-trials", type=int, default=None,
@@ -341,8 +343,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except (ValueError, KeyError) as exc:
         print(f"❌ --set: {exc}")
         return 2
+    mod_name, _, cls_name = args.strategy.partition(":")
     try:
-        BacktestEngine(settings, OpeningRangeBreakout.from_settings(settings))
+        strategy_cls = getattr(importlib.import_module(mod_name), cls_name)
+    except (ImportError, AttributeError, ValueError) as exc:
+        print(f"❌ --strategy {args.strategy}: {exc}")
+        return 2
+    try:
+        BacktestEngine(settings, strategy_cls.from_settings(settings))
     except MissingSetting as exc:
         print(f"❌ {exc.args[0]}\n   Chạy `python -m core.settings` để xem mọi khoá còn thiếu.")
         return 2
@@ -360,14 +368,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         data, skipped = load_bars_parquet(args.bars)
     bars = data
     n_trials = args.n_trials or count_logged_trials()
-    rob = run_robustness(settings, OpeningRangeBreakout.from_settings, bars,
-                         date.fromisoformat(args.split), params_for(settings), folds=args.folds,
+    params = tuple(getattr(strategy_cls, "ROBUSTNESS_PARAMS", ()) or params_for(settings))
+    rob = run_robustness(settings, strategy_cls.from_settings, bars,
+                         date.fromisoformat(args.split), params, folds=args.folds,
                          n_trials=n_trials)
     if args.ticks:
         n_fake = data.fake_quotes()                        # sau lượt cuối: số tick bị gắn báo giá giả
     rf = settings.get("strategy.orb.range_filter")
-    name = ("ORB #2 (lọc độ rộng biên / ADR)" if isinstance(rf, dict) and rf.get("enabled") is True
-            else "ORB baseline (#1)")
+    name = getattr(strategy_cls, "TITLE", None) or (
+        "ORB #2 (lọc độ rộng biên / ADR)" if isinstance(rf, dict) and rf.get("enabled") is True
+        else "ORB baseline (#1)")
     write_text_atomic(render_html(rob, title=f"{name} — kiểm định độ bền"), Path(args.out))
     print(f"Kết luận: {rob['verdict']}")
     for r in rob["verdict_reasons"]:

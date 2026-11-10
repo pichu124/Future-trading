@@ -102,6 +102,15 @@ strategy:
       min_ratio: 0.10
       max_ratio: 0.60
 
+  # Cấu hình #3 — đà sáng → chiều (strategy/morning_momentum.py). ĐĂNG KÝ TRƯỚC 10/11/2026 (research/log.md):
+  # đổi bất kỳ số nào = cấu hình mới (thêm dòng log, tăng n_trials). Cần lịch sử adr_days phiên (như ORB #2).
+  morning_momentum:
+    adr_days: 10
+    min_move_adr: 0.25                  # |đóng 11:29 − mở 09:00| ≥ 0,25 × ADR ⇒ vào theo hướng lúc 13:01
+    stop_adr: 0.30                      # stop = đóng nến 13:00 ∓ 0,30 × ADR
+    exit_bar: "14:19"                   # nến 14:19 đóng (14:20) ⇒ thoát nếu còn vị thế
+    qty: 1
+
 # Ghi tick ra data/raw/YYYY-MM-DD/ (recorder/, scripts/record_today.py).
 recorder:
   flush_seconds: 5                      # crash mất tối đa ngần này giây dữ liệu chưa ghi

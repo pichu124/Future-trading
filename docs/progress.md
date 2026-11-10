@@ -1,5 +1,15 @@
 # Tiến độ
 
+## 2026-11-10 — Chiến lược #3 đà sáng → chiều (`strategy/morning_momentum.py`) + robustness `--strategy`
+
+- Đăng ký trước #3/#4/#5 trong `research/log.md` (tham số chốt trước khi viết code; `n_trials` = 5).
+- `strategy/indicators.py::adr_before` (ADR N phiên trước, bỏ bar hôm nay, thiếu ⇒ None) — dùng chung cho #3–#5.
+- `MorningMomentum`: m = đóng nến cuối [11:25,11:30) − mở nến đầu [09:00,09:05); quyết định MỘT lần ở nến đầu phiên chiều [13:00,13:05) (11:30 risk chặn mở); |m| ≥ 0,25·ADR10 ⇒ theo m, stop 0,30·ADR10 từ đóng nến quyết định, không TP; EXIT khi nến ≥ 14:19 đóng. Thiếu nến mốc / thiếu lịch sử ⇒ không giao dịch. `settings.strategy.morning_momentum`.
+- `backtest.robustness --strategy module:Class` (mặc định ORB); class có `ROBUSTNESS_PARAMS` ⇒ độ nhạy trên đúng các khoá đó, `TITLE` ⇒ tiêu đề báo cáo.
+- Test: `tests/test_strategy_morning_momentum.py` (30, gồm tích hợp engine: vào 13:01, thoát 14:20). Chạy thử robustness tick trên dữ liệu giả: OK.
+- **Chạy thật (người dùng):** `python -m backtest.robustness --ticks data/history/trades --split 2026-09-01 --strategy strategy.morning_momentum:MorningMomentum --out reports/s3_robust_ticks.html`.
+- Chưa: runner live/paper chọn chiến lược theo cấu hình (hiện chỉ ORB) — chỉ làm nếu một chiến lược CÓ EDGE.
+
 ## 2026-11-10 — Telegram kênh trading đã cài (laptop)
 
 - Bot `@binh_vn30f_bot`; `TELEGRAM_TRADING_BOT_TOKEN/_CHAT_ID` trong `.env` laptop (không commit); `monitoring.telegram.send_message` gửi thử thành công. `/kill`, `/status`, `/pnl`, `/otp` chỉ nhận từ chat id này.
