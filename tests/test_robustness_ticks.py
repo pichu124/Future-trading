@@ -121,3 +121,36 @@ def test_cli_source_filter_passed(monkeypatch, tmp_path):
         R.main(["--ticks", str(d), "--source", "ssi", "--split", "2026-11-09"])
     assert {x.source for x in captured["data"]} == {"ssi"}
     assert R.main(["--ticks", str(d), "--split", "2026-11-09"]) == 2         # nhiều nguồn, không chọn ⇒ thoát 2
+
+
+def test_tick_store_gives_same_result_as_list(tmp_path):
+    """Robustness nhận `TickStore` (đọc dần từng ngày) ⇒ kết quả y hệt khi đưa cả list tick."""
+    from datetime import date
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from backtest.ticks import TickStore
+    from core.calendar import TradingCalendar
+    from recorder.tick_recorder import SCHEMA
+    cal = TradingCalendar.from_dates([date(2026, 9, 2), date(2027, 1, 1)])
+    cfg = {"pre_open_start": "08:30", "ato_start": "08:45", "continuous_am_start": "09:00",
+           "lunch_start": "11:30", "continuous_pm_start": "13:00", "atc_start": "14:30", "close": "14:45"}
+    ticks = ticks_from_bars(dataset(cal, 8, planted=True, seed=1))
+    by_day = {}
+    for x in ticks:
+        by_day.setdefault((x.symbol, x.ts.date()), []).append(x)
+    for (sym, d), rows in by_day.items():
+        p = tmp_path / sym / f"{d}.parquet"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        pq.write_table(pa.Table.from_pylist(
+            [{"symbol": r.symbol, "ts": r.ts, "last": r.last, "last_qty": r.last_qty, "bid": r.bid, "ask": r.ask,
+              "bid_qty": None, "ask_qty": None, "total_volume": None, "source": r.source, "seq": None,
+              "recv_ts": None, "session": None, "rx_seq": None} for r in rows], schema=SCHEMA), p)
+    split = sorted({x.ts.date() for x in ticks})[4]
+    s = orb_settings(cfg)
+    a = run_robustness(s, make_orb, ticks, split, ORB_PARAMS[:1], folds=2, calendar=cal)
+    store = TickStore([tmp_path], tick_size=0.1, spread_ticks=1)
+    b = run_robustness(s, make_orb, store, split, ORB_PARAMS[:1], folds=2, calendar=cal)
+    key = lambda r: [(t.entry_ts, t.exit_ts, t.pnl_vnd) for t in r["base"].trades]
+    assert a["base"].trades and key(a) == key(b) and a["verdict"] == b["verdict"]
+    assert [v["metrics"] for v in a["sensitivity"]] == [v["metrics"] for v in b["sensitivity"]]
+    assert a["days"] == b["days"] and a["summary"] == b["summary"]

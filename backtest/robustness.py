@@ -20,9 +20,9 @@ import html
 import re
 import sys
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
-from typing import Callable, Optional, Sequence
+from typing import Callable, Iterable, Optional, Sequence
 
 import numpy as np
 
@@ -139,19 +139,30 @@ def run_robustness(settings: Settings, make_strategy: Callable[[Settings], Strat
                    folds: int = 4, n_trials: int = 1, calendar: Optional[TradingCalendar] = None,
                    pct: float = 0.2, slippage_stress_ticks: int = 2,
                    rules: VerdictRules = RULES, thresholds: Thresholds = DEFAULT) -> dict:
-    # `bars` có thể là bar 1 phút HOẶC tick thật (--ticks): tick ⇒ run_events(bars_from_ticks), chia theo ngày tick
-    data = list(bars)
-    ticks_mode = bool(data) and isinstance(data[0], Tick)
-    day_of = (lambda x: x.ts.date()) if ticks_mode else (lambda x: x.start.date())
-    bars = sorted(data, key=(lambda t: t.ts) if ticks_mode else (lambda b: (b.start, b.symbol)))
-    days = sorted({day_of(x) for x in bars})
+    # `bars` có thể là bar 1 phút, list tick thật, HOẶC `TickStore` (--ticks: đọc dần từng ngày mỗi lượt — cả kho
+    # 6 tháng ~8 GB nếu giữ trong RAM): tick ⇒ run_events(bars_from_ticks), chia theo ngày tick
+    from backtest.ticks import TickStore
+    if isinstance(bars, TickStore):
+        store = bars
+        ticks_mode = True
+        days = store.days()
+
+        all_src = store.iter
+        is_src = lambda: store.iter(date_to=split_date - timedelta(days=1))  # noqa: E731
+    else:
+        data = list(bars)
+        ticks_mode = bool(data) and isinstance(data[0], Tick)
+        day_of = (lambda x: x.ts.date()) if ticks_mode else (lambda x: x.start.date())
+        data.sort(key=(lambda t: t.ts) if ticks_mode else (lambda b: (b.start, b.symbol)))
+        days = sorted({day_of(x) for x in data})
+        is_data = [x for x in data if day_of(x) < split_date]
+        all_src, is_src = (lambda: data), (lambda: is_data)
     if not days or not days[0] < split_date <= days[-1]:
         raise ValueError("split_date phải nằm trong khoảng dữ liệu (có cả IS lẫn OOS)")
-    is_bars = [x for x in bars if day_of(x) < split_date]
 
-    def run(s: Settings, data: Sequence):
+    def run(s: Settings, src: Callable[[], Iterable]):
         engine = BacktestEngine(s, make_strategy(s), calendar=calendar)
-        return engine.run_events(bars_from_ticks(data)) if ticks_mode else engine.run_bars(data)
+        return engine.run_events(bars_from_ticks(src())) if ticks_mode else engine.run_bars(src())
 
     def split(trades):
         return {"in_sample": make_section([t for t in trades if t.entry_ts.date() < split_date],
@@ -159,7 +170,7 @@ def run_robustness(settings: Settings, make_strategy: Callable[[Settings], Strat
                 "out_of_sample": make_section([t for t in trades if t.entry_ts.date() >= split_date],
                                               n_trials, thresholds)}
 
-    base = run(settings, bars)
+    base = run(settings, all_src)
     sections = split(base.trades)
 
     fold_list = []
@@ -173,7 +184,7 @@ def run_robustness(settings: Settings, make_strategy: Callable[[Settings], Strat
                  if fold_list else None)
 
     stressed_settings = with_overrides(settings, {"backtest.slippage_ticks": slippage_stress_ticks})
-    stressed = run(stressed_settings, bars)
+    stressed = run(stressed_settings, all_src)
     slip_sections = split(stressed.trades)
 
     sensitivity = []
@@ -181,7 +192,7 @@ def run_robustness(settings: Settings, make_strategy: Callable[[Settings], Strat
         base_value = settings.require(param)
         integer = isinstance(base_value, int) and not isinstance(base_value, bool)
         for v in perturbations(base_value, pct, integer):
-            res = run(with_overrides(settings, {param: v}), is_bars)
+            res = run(with_overrides(settings, {param: v}), is_src)
             sensitivity.append({"param": param, "base_value": base_value, "value": v,
                                 "trades": res.trades, "metrics": compute_metrics(res.trades)})
     sens_pos = (sum(1 for v in sensitivity if v["metrics"]["total_pnl_vnd"] > 0) / len(sensitivity)
@@ -337,14 +348,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
     skipped = n_fake = 0
     if args.ticks:
-        from backtest.ticks import fill_missing_quotes, load_tick_files
-        try:
-            data = load_tick_files(args.ticks, source=args.source)
+        from backtest.ticks import TickStore
+        try:                                               # đọc dần từng ngày mỗi lượt — không nạp cả kho vào RAM
+            data = TickStore(args.ticks, source=args.source,
+                             tick_size=float(settings.require("contract.tick_size_points")),
+                             spread_ticks=int(settings.require("backtest.synthetic_spread_ticks")))
         except ValueError as exc:
             print(f"❌ {exc}")
             return 2
-        data, n_fake = fill_missing_quotes(data, float(settings.require("contract.tick_size_points")),
-                                           int(settings.require("backtest.synthetic_spread_ticks")))
     else:
         data, skipped = load_bars_parquet(args.bars)
     bars = data
@@ -352,6 +363,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     rob = run_robustness(settings, OpeningRangeBreakout.from_settings, bars,
                          date.fromisoformat(args.split), params_for(settings), folds=args.folds,
                          n_trials=n_trials)
+    if args.ticks:
+        n_fake = data.fake_quotes()                        # sau lượt cuối: số tick bị gắn báo giá giả
     rf = settings.get("strategy.orb.range_filter")
     name = ("ORB #2 (lọc độ rộng biên / ADR)" if isinstance(rf, dict) and rf.get("enabled") is True
             else "ORB baseline (#1)")

@@ -549,16 +549,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return (not args.date_from or d >= date.fromisoformat(args.date_from)) and \
             (not args.date_to or d <= date.fromisoformat(args.date_to))
     if args.ticks:
-        from backtest.ticks import fill_missing_quotes, load_tick_files
-        try:
-            ticks = load_tick_files(args.ticks, source=args.source,
-                                    date_from=date.fromisoformat(args.date_from) if args.date_from else None,
-                                    date_to=date.fromisoformat(args.date_to) if args.date_to else None)
+        from backtest.ticks import TickStore
+        try:                                               # đọc dần từng ngày — không nạp cả kho vào RAM
+            store = TickStore(args.ticks, source=args.source, tick_size=engine.paper_config.tick_size,
+                              spread_ticks=engine.spread_ticks)
         except ValueError as exc:
             print(f"❌ {exc}")
             return 2
-        ticks, n_fake_quotes = fill_missing_quotes(ticks, engine.paper_config.tick_size, engine.spread_ticks)
-        res = engine.run_events(bars_from_ticks(ticks))
+        res = engine.run_events(bars_from_ticks(store.iter(
+            date_from=date.fromisoformat(args.date_from) if args.date_from else None,
+            date_to=date.fromisoformat(args.date_to) if args.date_to else None)))
+        n_fake_quotes = store.fake_quotes()
     else:
         bars, skipped = load_bars_parquet(args.bars, stats=load_stats)
         res = engine.run_bars([b for b in bars if in_range(b.start.date())])

@@ -1,5 +1,14 @@
 # Tiến độ
 
+## 2026-11-10 — `TickStore`: backtest/robustness `--ticks` đọc dần theo ngày (RAM ~1 ngày thay cho cả kho)
+
+- Đo thực tế ~570 B/tick ⇒ kho 6 tháng (~14,5 triệu tick) ≈ 8 GB nếu nạp hết; laptop 15 GB không đủ an toàn.
+- `backtest.ticks.TickStore(paths, source, tick_size=, spread_ticks=)`: lúc tạo chỉ liệt kê file theo tên `YYYY-MM-DD` + kiểm nguồn (đọc riêng cột `source`); mỗi lượt `iter(date_from, date_to)` đọc lại TỪNG NGÀY, sắp theo thời gian, gắn báo giá giả. Tên không phải ngày ⇒ lỗi; dòng khác ngày tên file ⇒ lỗi.
+- `run_robustness` nhận `TickStore` (IS = `iter(date_to=split−1)`), kết quả y hệt khi đưa list (test). CLI `backtest.engine --ticks` và `backtest.robustness --ticks` dùng `TickStore`.
+- Thêm: `fill_missing_quotes_inplace`; `Tick` dùng `slots=True`.
+- Đo (10 ngày giả cỡ thật, đúng lịch phiên): robustness đỉnh RAM 274 MB, 174 s (bản cũ ~2 GB). Ước tính kho thật 127 ngày: < 1 GB, ~40–90 phút/cấu hình.
+- **Phát hiện khi đo (CHƯA sửa — module khác):** chạm lỗ ngày ngay trước 11:30 ⇒ huỷ stop, MTL đóng bị từ chối trong giờ nghỉ trưa, rồi mỗi vòng `risk.check` lại gửi MTL mới ⇒ vị thế KHÔNG có stop suốt giờ trưa + bắn lệnh liên tục lên broker (live: mỗi giây). Backtest dữ liệu thật không gặp (không có tick giờ trưa). Cần xử lý trong `core/execution.py`/`risk` trước khi chạy paper.
+
 ## 2026-11-10 — Laptop setup; `live.allowed_machine = CFA-BINHLD-LT`
 
 - Laptop: repo ở `D:\Future-trading`, `.venv`, pytest qua hết. Chỉ laptop được chạy runner paper/live; Desktop chỉ backtest / tải dữ liệu / probe.

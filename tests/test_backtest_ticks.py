@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 import pyarrow as pa
 import pytest
 
-from backtest.ticks import fill_missing_quotes, load_tick_files
+from backtest.ticks import TickStore, fill_missing_quotes, fill_missing_quotes_inplace, load_tick_files
 from core.clock import FakeClock
 from core.models import Tick
 from recorder.tick_recorder import SCHEMA, TickRecorder
@@ -134,9 +134,98 @@ class TestLoad:
             load_tick_files([tmp_path])
 
 
+# ------------------------------------------------------------------ đọc dần theo ngày ----
+
+class TestStore:
+    """`TickStore`: không giữ cả kho trong RAM (6 tháng ~14,5 triệu tick ≈ 8 GB) — mỗi lần duyệt đọc lại TỪNG NGÀY
+    từ đĩa, gắn báo giá giả, phát theo thời gian. Robustness chạy ~14 lượt ⇒ đỉnh RAM ≈ một ngày."""
+
+    def _two_contracts(self, root):
+        nov, dec = SYM, "VN30F2612"
+        downloader_file(root / nov / "2026-11-09.parquet", [t(5, 1350.0), t(1, 1349.0)])
+        p = root / dec / "2026-11-09.parquet"
+        downloader_file(p, [Tick(dec, datetime(2026, 11, 9, 10, 0, 3), last=1352.0, last_qty=1, source="dnse_history")])
+        downloader_file(root / nov / "2026-11-10.parquet", [t(0, 1360.0, day=date(2026, 11, 10))])
+        return root
+
+    def test_days_from_names_without_reading(self, tmp_path, monkeypatch):
+        import backtest.ticks as bt
+        self._two_contracts(tmp_path)
+        monkeypatch.setattr(bt, "_read_file", lambda f: (_ for _ in ()).throw(AssertionError("không được đọc")))
+        st = TickStore([tmp_path], tick_size=0.1, spread_ticks=1)
+        assert st.days() == [date(2026, 11, 9), date(2026, 11, 10)] and bool(st)
+
+    def test_iter_equals_load_then_fill(self, tmp_path):
+        self._two_contracts(tmp_path)
+        st = TickStore([tmp_path], tick_size=0.1, spread_ticks=1)
+        expect, n = fill_missing_quotes(load_tick_files([tmp_path]), 0.1, 1)
+        got = list(st.iter())
+        assert got == expect and [x.last for x in got] == [1349.0, 1352.0, 1350.0, 1360.0]
+        assert st.fake_quotes() == n == 4
+        assert list(st) == expect                                        # duyệt lại được nhiều lần
+        assert st.fake_quotes() == 4                                     # đếm theo ngày, không cộng dồn qua lượt
+
+    def test_iter_date_range(self, tmp_path):
+        self._two_contracts(tmp_path)
+        st = TickStore([tmp_path], tick_size=0.1, spread_ticks=1)
+        assert [x.last for x in st.iter(date_from=date(2026, 11, 10))] == [1360.0]
+        assert [x.last for x in st.iter(date_to=date(2026, 11, 9))] == [1349.0, 1352.0, 1350.0]
+
+    def test_recorder_day_dirs(self, tmp_path):
+        recorder_day(tmp_path / "raw", [t(i, 1350.0, bid=1349.9, ask=1350.1) for i in range(3)])
+        st = TickStore([tmp_path / "raw"], tick_size=0.1, spread_ticks=1)
+        assert st.days() == [DAY] and len(list(st)) == 3 and st.fake_quotes() == 0
+
+    def test_sources_checked_up_front(self, tmp_path):
+        d = recorder_day(tmp_path / "raw", [t(0, 1350.0, "dnse"), t(1, 1350.1, "ssi")])
+        with pytest.raises(ValueError, match="nguồn"):
+            TickStore([d], tick_size=0.1, spread_ticks=1)
+        assert {x.source for x in TickStore([d], source="ssi", tick_size=0.1, spread_ticks=1)} == {"ssi"}
+        with pytest.raises(ValueError, match="Không có tick"):
+            TickStore([d], source="tcbs", tick_size=0.1, spread_ticks=1)
+
+    def test_undated_file_rejected(self, tmp_path):
+        downloader_file(tmp_path / "gop.parquet", [t(0, 1350.0)])
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            TickStore([tmp_path], tick_size=0.1, spread_ticks=1)
+
+    def test_row_outside_its_file_date_rejected(self, tmp_path):
+        downloader_file(tmp_path / SYM / "2026-11-09.parquet", [t(0, 1360.0, day=date(2026, 11, 10))])
+        st = TickStore([tmp_path], tick_size=0.1, spread_ticks=1)
+        with pytest.raises(ValueError, match="2026-11-10"):
+            list(st)
+
+    def test_nothing_found(self, tmp_path):
+        with pytest.raises(ValueError, match="Không có"):
+            TickStore([tmp_path], tick_size=0.1, spread_ticks=1)
+
+
 # ------------------------------------------------------------------ báo giá giả ----
 
 class TestQuotes:
+    def test_inplace_same_result_without_second_copy(self):
+        """Kho 6 tháng ~14 triệu tick: tạo bản sao thứ hai ⇒ đỉnh RAM gấp đôi. Bản in-place sửa ngay trên list."""
+        src = [t(0, 1350.0), t(1, 1350.1, bid=1350.0, ask=1350.2), t(2, 1350.2)]
+        expect, n_expect = fill_missing_quotes(list(src), tick_size=0.1, spread_ticks=1)
+        lst = list(src)
+        ident = id(lst)
+        n = fill_missing_quotes_inplace(lst, tick_size=0.1, spread_ticks=1)
+        assert id(lst) == ident and n == n_expect == 2 and lst == expect
+        assert lst[1] is src[1]                                         # tick đã có báo giá giữ nguyên đối tượng
+
+    def test_inplace_rejects_bad_spread(self):
+        with pytest.raises(ValueError):
+            fill_missing_quotes_inplace([t(0, 1350.0)], tick_size=0.1, spread_ticks=-1)
+
+    def test_tick_has_no_instance_dict(self):
+        """Tick dùng __slots__ (nhẹ hơn ~17%/tick) — vẫn frozen, vẫn dùng được với dataclasses.replace."""
+        from dataclasses import FrozenInstanceError, replace
+        x = t(0, 1350.0)
+        assert not hasattr(x, "__dict__")
+        with pytest.raises(FrozenInstanceError):
+            x.last = 1.0
+        assert replace(x, bid=1349.9).bid == 1349.9
+
     @pytest.mark.parametrize("spread,half", [(1, 0.1), (2, 0.1), (3, 0.2), (0, 0.0)])
     def test_trades_without_quotes_get_pessimistic_quotes(self, spread, half):
         out, n = fill_missing_quotes([t(0, 1350.0)], tick_size=0.1, spread_ticks=spread)

@@ -62,7 +62,7 @@ class SignalAction(str, Enum):
     HOLD = "HOLD"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)      # slots: backtest giữ hàng chục triệu tick trong RAM
 class Tick:
     """Một sự kiện thị trường đã chuẩn hoá từ bất kỳ feed nào."""
     symbol: str                      # tên hợp đồng chuẩn VN30FYYMM
