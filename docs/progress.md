@@ -1,5 +1,9 @@
 # Tiến độ
 
+## 2026-11-10 — Tải bù 09–10/11 (Desktop); chốt ❓ tham số phân trang DNSE
+
+- `download_history.py --start 2026-11-07 --end 2026-11-10`: 09/11 103.726 dòng, 10/11 109.197 dòng, 0 lỗi, 230 request. Phân trang chạy bằng `nextPageToken` ⇒ chốt ❓ trong broker_notes. Dữ liệu này hiện chỉ ở Desktop (laptop còn tới 06/11).
+
 ## 2026-11-10 — Robustness tick #3/#4/#5: CHƯA ĐỦ (mẫu nhỏ); #5 rõ ràng không có edge
 
 - #3 IS +8,80tr (33 lệnh) / OOS +1,49tr (25 lệnh, p 0,389), độ nhạy 6/6, walk-forward 2/4. #4 IS +2,57tr (11) / OOS +1,99tr (13, p 0,373), độ nhạy 4/6. #5 IS −10,79tr / OOS −5,16tr ⇒ dừng.

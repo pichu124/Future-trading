@@ -94,7 +94,7 @@ lệnh đôi ⇒ adapter DNSE phải: không tự retry lệnh đặt; khi khôn
 - Tải thử 1 ngày (06/11/2026): 108.976 lệnh, 705 request; trong một giây khớp định kỳ — **09:00:00 (ATO)** và
   **14:45:00 (ATC)** — có > 500 lệnh cùng thời điểm, không chia nhỏ hơn giây được ⇒ thiếu 2.986 HĐ (~1,4% KL ngày),
   phiên liên tục đầy đủ. `limit` tối đa = **1000** ✅ (`400 "limit must be between 1 and 1000"`) ⇒ downloader dùng 1000.
-  Giây đầy ⇒ đi tiếp bằng `nextPageToken`; tên tham số gửi token CHƯA có tài liệu ⇒ thử `nextPageToken` rồi `pageToken`,
+  Giây đầy ⇒ đi tiếp bằng `nextPageToken`; tên tham số gửi token (đặc tả không ghi) = `nextPageToken` — ✅ xác nhận trên dây 10/11/2026 (code vẫn thử `pageToken` dự phòng),
   chỉ nhận khi trang sau CŨ hơn và không trùng (tự kiểm) — **lần tải thứ 3 (06/11) phân trang CHẠY**: 110.501 lệnh,
   `volume_gap` 0, 369 request ✅ (tên tham số cụ thể sẽ hiện trong log lần tải tới: "phân trang chạy bằng tham số …").
   Vẫn thiếu ⇒ chỉ đánh dấu volume không tin được cho đúng phút quanh chỗ hụt KL luỹ kế.
@@ -112,7 +112,7 @@ Còn ❓ trên dây — downloader **tự kiểm, không đoán** (sai ⇒ báo 
 |---|---|
 | ❓ `t` của OHLC là giờ MỞ nến | coi là giờ mở (theo ví dụ đặc tả); kiểm bằng `scripts/validate_day.py` so với tick recorder khi có |
 | ❓ `time` của trades là UTC (ví dụ đặc tả 04:29 ⇒ 11:29 VN) | thử UTC rồi giờ VN, phải nằm trong cửa sổ đã hỏi; không khớp cách nào ⇒ lỗi |
-| ❓ tên tham số gửi `nextPageToken` (đặc tả không ghi) | không dùng: cửa sổ 30 phút trả đủ `limit` dòng ⇒ chia đôi tới khi hết đầy; trùng lọc theo `totalVolumeTraded` |
+| ✅ tên tham số gửi token = `nextPageToken` (xác nhận trên dây 09–10/11/2026: log "phân trang chạy bằng tham số 'nextPageToken'") | không dùng: cửa sổ 30 phút trả đủ `limit` dòng ⇒ chia đôi tới khi hết đầy; trùng lọc theo `totalVolumeTraded` |
 | ❓ ký path có/không kèm query | ký không kèm (như SDK); 401 ⇒ thử kèm query, nhớ cách được nhận |
 | ❓ độ sâu lịch sử hợp đồng ĐÃ đáo hạn | ngày rỗng ghi vào `_manifest.json`, không thử lại trừ khi `--retry-empty` |
 | ❓ đơn vị giá (điểm) | giá ngoài `PRICE_MIN..PRICE_MAX` của feed ⇒ bỏ dòng, không tự chia |
