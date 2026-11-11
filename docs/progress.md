@@ -1,5 +1,13 @@
 # Tiến độ
 
+## 2026-11-11 — Feed DNSE: chuyển giao thức theo SDK chính thức 2.4.1 (probe thật: 0 tick, AUTH_FAILED)
+
+- Probe laptop 09:24: 5 kết nối, 0 tick; message thô: `{"action":"error","code":"AUTH_FAILED","message":"authentication failed: nonce is required"}` mỗi lần. Hai lỗi: nonce gửi dạng số; feed chỉ nhận `auth_error` là lỗi ⇒ coi `error` là thành công ⇒ đăng ký ⇒ server đóng ⇒ lặp.
+- SDK `dnse` 0.5.0 (nguồn cũ của feed) có cùng lỗi; SDK chính thức `dnse-sdk-openapi` 2.4.1: nonce chuỗi, `auth_success`, đăng ký `{"action":"subscribe","channels":[…]}` mỗi kênh, khớp lệnh `tick.<board>.json` (`matchPrice`/`matchQtty`/`totalVolumeTraded`/`time`), giá tốt nhất `top_price.<board>.json` (`bid`/`offer` danh sách `{price,qtty}`).
+- `feeds/data_feed_dnse.py`: theo 2.4.1; phản hồi xác thực ≠ `auth_success` ⇒ `FeedAuthError` (dừng, không lặp); `error` giữa phiên ⇒ đếm `server_errors` + log; `time` chuỗi không múi giờ ⇒ chọn VN/UTC gần lúc nhận (≤ 10′); backoff chặn tràn số. Giữ đọc dạng cũ để tương thích.
+- Test: fixture thêm bản ghi THẬT (`real_welcome`, `real_auth_failed`) + mẫu 2.4.1; `tests/test_feed_dnse.py`, `tests/test_recorder_roll_eve.py` cập nhật.
+- ❓ còn chờ probe lần 2: xác thực có qua không, board của VN30F, tên trường/định dạng `time` thật.
+
 ## 2026-11-10 — Runner paper chạy chiến lược chọn bằng `--strategy` (#3)
 
 - Runner đã có `--strategy module:Class` + nạp lịch sử nhiều phiên cho chiến lược `history_days > 0`. Thêm: sai module/class ⇒ log rõ + thoát 2 (trước đây văng traceback); cấu hình chiến lược sai (`ValueError`) ⇒ thoát 2; tin khởi động ghi tên chiến lược (`TITLE` / tên class).

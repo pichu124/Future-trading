@@ -40,7 +40,7 @@ def test_extra_contract_subscribed_on_same_connection(cal, session_cfg):
     ticks = []
     feed.on_tick(ticks.append)
     asyncio.run(run_until(feed, ticks, 2))
-    assert tr.sent[1] == {"name": "tick.G1.json", "symbols": [KRX, DEC_KRX]}
+    assert tr.sent[1] == {"action": "subscribe", "channels": [{"name": "tick.G1.json", "symbols": [KRX, DEC_KRX]}]}
     assert len(conn.urls) == 1                                       # một kết nối
     assert [(t.symbol, t.last) for t in ticks] == [(SYM, 1352.5), (DEC, 1402.0)]
     assert feed.stats()["extra_contracts"] == [DEC]
@@ -52,7 +52,7 @@ def test_without_extras_subscription_unchanged(cal, session_cfg):
     ticks = []
     feed.on_tick(ticks.append)
     asyncio.run(run_until(feed, ticks, 1))
-    assert tr.sent[1] == {"name": "tick.G1.json", "symbols": [KRX]}
+    assert tr.sent[1] == {"action": "subscribe", "channels": [{"name": "tick.G1.json", "symbols": [KRX]}]}
     assert feed.stats()["extra_contracts"] == []
 
 
@@ -73,7 +73,7 @@ def test_unlisted_extra_skipped_primary_still_recorded(cal, session_cfg, caplog)
     feed.on_tick(ticks.append)
     with caplog.at_level("WARNING"):
         asyncio.run(run_until(feed, ticks, 1))
-    assert tr.sent[1] == {"name": "tick.G1.json", "symbols": [KRX]}
+    assert tr.sent[1] == {"action": "subscribe", "channels": [{"name": "tick.G1.json", "symbols": [KRX]}]}
     assert [t.symbol for t in ticks] == [SYM]
     assert any(DEC in r.getMessage() for r in caplog.records)
 
@@ -84,7 +84,7 @@ def test_extra_equal_to_primary_ignored(cal, session_cfg):
     ticks = []
     feed.on_tick(ticks.append)
     asyncio.run(run_until(feed, ticks, 1))
-    assert tr.sent[1] == {"name": "tick.G1.json", "symbols": [KRX]}
+    assert tr.sent[1] == {"action": "subscribe", "channels": [{"name": "tick.G1.json", "symbols": [KRX]}]}
 
 
 # ------------------------------------------------------------------ record_today ----

@@ -1,16 +1,174 @@
 {
-  "_note": "Message MẪU dựng theo model của SDK chính thức dnse 0.5.0 (dnse/stream/models.py, DnseBaseModel camelCase alias). CHƯA phải bản ghi từ server thật — thay bằng message thật khi có API key (docs/broker_notes.md §1.4 ❓).",
-  "welcome": {"action": "welcome", "session_id": "abc123"},
-  "auth_ok": {"action": "auth_success"},
-  "auth_error": {"action": "auth_error", "message": "invalid signature"},
-  "ping": {"action": "ping"},
-  "quote": {"T": "q", "symbol": "41I1GB000", "bidPrice": 1352.3, "bidVolume": 12, "askPrice": 1352.5, "askVolume": 7, "timestamp": 1794197700123},
-  "trade": {"T": "t", "symbol": "41I1GB000", "price": 1352.5, "volume": 3, "timestamp": 1794197700456, "side": "B"},
-  "trade_extra": {"T": "te", "symbol": "41I1GB000", "price": 1352.4, "volume": 2, "timestamp": 1794197701000, "side": "S", "totalVolume": 15234, "totalValue": 2.06e12},
-  "quote_snake": {"T": "q", "symbol": "41I1GB000", "bid_price": 1352.2, "bid_volume": 4, "ask_price": 1352.4, "ask_volume": 9, "timestamp": 1794197702000},
-  "trade_s_key": {"t": "t", "s": "41I1GB000", "price": 1352.6, "volume": 1, "timestamp": 1794197703000},
-  "other_symbol": {"T": "t", "symbol": "41I1GC000", "price": 1355.0, "volume": 1, "timestamp": 1794197703000},
-  "bad_price": {"T": "t", "symbol": "41I1GB000", "price": 1352500, "volume": 1, "timestamp": 1794197704000},
-  "secdef": {"T": "sd", "symbol": "41I1GB000", "ceiling": 1447.0, "floor": 1257.8, "refPrice": 1352.4},
-  "unknown": {"T": "zz", "symbol": "41I1GB000"}
+  "_note": "Message MẪU. Bản cũ dựng theo SDK dnse 0.5.0 (KHÔNG khớp server thật 11/11/2026). Các mục *_v2 dựng theo SDK CHÍNH THỨC dnse-sdk-openapi 2.4.1 (dnse/websocket/client.py + models.py, đọc 11/11/2026) — vẫn ❓ tới khi probe ghi được message thật. Mục real_* là bản ghi THẬT từ server (probe laptop 11/11/2026 09:24).",
+  "welcome": {
+    "action": "welcome",
+    "session_id": "abc123"
+  },
+  "auth_ok": {
+    "action": "auth_success"
+  },
+  "auth_error": {
+    "action": "auth_error",
+    "message": "invalid signature"
+  },
+  "ping": {
+    "action": "ping"
+  },
+  "quote": {
+    "T": "q",
+    "symbol": "41I1GB000",
+    "bidPrice": 1352.3,
+    "bidVolume": 12,
+    "askPrice": 1352.5,
+    "askVolume": 7,
+    "timestamp": 1794197700123
+  },
+  "trade": {
+    "T": "t",
+    "symbol": "41I1GB000",
+    "price": 1352.5,
+    "volume": 3,
+    "timestamp": 1794197700456,
+    "side": "B"
+  },
+  "trade_extra": {
+    "T": "te",
+    "symbol": "41I1GB000",
+    "price": 1352.4,
+    "volume": 2,
+    "timestamp": 1794197701000,
+    "side": "S",
+    "totalVolume": 15234,
+    "totalValue": 2060000000000.0
+  },
+  "quote_snake": {
+    "T": "q",
+    "symbol": "41I1GB000",
+    "bid_price": 1352.2,
+    "bid_volume": 4,
+    "ask_price": 1352.4,
+    "ask_volume": 9,
+    "timestamp": 1794197702000
+  },
+  "trade_s_key": {
+    "t": "t",
+    "s": "41I1GB000",
+    "price": 1352.6,
+    "volume": 1,
+    "timestamp": 1794197703000
+  },
+  "other_symbol": {
+    "T": "t",
+    "symbol": "41I1GC000",
+    "price": 1355.0,
+    "volume": 1,
+    "timestamp": 1794197703000
+  },
+  "bad_price": {
+    "T": "t",
+    "symbol": "41I1GB000",
+    "price": 1352500,
+    "volume": 1,
+    "timestamp": 1794197704000
+  },
+  "secdef": {
+    "T": "sd",
+    "symbol": "41I1GB000",
+    "ceiling": 1447.0,
+    "floor": 1257.8,
+    "refPrice": 1352.4
+  },
+  "unknown": {
+    "T": "zz",
+    "symbol": "41I1GB000"
+  },
+  "real_welcome": {
+    "action": "welcome",
+    "message": "Please authenticate within 30 seconds",
+    "session_id": "conn_1794363855704153203",
+    "timestamp": 1794363855
+  },
+  "real_auth_failed": {
+    "action": "error",
+    "code": "AUTH_FAILED",
+    "message": "authentication failed: nonce is required"
+  },
+  "subscribed": {
+    "action": "subscribed",
+    "channels": [
+      {
+        "name": "tick.G1.json",
+        "symbols": [
+          "41I1GB000"
+        ]
+      }
+    ]
+  },
+  "server_error": {
+    "action": "error",
+    "code": "INVALID_CHANNEL",
+    "message": "unknown channel tick.T6.json"
+  },
+  "trade_v2": {
+    "T": "t",
+    "marketId": "DVX",
+    "boardId": "G1",
+    "isin": "VN41I1GB0009",
+    "symbol": "41I1GB000",
+    "matchPrice": 1352.5,
+    "matchQtty": 3,
+    "totalVolumeTraded": 15234,
+    "grossTradeAmount": 2060000000000.0,
+    "highestPrice": 1360.0,
+    "lowestPrice": 1345.0,
+    "openPrice": 1350.0,
+    "tradingSessionId": 1,
+    "time": "2026-11-09 11:15:00.456"
+  },
+  "trade_extra_v2": {
+    "T": "te",
+    "marketId": "DVX",
+    "boardId": "G1",
+    "symbol": "41I1GB000",
+    "matchPrice": 1352.4,
+    "matchQtty": 2,
+    "side": 1,
+    "avgPrice": 1352.0,
+    "totalVolumeTraded": 15236,
+    "time": "2026-11-09 11:15:01.000"
+  },
+  "quote_v2": {
+    "T": "q",
+    "marketId": "DVX",
+    "boardId": "G1",
+    "symbol": "41I1GB000",
+    "isin": "VN41I1GB0009",
+    "bid": [
+      {
+        "price": 1352.2,
+        "qtty": 5
+      },
+      {
+        "price": 1352.3,
+        "qtty": 12
+      },
+      {
+        "price": 0,
+        "qtty": 0
+      }
+    ],
+    "offer": [
+      {
+        "price": 1352.6,
+        "qtty": 9
+      },
+      {
+        "price": 1352.5,
+        "qtty": 7
+      }
+    ],
+    "totalBidQtty": 100,
+    "totalOfferQtty": 120,
+    "time": "2026-11-09 11:15:00.123"
+  }
 }

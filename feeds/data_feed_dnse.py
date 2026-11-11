@@ -1,12 +1,17 @@
 """Feed realtime DNSE Open API V2 (LightSpeed V2) — WebSocket, JSON.
 
-Giao thức (docs/broker_notes.md §1.4, đối chiếu mã nguồn SDK chính thức `dnse` 0.5.0):
-- URL `wss://ws-openapi.dnse.com.vn/v1/stream?encoding=json`; server gửi lời chào trước.
-- Xác thực: `{"action":"auth","api_key",…,"signature": hex(HMAC-SHA256(secret,
-  f"{api_key}:{timestamp}:{nonce}")),"timestamp": giây,"nonce": micro-giây}`; lỗi ⇒
-  `{"action":"auth_error"}` — lỗi CỐ ĐỊNH (sai khoá), không thử lại.
-- Đăng ký: `{"name": "tick.G1.json", "symbols": [mã KRX]}` — kênh này mang khớp lệnh
-  (`T`=`t`/`te`) và giá tốt nhất (`T`=`q`). KHÔNG có sổ lệnh nhiều bước giá trong SDK.
+Giao thức (docs/broker_notes.md §1.4) — theo SDK CHÍNH THỨC `dnse-sdk-openapi` 2.4.1 (`dnse/websocket/*`,
+đọc 11/11/2026). SDK cũ `dnse` 0.5.0 KHÔNG còn khớp server: probe thật 11/11/2026 trả
+`{"action":"error","code":"AUTH_FAILED","message":"authentication failed: nonce is required"}` khi nonce là số.
+- URL `wss://ws-openapi.dnse.com.vn/v1/stream?encoding=json`; server gửi lời chào (`welcome`, `session_id`) trước ✅.
+- Xác thực: `{"action":"auth","api_key","signature": hex(HMAC-SHA256(secret, f"{api_key}:{timestamp}:{nonce}")),
+  "timestamp": giây (số), "nonce": micro-giây dạng CHUỖI}`. Thành công ⇔ `{"action":"auth_success"}`; `auth_error`
+  hoặc `error` (vd `code: AUTH_FAILED` ✅ thật) ⇒ lỗi CỐ ĐỊNH, không thử lại; phản hồi lạ ⇒ cũng dừng (như SDK).
+- Đăng ký: mỗi kênh một message `{"action":"subscribe","channels":[{"name": kênh, "symbols":[mã KRX…]}]}`:
+  khớp lệnh `tick.<board>.json` (board mặc định SDK: G1 G3 G4 G7 T1 T2 T3 T4 T6), giá tốt nhất
+  `top_price.<board>.json` (G1…G7). ❓ board của phái sinh — đăng ký hết như SDK, `symbols` lọc đúng mã.
+- Message dữ liệu phân loại theo `T`: `t`/`te` khớp lệnh (`matchPrice`, `matchQtty`, `totalVolumeTraded`, `time`),
+  `q` sổ lệnh (`bid`/`offer` = danh sách `{price, qtty}`). Server `{"action":"error"}` giữa phiên ⇒ đếm + log.
 - Ping/pong: client gửi `{"action":"ping"}` định kỳ; server gửi ping ⇒ trả `{"action":"pong"}`.
 
 Khác SDK (thận trọng hơn):
@@ -44,7 +49,9 @@ log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
 
 WS_URL = "wss://ws-openapi.dnse.com.vn/v1/stream?encoding=json"
-TICK_CHANNEL = "tick.G1.json"
+TICK_BOARDS = ("G1", "G3", "G4", "G7", "T1", "T2", "T3", "T4", "T6")    # SDK 2.4.1 DEFAULT_BOARDS (subscribe_trades)
+QUOTE_BOARDS = ("G1", "G2", "G3", "G4", "G5", "G6", "G7")               # SDK 2.4.1 subscribe_quotes mặc định
+TIME_TOLERANCE_S = 600          # `time` không kèm múi giờ: chọn cách hiểu (giờ VN / UTC) lệch ≤ 10′ so với lúc nhận
 PRICE_MIN, PRICE_MAX = 300.0, 5000.0           # điểm VN30F hợp lý; ngoài khoảng ⇒ nghi sai đơn vị
 
 
@@ -82,6 +89,50 @@ def resolve_contract(d: date, cal: TradingCalendar, roll_days_before_expiry: int
     return name, krx
 
 
+def _vn_from_naive(dt: datetime, tz) -> datetime:
+    return to_vn(dt.replace(tzinfo=tz))
+
+
+def message_time(raw: Any, received: datetime) -> Optional[datetime]:
+    """`time`/`timestamp` của message → giờ VN naive; None nếu không hiểu hoặc lệch quá xa lúc nhận.
+
+    Nhận: epoch số (s/ms/µs/ns), protobuf `{Seconds, Nanos}`, chuỗi ISO có múi giờ, chuỗi KHÔNG múi giờ (REST trả
+    giờ VN — thử giờ VN rồi UTC, lấy cách hiểu gần `received` trong `TIME_TOLERANCE_S`)."""
+    from core.clock import VN_TZ
+    cands: list[datetime] = []
+    try:
+        if isinstance(raw, dict):
+            sec = float(raw.get("Seconds", raw.get("seconds", 0))) + float(raw.get("Nanos", raw.get("nanos", 0))) / 1e9
+            cands = [epoch_to_vn(sec)]
+        elif isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            cands = [epoch_to_vn(raw)]
+        elif isinstance(raw, str) and raw.strip():
+            dt = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+            cands = [to_vn(dt)] if dt.tzinfo is not None else [_vn_from_naive(dt, VN_TZ),
+                                                                 _vn_from_naive(dt, timezone.utc)]
+    except (ValueError, TypeError, OverflowError):
+        return None
+    ok = [c for c in cands if abs((c - received).total_seconds()) <= TIME_TOLERANCE_S]
+    return min(ok, key=lambda c: abs((c - received).total_seconds())) if ok else None
+
+
+def _best_level(levels: Any, best_is_max: bool) -> Optional[tuple[float, Optional[int]]]:
+    """Mức giá tốt nhất trong danh sách `{price, qtty}` (không dựa vào thứ tự server gửi); bỏ giá ≤ 0."""
+    if not isinstance(levels, list):
+        return None
+    good = []
+    for lv in levels:
+        if not isinstance(lv, dict) or lv.get("price") is None:
+            continue
+        px = float(lv["price"])
+        if px > 0:
+            q = _first(lv, "qtty", "quantity", "qty")
+            good.append((px, None if q is None else int(q)))
+    if not good:
+        return None
+    return max(good, key=lambda x: x[0]) if best_is_max else min(good, key=lambda x: x[0])
+
+
 def _first(msg: dict, *keys: str) -> Any:
     for k in keys:
         v = msg.get(k)
@@ -95,46 +146,49 @@ class DnseNormalizer:
 
     def __init__(self, krx_symbols: Iterable[str]):
         self.krx = {s.upper() for s in krx_symbols}
+        self.names = {contracts.symbol_contract(k): k for k in self.krx}     # server có thể gửi tên VN30FYYMM
         self._quote: dict[str, tuple] = {}
         self.counts: Counter = Counter()
 
     def normalize(self, msg: dict, received: datetime) -> Optional[Tick]:
         kind = str(_first(msg, "T", "t") or "")
         raw_sym = str(_first(msg, "symbol", "s") or "").upper()
-        if kind not in ("t", "te", "q") or raw_sym not in self.krx:
+        if kind not in ("t", "te", "q") or (raw_sym not in self.krx and raw_sym not in self.names):
             self.counts["ignored"] += 1
             return None
-        symbol = contracts.symbol_contract(raw_sym)
-        ts_raw = msg.get("timestamp")
-        try:
-            ts = epoch_to_vn(ts_raw) if ts_raw is not None else received
-        except ValueError:
+        symbol = raw_sym if raw_sym in self.names else contracts.symbol_contract(raw_sym)
+        ts_raw = _first(msg, "time", "timestamp")
+        ts = message_time(ts_raw, received) if ts_raw is not None else received
+        if ts is None:
             self.counts["bad_timestamp"] += 1
             ts = received
 
         if kind == "q":
-            bid = _first(msg, "bidPrice", "bid_price")
-            ask = _first(msg, "askPrice", "ask_price")
+            if "bid" in msg or "offer" in msg:                        # SDK 2.4.1: danh sách mức giá
+                b, a = _best_level(msg.get("bid"), True), _best_level(msg.get("offer"), False)
+                bid, bq = b if b else (None, None)
+                ask, aq = a if a else (None, None)
+            else:                                                     # dạng cũ (SDK 0.5.0) — giữ để tương thích
+                bid, ask = _first(msg, "bidPrice", "bid_price"), _first(msg, "askPrice", "ask_price")
+                bq, aq = _first(msg, "bidVolume", "bid_volume"), _first(msg, "askVolume", "ask_volume")
             if bid is None and ask is None:
                 self.counts["ignored"] += 1
                 return None
             if any(p is not None and not PRICE_MIN <= float(p) <= PRICE_MAX for p in (bid, ask)):
                 self.counts["rejected_price"] += 1
                 return None
-            bq = _first(msg, "bidVolume", "bid_volume")
-            aq = _first(msg, "askVolume", "ask_volume")
             q = (None if bid is None else float(bid), None if ask is None else float(ask),
                  None if bq is None else int(bq), None if aq is None else int(aq))
             self._quote[symbol] = q
             self.counts["quotes"] += 1
             return Tick(symbol, ts, bid=q[0], ask=q[1], bid_qty=q[2], ask_qty=q[3], source="dnse")
 
-        price = msg.get("price")
+        price = _first(msg, "matchPrice", "price")
         if price is None or not PRICE_MIN <= float(price) <= PRICE_MAX:
             self.counts["rejected_price"] += 1
             return None
-        vol = msg.get("volume")
-        total = _first(msg, "totalVolume", "total_volume")
+        vol = _first(msg, "matchQtty", "volume")
+        total = _first(msg, "totalVolumeTraded", "totalVolume", "total_volume")
         bid, ask, bq, aq = self._quote.get(symbol, (None, None, None, None))
         self.counts["trades"] += 1
         return Tick(symbol, ts, last=float(price), last_qty=None if vol is None else int(vol),
@@ -277,7 +331,7 @@ class DnseFeed(DataFeed):
                 break
             if got_data:
                 attempt = 0
-            delay = min(self.backoff_base_s * (2 ** attempt), self.backoff_max_s)
+            delay = min(self.backoff_base_s * (2 ** min(attempt, 30)), self.backoff_max_s)   # chặn tràn số
             attempt += 1
             log.info("dnse: kết nối lại sau %.0fs (lần %d)", delay, attempt)
             await self._sleep(delay)
@@ -303,11 +357,17 @@ class DnseFeed(DataFeed):
             await tr.send(json.dumps(self._auth_message()))
             resp = json.loads(await self._recv(tr))
             self._count_frame()
-            if resp.get("action") == "auth_error":
-                raise FeedAuthError(f"DNSE từ chối xác thực: {resp.get('message', '')}")
-            await tr.send(json.dumps({"name": TICK_CHANNEL, "symbols": [self.krx_symbol, *self.extra_krx]}))
+            action = resp.get("action") if isinstance(resp, dict) else None
+            if action != "auth_success":
+                detail = (f"{resp.get('code', '')} {resp.get('message') or resp.get('msg') or ''}".strip()
+                          if isinstance(resp, dict) else str(resp))
+                raise FeedAuthError(f"DNSE từ chối xác thực (action={action!r}): {detail}")
+            for msg in self.subscribe_messages():
+                await tr.send(json.dumps(msg))
             self._counts["connects"] += 1
-            log.info("dnse: đã kết nối và đăng ký %s", TICK_CHANNEL)
+            log.info("dnse: đã xác thực, đăng ký %d kênh (tick × %d board, top_price × %d board) cho %s",
+                     len(TICK_BOARDS) + len(QUOTE_BOARDS), len(TICK_BOARDS), len(QUOTE_BOARDS),
+                     ", ".join([self.krx_symbol, *self.extra_krx]))
             hb = asyncio.create_task(self._heartbeat(tr))
             while not self._stopping:
                 frame = await self._recv(tr)
@@ -344,9 +404,16 @@ class DnseFeed(DataFeed):
             except Exception:
                 return
 
+    def subscribe_messages(self) -> list[dict]:
+        syms = [self.krx_symbol, *self.extra_krx]
+        return ([{"action": "subscribe", "channels": [{"name": f"tick.{b}.json", "symbols": syms}]}
+                 for b in TICK_BOARDS]
+                + [{"action": "subscribe", "channels": [{"name": f"top_price.{b}.json", "symbols": syms}]}
+                   for b in QUOTE_BOARDS])
+
     def _auth_message(self) -> dict:
         now = self._epoch()
-        ts, nonce = int(now), int(now * 1_000_000)
+        ts, nonce = int(now), str(int(now * 1_000_000))       # nonce CHUỖI (server từ chối số — 11/11/2026)
         sig = hmac.new(self._api_secret.encode(), f"{self._api_key}:{ts}:{nonce}".encode(),
                        hashlib.sha256).hexdigest()
         return {"action": "auth", "api_key": self._api_key, "signature": sig,
@@ -389,6 +456,9 @@ class DnseFeed(DataFeed):
                 await tr.send(json.dumps({"action": "pong"}))
             elif action == "auth_error":
                 raise FeedAuthError(f"DNSE từ chối xác thực: {msg.get('message', '')}")
+            elif action == "error":
+                self._counts["server_errors"] += 1
+                log.warning("dnse: server báo lỗi %s %s", msg.get("code", ""), msg.get("message") or msg.get("msg"))
             return False
         tick = self._normalizer.normalize(msg, received=self.clock.now()) if self._normalizer else None
         if tick is None:
@@ -419,7 +489,7 @@ class DnseFeed(DataFeed):
         return {"symbol": self.symbol, "krx_symbol": self.krx_symbol, "extra_contracts": list(self.extra_contracts),
                 "connects": self._counts["connects"], "disconnects": self._counts["disconnects"],
                 "frames": self._counts["frames"], "ticks": self._counts["ticks"],
-                "bad_frames": self._counts["bad_frames"],
+                "bad_frames": self._counts["bad_frames"], "server_errors": self._counts["server_errors"],
                 "callback_errors": self._counts["callback_errors"],
                 "ignored": n["ignored"], "rejected_price": n["rejected_price"],
                 "last_message_at": self._last_message_at,

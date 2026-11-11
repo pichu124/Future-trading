@@ -143,6 +143,21 @@ Còn ❓ trên dây — downloader **tự kiểm, không đoán** (sai ⇒ báo 
   tháng trước với đúng hợp đồng từng ngày, ký không-query rồi kèm-query khi 401, ghi response thô).
 
 ### 1.4 WebSocket stream
+
+> **11/11/2026 — SDK `dnse` 0.5.0 KHÔNG còn khớp server.** Probe thật (laptop) nhận
+> `{"action":"error","code":"AUTH_FAILED","message":"authentication failed: nonce is required"}` cho MỌI lần xác thực
+> (nonce gửi dạng số), và feed cũ coi đó là thành công ⇒ đăng ký ⇒ server đóng ⇒ vòng lặp. Đã chuyển theo SDK
+> CHÍNH THỨC `dnse-sdk-openapi` 2.4.1 (`dnse/websocket/{auth,client,models}.py`, đọc 11/11/2026):
+> - `nonce` = **chuỗi** micro-giây ✅(SDK) / ❓(chờ probe); chữ ký giữ nguyên `"{api_key}:{timestamp}:{nonce}"`;
+> - thành công ⇔ `{"action":"auth_success"}`; lỗi ⇔ `auth_error` hoặc `error` (+`code`) ✅ (bản `error` là THẬT);
+> - đăng ký: `{"action":"subscribe","channels":[{"name":…,"symbols":[…]}]}`, một message mỗi kênh; khớp lệnh
+>   `tick.<board>.json` (board G1 G3 G4 G7 T1 T2 T3 T4 T6), giá tốt nhất `top_price.<board>.json` (G1…G7);
+>   ❓ board của VN30F — đăng ký hết như SDK, xem `boardId` trong message thật;
+> - khớp lệnh `T`=`t`/`te`: `matchPrice`, `matchQtty`, `totalVolumeTraded`, `time` (cùng tên trường REST `/trades`);
+>   sổ lệnh `T`=`q`: `bid`/`offer` = danh sách `{price, qtty}` — bot lấy max bid / min offer, không dựa thứ tự;
+> - `time` không kèm múi giờ (REST: giờ VN) ⇒ bot chọn cách hiểu VN/UTC gần lúc nhận ≤ 10′, không thì dùng lúc nhận.
+> Phần dưới (SDK 0.5.0) giữ để đối chiếu lịch sử.
+
 - Xác thực ngay sau khi kết nối ✅:
   `{"action": "auth", "api_key": …, "signature": hex(HMAC-SHA256(secret, f"{api_key}:{timestamp}:{nonce}")), "timestamp": <giây>, "nonce": <micro-giây>}`.
   Lỗi ⇒ server gửi `{"action": "auth_error", "message": …}`.

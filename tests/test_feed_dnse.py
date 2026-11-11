@@ -25,6 +25,19 @@ NOW = datetime(2026, 11, 9, 11, 15, 0)
 KEY, SECRET = "key-abc", "s3cr3t-very-private"
 
 
+# Đăng ký theo SDK chính thức dnse-sdk-openapi 2.4.1: mỗi kênh một message {"action":"subscribe","channels":[…]};
+# khớp lệnh `tick.<board>.json` trên DEFAULT_BOARDS, giá tốt nhất `top_price.<board>.json` trên G1…G7.
+TICK_BOARDS = ["G1", "G3", "G4", "G7", "T1", "T2", "T3", "T4", "T6"]
+QUOTE_BOARDS = ["G1", "G2", "G3", "G4", "G5", "G6", "G7"]
+
+
+def subs(*krx):
+    syms = list(krx or [KRX])
+    return ([{"action": "subscribe", "channels": [{"name": f"tick.{b}.json", "symbols": syms}]} for b in TICK_BOARDS]
+            + [{"action": "subscribe", "channels": [{"name": f"top_price.{b}.json", "symbols": syms}]}
+               for b in QUOTE_BOARDS])
+
+
 def m(name, **over):
     d = dict(FIX[name])
     d.update(over)
@@ -204,12 +217,14 @@ def test_handshake_auth_subscribe_and_ticks(cal, session_cfg):
     feed.on_tick(ticks.append)
     asyncio.run(run_until(feed, ticks, 3))
     assert [t.last for t in ticks] == [None, 1352.5, 1352.4]
-    auth, sub = tr.sent[0], tr.sent[1]
+    auth = tr.sent[0]
     assert auth["action"] == "auth" and auth["api_key"] == KEY
+    # server thật 11/11/2026: nonce dạng SỐ ⇒ "authentication failed: nonce is required"; SDK 2.4.1 gửi CHUỖI
+    assert isinstance(auth["nonce"], str) and auth["nonce"] == "1794197700500000"
     expected = hmac.new(SECRET.encode(), f"{KEY}:{auth['timestamp']}:{auth['nonce']}".encode(),
                         hashlib.sha256).hexdigest()
     assert auth["signature"] == expected and auth["timestamp"] == 1794197700
-    assert sub == {"name": "tick.G1.json", "symbols": [KRX]}
+    assert tr.sent[1:1 + len(subs())] == subs()
     assert feed.symbol == SYM and feed.krx_symbol == KRX
     assert tr.closed
 
@@ -223,8 +238,9 @@ def test_url_uses_json_encoding(cal, session_cfg):
     assert con.urls[0] == "wss://ws-openapi.dnse.com.vn/v1/stream?encoding=json"
 
 
-def test_auth_error_is_fatal_no_retry(cal, session_cfg):
-    con = Connector(FakeTransport([FIX["welcome"], FIX["auth_error"]]), FakeTransport(stream()))
+@pytest.mark.parametrize("err", ["auth_error", "real_auth_failed"])
+def test_auth_error_is_fatal_no_retry(cal, session_cfg, err):
+    con = Connector(FakeTransport([FIX["welcome"], FIX[err]]), FakeTransport(stream()))
     feed, _, sleeps = make_feed(cal, session_cfg, con)
     with pytest.raises(FeedAuthError):
         asyncio.run(feed.run())
@@ -271,7 +287,7 @@ def test_reconnect_with_backoff_and_resubscribe(cal, session_cfg):
     asyncio.run(run_until(feed, ticks, 2))
     assert [t.last for t in ticks] == [1352.5, 1352.4]
     assert sleeps == [1.0, 2.0]                         # backoff 1s rồi 2s
-    assert t2.sent[1] == {"name": "tick.G1.json", "symbols": [KRX]}
+    assert t2.sent[1:1 + len(subs())] == subs()
     assert feed.stats()["disconnects"] == 2 and feed.stats()["connects"] == 2
 
 
@@ -389,4 +405,84 @@ def test_real_websocket_transport_against_local_server(cal, session_cfg):
 
     ticks = asyncio.run(go())
     assert [t.last for t in ticks] == [None, 1352.5] and ticks[1].bid == 1352.3
-    assert received[0]["action"] == "auth" and received[1]["name"] == "tick.G1.json"
+    assert received[0]["action"] == "auth" and received[1] == subs()[0]
+
+
+
+# ------------------------------------------------- giao thức theo SDK chính thức 2.4.1 (11/11/2026) ----
+
+def test_real_auth_failed_message_reported(cal, session_cfg):
+    """Bản ghi THẬT: {"action":"error","code":"AUTH_FAILED",…} — trước đây bị coi là thành công ⇒ vòng lặp kết nối."""
+    con = Connector(FakeTransport([FIX["real_welcome"], FIX["real_auth_failed"]]))
+    feed, _, _ = make_feed(cal, session_cfg, con)
+    with pytest.raises(FeedAuthError, match="nonce is required"):
+        asyncio.run(feed.run())
+    assert feed.stats()["connects"] == 0
+
+
+def test_unexpected_auth_response_is_fatal(cal, session_cfg):
+    con = Connector(FakeTransport([FIX["welcome"], {"action": "hello"}]))
+    feed, _, sleeps = make_feed(cal, session_cfg, con)
+    with pytest.raises(FeedAuthError, match="hello"):
+        asyncio.run(feed.run())
+    assert sleeps == []
+
+
+def test_v2_quote_and_trade_flow(cal, session_cfg):
+    tr = FakeTransport(stream("subscribed", "quote_v2", "trade_v2", "trade_extra_v2"))
+    feed, _, _ = make_feed(cal, session_cfg, Connector(tr))
+    ticks = []
+    feed.on_tick(ticks.append)
+    asyncio.run(run_until(feed, ticks, 3))
+    q, t, te = ticks
+    assert (q.bid, q.bid_qty, q.ask, q.ask_qty, q.last) == (1352.3, 12, 1352.5, 7, None)
+    assert (t.last, t.last_qty, t.total_volume, t.bid, t.ask) == (1352.5, 3, 15234, 1352.3, 1352.5)
+    assert t.ts == datetime(2026, 11, 9, 11, 15, 0, 456000) and te.total_volume == 15236
+
+
+def test_server_error_after_subscribe_is_counted_not_fatal(cal, session_cfg, caplog):
+    tr = FakeTransport(stream("server_error", "trade_v2"))
+    feed, _, _ = make_feed(cal, session_cfg, Connector(tr))
+    ticks = []
+    feed.on_tick(ticks.append)
+    with caplog.at_level(logging.WARNING):
+        asyncio.run(run_until(feed, ticks, 1))
+    assert len(ticks) == 1 and feed.stats()["server_errors"] == 1
+    assert "unknown channel" in caplog.text
+
+
+class TestNormalizerV2:
+    def setup_method(self):
+        self.n = DnseNormalizer({KRX})
+
+    def test_best_levels_from_unsorted_arrays_skip_zero(self):
+        t = self.n.normalize(m("quote_v2"), received=NOW)
+        assert (t.bid, t.bid_qty, t.ask, t.ask_qty) == (1352.3, 12, 1352.5, 7)
+
+    def test_empty_book_side_kept_as_none(self):
+        t = self.n.normalize(m("quote_v2", offer=[]), received=NOW)
+        assert t.bid == 1352.3 and t.ask is None
+        assert self.n.normalize(m("quote_v2", bid=[], offer=[]), received=NOW) is None
+
+    @pytest.mark.parametrize("raw,expect", [
+        ("2026-11-09 11:15:00.456", datetime(2026, 11, 9, 11, 15, 0, 456000)),      # giờ VN không múi giờ (như REST)
+        ("2026-11-09 04:15:00.456", datetime(2026, 11, 9, 11, 15, 0, 456000)),      # UTC không múi giờ
+        ("2026-11-09T04:15:00.456Z", datetime(2026, 11, 9, 11, 15, 0, 456000)),     # ISO UTC
+        (1794197700456, datetime(2026, 11, 9, 11, 15, 0, 456000)),                  # epoch ms
+        ({"Seconds": 1794197700, "Nanos": 456000000}, datetime(2026, 11, 9, 11, 15, 0, 456000)),
+    ])
+    def test_time_formats_checked_against_receive_time(self, raw, expect):
+        t = self.n.normalize(m("trade_v2", time=raw), received=NOW)
+        assert t.ts == expect
+
+    def test_time_far_from_receive_uses_receive_and_counts(self):
+        t = self.n.normalize(m("trade_v2", time="2026-11-08 11:15:00"), received=NOW)
+        assert t.ts == NOW and self.n.counts["bad_timestamp"] == 1
+
+    def test_contract_name_as_symbol_accepted(self):
+        t = self.n.normalize(m("trade_v2", symbol="VN30F2611"), received=NOW)
+        assert t.symbol == SYM and t.last == 1352.5
+
+    def test_bad_price_rejected(self):
+        assert self.n.normalize(m("trade_v2", matchPrice=1352500), received=NOW) is None
+        assert self.n.counts["rejected_price"] == 1
