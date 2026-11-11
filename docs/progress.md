@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-11 — Nến 1 phút VN30F từ SSI (kết nối Claude, nghiên cứu): 23/07/2025 → 11/11/2026 + `scripts/compare_bars.py`
+
+- Tải qua `marketdata_list_intraday_stock_infor` (25 lần × 30 ngày): 365 (HĐ, ngày), 90.516 nến, 326 ngày giao dịch, thiếu 8 ngày (đầu HĐ mới sau roll) + HĐ kế tiếp ở 5 ngày trước roll. Ghi `ssi/ohlc1m/<HĐ>/<ngày>.parquet` (cùng schema kho DNSE, `source=ssi`, `volume_reliable=false`) + `_manifest.json`; gửi người dùng dạng zip (2,3 MB) ⇒ giải nén vào `data/` (⇒ `data/ssi/ohlc1m`).
+- `scripts/compare_bars.py <kho1> <kho2>`: so (HĐ, ngày) trùng — khớp OHLC, lệch giá đóng, khớp volume, ngày lệch nhiều nhất. Test `tests/test_compare_bars.py` (5). Chạy `python scripts/compare_bars.py data/ssi data/history` trước khi dùng SSI.
+- Dùng chung với DNSE: `--bars data/history/ohlc1m data/ssi/ohlc1m` ⇒ trùng thì giữ bản DNSE (volume tin được). Backtest trên SSI là chế độ NẾN (bi quan hơn tick). Kho SSI KHÔNG dùng lại để kết luận #1–#5.
+
 ## 2026-11-11 — #3 kiểm định OOS gộp: KHÔNG CÓ EDGE
 
 - `backtest.pooled` #3: 25/03→08/05 12 lệnh −4,26tr; 01/09→11/11 28 lệnh +2,07tr; gộp 40 lệnh −2,19tr, p 0,656, trượt 2 tick −2,99tr ⇒ KHÔNG CÓ EDGE (research/log.md). #4 đang chạy.

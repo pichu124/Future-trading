@@ -323,6 +323,17 @@ SignalR, `fc-tradeapi`) là thế hệ trước.
 | Đơn vị giá phái sinh (điểm) | gửi điểm, bước 0,1 | probe masterdata |
 | Token chỉ-dữ-liệu có cần OTP | feed dùng chung token có OTP | probe |
 
+### 2.x Kết nối SSI qua tài khoản Claude (MCP, CHỈ nghiên cứu) — dò 11/11/2026
+- `marketdata_list_intraday_stock_infor` nhận mã phái sinh: nến **1 phút** (OHLC + volume từng phút, nhãn = giờ MỞ nến,
+  09:00…11:29, 13:00…14:29 + nến 14:45 ATC ⇒ 241 nến/ngày), `trading_date` thực tế dạng **DD/MM/YYYY HH:mm:ss** (mô tả
+  công cụ ghi MM/dd — sai). `range=1m` = 30 ngày/lần (~1,2 MB); `marketdata_list_stock_infor` báo DOWNSTREAM_UNAVAILABLE.
+- Mã: HĐ tháng thường + mọi HĐ 2026 theo mã KRX (`41I1G5000`); HĐ QUÝ năm 2025 (VN30F2509, VN30F2512) chỉ có dưới tên
+  cũ `VN30FYYMM`; `latest=true` với tên cũ HĐ hiện tại ⇒ rỗng. Thử KRX trước, rỗng thì tên cũ.
+- Độ sâu: dữ liệu từ ~22/07/2025 (16/07/2025 rỗng) ⇒ ~15–16 tháng (mô tả "730 ngày" là giới hạn tham số, không phải dữ
+  liệu). Thiếu vài ngày đầu của HĐ mới sau roll (16–17/10/2025, 13/02, 16–20/04, 16–17/07/2026) và HĐ kế tiếp ngày trước
+  roll ở 5 lần roll. Có giới hạn tốc độ (RATE_LIMITED, retryAfter 1–2 s).
+- Đã tải: 365 (HĐ, ngày), 90.516 nến, 23/07/2025 → 11/11/2026 ⇒ `data/ssi/ohlc1m` (volume_reliable=false tới khi đối chiếu).
+
 ## 2b. TCBS — iFlash Open API (broker thứ 3, tuỳ chọn, KHÔNG bật mặc định)
 
 **Nguồn:** cổng tài liệu chính thức `https://developers.tcbs.com.vn` (TCBS OpenAPI — Developer Portal, v1.0.0) và
