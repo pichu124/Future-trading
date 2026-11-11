@@ -1,5 +1,9 @@
 # Tiến độ
 
+## 2026-11-11 — Paper #3 chạy lần đầu trên laptop (kiểm vận hành)
+
+- 10:06 `live.runner --strategy strategy.morning_momentum:MorningMomentum` (paper): nạp lịch sử 10 phiên OK, Telegram báo khởi động kèm tên chiến lược, `/status` trả lời (phẳng, feed khoẻ, ping DNSE 1s). Khởi động sau 09:00 ⇒ hôm nay không vào lệnh (thiếu nến 09:00). Đang kiểm recorder + runner cùng mở feed.
+
 ## 2026-11-11 — Recorder chạy thật trên laptop ✅
 
 - `record_today.py --assume-computed-contract` 09:42–09:56: 69.282 dòng, 169 part (5 s/part), 0 lỗi ghi, Ctrl+C ⇒ gộp `ticks.parquet` OK; 3.000–7.400 message/phút. Tiếp: hẹn giờ Task Scheduler.

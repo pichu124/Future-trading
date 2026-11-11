@@ -37,11 +37,8 @@
    Tối 11/11: `download_history.py --start 2026-11-11 --end 2026-11-11` (bù 09:00–09:42 + khoảng ngắt; lịch sử đủ cho paper 12/11).
 5. **Telegram** — ✅ 10/11/2026: bot `@binh_vn30f_bot`, `TELEGRAM_TRADING_*` trong `.env` laptop, gửi tin thử OK.
 
-6. **Paper #3** (sau khi feed + recorder chạy ổn ≥ 1 ngày; chỉ để kiểm VẬN HÀNH, chưa có bằng chứng edge):
-   tải bù lịch sử tới hôm qua, rồi trong giờ giao dịch
-   `python -m live.runner --assume-computed-contract --strategy strategy.morning_momentum:MorningMomentum`
-   (`TRADING_MODE=paper`, không `--live`). 18/11 là ngày trước roll ⇒ tối 18/11 chạy
-   `download_history.py --start 2026-11-18 --end 2026-11-18` (lấy cả VN30F2612) trước phiên 19/11.
+6. **Paper #3** — ▶️ chạy lần đầu 11/11/2026 10:06 trên laptop (khởi động sau 09:00 ⇒ hôm nay #3 không vào lệnh — thiếu nến 09:00, đúng thiết kế; mục đích: kiểm vận hành). Telegram khởi động + `/status` OK (feed khoẻ, ping DNSE 1s). Chạy song song recorder ⇒ đang kiểm ❓ hai kết nối feed (broker_notes §3.9). Từ 12/11: khởi động TRƯỚC 09:00.
+   `python -m live.runner --assume-computed-contract --strategy strategy.morning_momentum:MorningMomentum`; 18/11 tối: `download_history.py --start 2026-11-18 --end 2026-11-18` (lấy cả VN30F2612) trước phiên 19/11.
 
 **Đã xong:** settings (phí, vốn 100tr, lỗ ngày 15 điểm, 2 lượt, thua 2, `allowed_machine = CFA-BINHLD-LT`);
 probe DNSE chỉ đọc + lịch sử (trên Desktop); tải 6 tháng lịch sử (+ chép sang laptop, check 133/133);
