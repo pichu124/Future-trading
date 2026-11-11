@@ -1,5 +1,9 @@
 # Tiến độ
 
+## 2026-11-11 — Paper #3 ngày đầu: kết thúc phiên đúng, báo cáo Telegram OK
+
+- Runner chạy 10:06 → 14:45 không lỗi; `/status`, `/pnl` trả lời; 14:45:01 tự thoát + báo cáo ("hết phiên", 0 lệnh — khởi động sau 09:00 nên #3 không xét vào, đúng thiết kế). Feed runner nhận ~756 nghìn tick cả phiên, song song recorder.
+
 ## 2026-11-11 — Chốt lời từng phần (scale-out) trong đường đặt lệnh — CHƯA bật cho chiến lược nào
 
 - `Signal.take_profits = ((giá, KL), …)` (tổng KL ≤ qty, phần dư = runner chạy tới stop/EXIT/flatten) + `breakeven_after_first_tp`; kiểm hợp lệ trong `Signal.__post_init__`; không dùng chung với `take_profit` (giữ nguyên hành vi một mức).
