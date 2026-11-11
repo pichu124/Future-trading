@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-11 — Tải thêm 25/03→08/05/2026; `backtest/pooled.py` (kiểm định OOS gộp theo luật đăng ký trước)
+
+- `download_history.py --start 2026-03-16 --end 2026-05-10` (laptop): 29 ngày, 0 lỗi, 3.169 request; 17/03–24/03 rỗng ⇒ DNSE lưu tới ~25/03 (≈ 7,5 tháng cuộn). Kho: 25/03 → 10/11/2026.
+- `backtest/pooled.py`: lệnh OOS = ngày vào thuộc các `--window`; CÓ EDGE ⇔ ≥ 30 lệnh gộp, P&L > 0 ở MỌI cửa sổ, p sign-flip gộp × n_trials < 0,1, P&L gộp trượt 2 tick > 0 (đúng luật research/log.md 11/11). Chạy engine tick trên toàn kho 2 lần (trượt thường / căng). Test `tests/test_pooled_oos.py` (8).
+- Recorder ngày đầu: 865.246 tick (70.981 khớp) 09:42→14:45; cảnh báo "khoảng trống 2.562 s" = trước khi bật recorder, "hụt 429 HĐ" ≈ 75 s chạy lại 09:56→09:58 — không phải lỗi feed; kiểm lại ngày chạy liền.
+
 ## 2026-11-11 — Paper #3 ngày đầu: kết thúc phiên đúng, báo cáo Telegram OK
 
 - Runner chạy 10:06 → 14:45 không lỗi; `/status`, `/pnl` trả lời; 14:45:01 tự thoát + báo cáo ("hết phiên", 0 lệnh — khởi động sau 09:00 nên #3 không xét vào, đúng thiết kế). Feed runner nhận ~756 nghìn tick cả phiên, song song recorder.
