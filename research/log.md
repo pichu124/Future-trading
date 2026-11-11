@@ -91,3 +91,16 @@ Thứ tự làm: #3 → #4 → #5, mỗi chiến lược một module (test trư
   chính thức khi OOS ≥ 30 lệnh (#3 cần thêm ~5 lệnh ≈ 2–3 tuần; #4 cần thêm ~17 ≈ 2–3 tháng).
 - Song song có thể chạy PAPER #3 trên laptop để kiểm vận hành (feed, lệnh, stop, Telegram) — paper KHÔNG phải bằng
   chứng edge thay cho robustness.
+
+### Đăng ký trước: giai đoạn kiểm tra THỨ HAI = dữ liệu TRƯỚC 11/05/2026 (ghi 11/11/2026, TRƯỚC khi tải/xem)
+
+- DNSE lưu ~7 tháng cuộn ⇒ tải được ~16/03→08/05/2026 (chưa ai xem; tham số #3/#4 chốt 10/11 không nhìn giai đoạn này)
+  ⇒ là OOS sạch thứ hai cho #3 và #4 (KHÔNG cho ORB #1/#2, #5 — đã dừng).
+- Chạy: `backtest.engine --ticks … --from <ngày đầu có dữ liệu> --to 2026-05-08 --strategy <#3|#4>`, cùng phí/trượt/mô
+  hình tick, KHÔNG đổi tham số. 10 phiên đầu dùng làm lịch sử ADR (không giao dịch được) — chấp nhận.
+- Luật kết luận (cố định, cho từng chiến lược): gộp lệnh OOS = (giai đoạn trước) ∪ (01/09/2026 → mới nhất);
+  CÓ EDGE ⇔ (a) ≥ 30 lệnh gộp; (b) P&L sau phí > 0 ở CẢ HAI giai đoạn; (c) p sign-flip của chuỗi gộp × 5 < 0,1;
+  (d) P&L gộp vẫn > 0 khi trượt 2 tick. Thiếu (a) ⇒ CHƯA ĐỦ; trượt bất kỳ (b)(c)(d) ⇒ KHÔNG CÓ EDGE.
+- CÓ EDGE vẫn phải chạy paper ổn định trước khi tính đến live; cấu hình #3b (1–3 HĐ, chốt từng phần) là thử nghiệm MỚI
+  (n_trials 6), chỉ đăng ký sau khi có kết luận này.
+
