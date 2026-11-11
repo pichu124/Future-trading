@@ -1,5 +1,9 @@
 # Tiến độ
 
+## 2026-11-11 — #3 kiểm định OOS gộp: KHÔNG CÓ EDGE
+
+- `backtest.pooled` #3: 25/03→08/05 12 lệnh −4,26tr; 01/09→11/11 28 lệnh +2,07tr; gộp 40 lệnh −2,19tr, p 0,656, trượt 2 tick −2,99tr ⇒ KHÔNG CÓ EDGE (research/log.md). #4 đang chạy.
+
 ## 2026-11-11 — Tải thêm 25/03→08/05/2026; `backtest/pooled.py` (kiểm định OOS gộp theo luật đăng ký trước)
 
 - `download_history.py --start 2026-03-16 --end 2026-05-10` (laptop): 29 ngày, 0 lỗi, 3.169 request; 17/03–24/03 rỗng ⇒ DNSE lưu tới ~25/03 (≈ 7,5 tháng cuộn). Kho: 25/03 → 10/11/2026.
