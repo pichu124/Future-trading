@@ -31,7 +31,7 @@ Chỉ cần cho Task Scheduler gọi nó **mỗi ngày thường lúc ~08:20**.
 > (P4.1) có REST danh sách hợp đồng, script sẽ tự đối chiếu và bỏ cờ này. Nếu mã tính sai, feed sẽ
 > im lặng và log báo "feed … im lặng". Muốn chắc chắn hơn thì dùng `--krx <mã>` (phải sửa mỗi tháng).
 
-## 2. Tạo task (Command Prompt, đăng nhập bằng user sẽ chạy bot)
+## 2. Tạo task (Command Prompt **Run as administrator** — cmd thường có thể báo `Access is denied`)
 
 ```bat
 schtasks /Create /F /TN "VN30F Recorder" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 08:20 ^

@@ -33,10 +33,7 @@
 1. **`.env` trên laptop** — ✅ 11/11/2026: khoá DNSE đã thêm, probe chỉ đọc + tải bù 07–10/11 chạy được trên laptop.
 2. **Thử feed trong giờ giao dịch** — ✅ 11/11/2026 09:34: 4.450 tick/120 s (sau khi sửa giao thức theo SDK chính thức 2.4.1).
 3. **Chạy tay recorder** — ✅ 11/11/2026 09:42–09:56: 69.282 dòng, 169 part, 0 lỗi ghi, gộp file ngày OK (~3.000–7.400 message/phút).
-4. **Hẹn giờ** (cmd): `schtasks /Create /F /TN "VN30F Recorder" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 08:20 /TR
-   "\"D:\Future-trading\.venv\Scripts\python.exe\" \"D:\Future-trading\scripts\record_today.py\" --assume-computed-contract"`
-   rồi chỉnh Properties theo `docs/recorder_windows.md` §2; tắt Sleep khi cắm sạc. Laptop phải bật + có mạng
-   08:20–15:00 ngày thường (gập nắp / ngủ / IT khởi động lại = mất dữ liệu ngày đó; bù bằng `download_history.py`).
+4. **Hẹn giờ** — ✅ 11/11/2026: task `VN30F Recorder` (T2–T6 08:20) tạo được bằng cmd *Run as administrator* (cmd thường báo Access is denied). Còn chỉnh Properties theo `docs/recorder_windows.md` §2 + tắt Sleep.
 5. **Telegram** — ✅ 10/11/2026: bot `@binh_vn30f_bot`, `TELEGRAM_TRADING_*` trong `.env` laptop, gửi tin thử OK.
 
 6. **Paper #3** (sau khi feed + recorder chạy ổn ≥ 1 ngày; chỉ để kiểm VẬN HÀNH, chưa có bằng chứng edge):
