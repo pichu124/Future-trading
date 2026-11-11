@@ -32,8 +32,7 @@
 
 1. **`.env` trên laptop** — ✅ 11/11/2026: khoá DNSE đã thêm, probe chỉ đọc + tải bù 07–10/11 chạy được trên laptop.
 2. **Thử feed trong giờ giao dịch** — ✅ 11/11/2026 09:34: 4.450 tick/120 s (sau khi sửa giao thức theo SDK chính thức 2.4.1).
-3. **Chạy tay recorder 10–15 phút**: `python scripts/record_today.py --assume-computed-contract` ⇒ kiểm
-   `data\raw\<ngày>\part-*.parquet` + `logs\`; Ctrl+C không mất dữ liệu.
+3. **Chạy tay recorder** — ✅ 11/11/2026 09:42–09:56: 69.282 dòng, 169 part, 0 lỗi ghi, gộp file ngày OK (~3.000–7.400 message/phút).
 4. **Hẹn giờ** (cmd): `schtasks /Create /F /TN "VN30F Recorder" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 08:20 /TR
    "\"D:\Future-trading\.venv\Scripts\python.exe\" \"D:\Future-trading\scripts\record_today.py\" --assume-computed-contract"`
    rồi chỉnh Properties theo `docs/recorder_windows.md` §2; tắt Sleep khi cắm sạc. Laptop phải bật + có mạng

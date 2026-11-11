@@ -1,5 +1,9 @@
 # Tiến độ
 
+## 2026-11-11 — Recorder chạy thật trên laptop ✅
+
+- `record_today.py --assume-computed-contract` 09:42–09:56: 69.282 dòng, 169 part (5 s/part), 0 lỗi ghi, Ctrl+C ⇒ gộp `ticks.parquet` OK; 3.000–7.400 message/phút. Tiếp: hẹn giờ Task Scheduler.
+
 ## 2026-11-11 — Feed DNSE chạy thật ✅ (probe lần 2): 4.450 tick/120 s, board G1
 
 - Sau khi chuyển theo SDK 2.4.1: xác thực qua, 1 kết nối, 0 ngắt; 200 message đầu: 153 sổ lệnh + 28 khớp lệnh, mọi message `boardId: G1` ⇒ chỉ đăng ký G1. `time` = `{Seconds, Nanos}`. Bản ghi thật vào fixture + `test_real_messages_end_to_end`.
