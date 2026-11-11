@@ -1,5 +1,10 @@
 # Tiến độ
 
+## 2026-11-11 — Feed DNSE chạy thật ✅ (probe lần 2): 4.450 tick/120 s, board G1
+
+- Sau khi chuyển theo SDK 2.4.1: xác thực qua, 1 kết nối, 0 ngắt; 200 message đầu: 153 sổ lệnh + 28 khớp lệnh, mọi message `boardId: G1` ⇒ chỉ đăng ký G1. `time` = `{Seconds, Nanos}`. Bản ghi thật vào fixture + `test_real_messages_end_to_end`.
+- Tiếp: chạy tay recorder 10–15′, rồi hẹn giờ.
+
 ## 2026-11-11 — Feed DNSE: chuyển giao thức theo SDK chính thức 2.4.1 (probe thật: 0 tick, AUTH_FAILED)
 
 - Probe laptop 09:24: 5 kết nối, 0 tick; message thô: `{"action":"error","code":"AUTH_FAILED","message":"authentication failed: nonce is required"}` mỗi lần. Hai lỗi: nonce gửi dạng số; feed chỉ nhận `auth_error` là lỗi ⇒ coi `error` là thành công ⇒ đăng ký ⇒ server đóng ⇒ lặp.

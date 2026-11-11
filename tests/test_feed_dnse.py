@@ -27,8 +27,9 @@ KEY, SECRET = "key-abc", "s3cr3t-very-private"
 
 # Đăng ký theo SDK chính thức dnse-sdk-openapi 2.4.1: mỗi kênh một message {"action":"subscribe","channels":[…]};
 # khớp lệnh `tick.<board>.json` trên DEFAULT_BOARDS, giá tốt nhất `top_price.<board>.json` trên G1…G7.
-TICK_BOARDS = ["G1", "G3", "G4", "G7", "T1", "T2", "T3", "T4", "T6"]
-QUOTE_BOARDS = ["G1", "G2", "G3", "G4", "G5", "G6", "G7"]
+# VN30F nằm trên board G1 (✅ probe thật 11/11/2026: mọi message `boardId: "G1"`) ⇒ chỉ đăng ký G1.
+TICK_BOARDS = ["G1"]
+QUOTE_BOARDS = ["G1"]
 
 
 def subs(*krx):
@@ -486,3 +487,23 @@ class TestNormalizerV2:
     def test_bad_price_rejected(self):
         assert self.n.normalize(m("trade_v2", matchPrice=1352500), received=NOW) is None
         assert self.n.counts["rejected_price"] == 1
+
+
+
+# ------------------------------------------------- bản ghi THẬT từ server (probe 11/11/2026 09:34) ----
+
+def test_real_messages_end_to_end(cal, session_cfg):
+    clock = FakeClock(datetime(2026, 11, 11, 9, 34, 40))
+    tr = FakeTransport([FIX["real_welcome"], FIX["real_auth_success"], FIX["real_ping"], FIX["real_subscribed"],
+                        FIX["real_quote"], FIX["real_trade"]])
+    feed, _, _ = make_feed(cal, session_cfg, Connector(tr), clock=clock)
+    ticks = []
+    feed.on_tick(ticks.append)
+    asyncio.run(run_until(feed, ticks, 2))
+    q, t = ticks
+    assert (q.symbol, q.bid, q.bid_qty, q.ask, q.ask_qty) == (SYM, 1853.4, 3, 1853.5, 3)
+    assert q.ts == datetime(2026, 11, 11, 9, 34, 38, 120000)            # time = {Seconds, Nanos} (UTC epoch)
+    assert (t.last, t.last_qty, t.total_volume, t.bid, t.ask) == (1853.5, 1, 33911, 1853.4, 1853.5)
+    assert t.ts == datetime(2026, 11, 11, 9, 34, 38, 582000)
+    assert {"action": "pong"} in tr.sent and feed.stats()["server_errors"] == 0
+    assert tr.sent[1:] [:2] == subs()                                     # 2 kênh: tick.G1 + top_price.G1

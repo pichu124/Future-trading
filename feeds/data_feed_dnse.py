@@ -9,9 +9,9 @@ Giao thức (docs/broker_notes.md §1.4) — theo SDK CHÍNH THỨC `dnse-sdk-op
   hoặc `error` (vd `code: AUTH_FAILED` ✅ thật) ⇒ lỗi CỐ ĐỊNH, không thử lại; phản hồi lạ ⇒ cũng dừng (như SDK).
 - Đăng ký: mỗi kênh một message `{"action":"subscribe","channels":[{"name": kênh, "symbols":[mã KRX…]}]}`:
   khớp lệnh `tick.<board>.json` (board mặc định SDK: G1 G3 G4 G7 T1 T2 T3 T4 T6), giá tốt nhất
-  `top_price.<board>.json` (G1…G7). ❓ board của phái sinh — đăng ký hết như SDK, `symbols` lọc đúng mã.
-- Message dữ liệu phân loại theo `T`: `t`/`te` khớp lệnh (`matchPrice`, `matchQtty`, `totalVolumeTraded`, `time`),
-  `q` sổ lệnh (`bid`/`offer` = danh sách `{price, qtty}`). Server `{"action":"error"}` giữa phiên ⇒ đếm + log.
+  `top_price.<board>.json`. VN30F ở board G1 ✅ (probe thật 11/11/2026) ⇒ chỉ đăng ký G1.
+- Message dữ liệu phân loại theo `T` ✅ (thật): `t` khớp lệnh (`matchPrice`, `matchQtty`, `totalVolumeTraded`,
+  `time` = `{"Seconds","Nanos"}` epoch UTC), `q` sổ lệnh 10 bước (`bid`/`offer` = danh sách `{price, qtty}`). Server `{"action":"error"}` giữa phiên ⇒ đếm + log.
 - Ping/pong: client gửi `{"action":"ping"}` định kỳ; server gửi ping ⇒ trả `{"action":"pong"}`.
 
 Khác SDK (thận trọng hơn):
@@ -49,8 +49,10 @@ log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
 
 WS_URL = "wss://ws-openapi.dnse.com.vn/v1/stream?encoding=json"
-TICK_BOARDS = ("G1", "G3", "G4", "G7", "T1", "T2", "T3", "T4", "T6")    # SDK 2.4.1 DEFAULT_BOARDS (subscribe_trades)
-QUOTE_BOARDS = ("G1", "G2", "G3", "G4", "G5", "G6", "G7")               # SDK 2.4.1 subscribe_quotes mặc định
+# VN30F trên board G1 ✅ (probe thật 11/11/2026: mọi message `boardId: "G1"`). SDK mặc định đăng ký 9 + 7 board —
+# không cần; server giới hạn `subscriptions_max: 100`, `messages_per_second: 100` (trong `auth_success`).
+TICK_BOARDS = ("G1",)
+QUOTE_BOARDS = ("G1",)
 TIME_TOLERANCE_S = 600          # `time` không kèm múi giờ: chọn cách hiểu (giờ VN / UTC) lệch ≤ 10′ so với lúc nhận
 PRICE_MIN, PRICE_MAX = 300.0, 5000.0           # điểm VN30F hợp lý; ngoài khoảng ⇒ nghi sai đơn vị
 

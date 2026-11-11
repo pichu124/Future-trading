@@ -156,6 +156,12 @@ Còn ❓ trên dây — downloader **tự kiểm, không đoán** (sai ⇒ báo 
 > - khớp lệnh `T`=`t`/`te`: `matchPrice`, `matchQtty`, `totalVolumeTraded`, `time` (cùng tên trường REST `/trades`);
 >   sổ lệnh `T`=`q`: `bid`/`offer` = danh sách `{price, qtty}` — bot lấy max bid / min offer, không dựa thứ tự;
 > - `time` không kèm múi giờ (REST: giờ VN) ⇒ bot chọn cách hiểu VN/UTC gần lúc nhận ≤ 10′, không thì dùng lúc nhận.
+> **Probe lần 2 (11/11/2026 09:34, laptop) ✅:** xác thực qua (`auth_success` kèm `rate_limit: {messages_per_second: 100,
+> subscriptions_max: 100}`), 1 kết nối, 0 ngắt, 4.450 tick/120 s. VN30F ở **board G1** (bot chỉ đăng ký `tick.G1.json` +
+> `top_price.G1.json`). Khớp lệnh `t`: `matchPrice`, `matchQtty`, `totalVolumeTraded`, `time = {"Seconds","Nanos"}`
+> (epoch UTC), `tradingSessionId` (chuỗi), `multicastReceiveTime`. Sổ lệnh `q`: 10 bước mỗi bên. Server gửi `ping`
+> (`timestamp` ms) — bot trả `pong`. Server xác nhận đăng ký `{"action":"subscribed","channel":…,"status":"active"}`.
+> Bản ghi thật ở `tests/fixtures/dnse_stream.json` (`real_*`).
 > Phần dưới (SDK 0.5.0) giữ để đối chiếu lịch sử.
 
 - Xác thực ngay sau khi kết nối ✅:

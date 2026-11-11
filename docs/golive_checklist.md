@@ -31,9 +31,7 @@
 **Việc tiếp theo (11/11/2026, trên LAPTOP `D:\Future-trading`, máy ghi dữ liệu + chạy bot):**
 
 1. **`.env` trên laptop** — ✅ 11/11/2026: khoá DNSE đã thêm, probe chỉ đọc + tải bù 07–10/11 chạy được trên laptop.
-2. **Thử feed trong giờ giao dịch** (09:15–11:30 hoặc 13:00–14:25):
-   `python scripts/dnse_feed_probe.py --krx 41I1GB000 --seconds 120` (41I1GB000 = VN30F2611; từ 19/11 là
-   41I1GC000 = VN30F2612) ⇒ gửi phần tổng kết.
+2. **Thử feed trong giờ giao dịch** — ✅ 11/11/2026 09:34: 4.450 tick/120 s (sau khi sửa giao thức theo SDK chính thức 2.4.1).
 3. **Chạy tay recorder 10–15 phút**: `python scripts/record_today.py --assume-computed-contract` ⇒ kiểm
    `data\raw\<ngày>\part-*.parquet` + `logs\`; Ctrl+C không mất dữ liệu.
 4. **Hẹn giờ** (cmd): `schtasks /Create /F /TN "VN30F Recorder" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 08:20 /TR
