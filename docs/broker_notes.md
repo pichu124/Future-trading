@@ -386,9 +386,9 @@ CLAUDE.md: chỉ bật sau khi DNSE + SSI ổn định ⇒ adapter có sẵn nh�
 6. Dữ liệu backtest thật: DNSE `/price/{symbol}/trades` (tick) và `/price/ohlc` (1 phút), SSI OHLC 1 phút lịch sử ⇒ thêm bước P1.6 tải lịch sử, tốt hơn nhiều so với dữ liệu snapshot import từ dashboard.
 7. Refresh token SSI chỉ dùng MỘT lần ⇒ `SsiTokenManager` (P4.2) bỏ refresh token khỏi bộ nhớ TRƯỚC khi gửi; lỗi mạng giữa chừng ⇒ coi như đã dùng, xin OTP. Token chỉ ở bộ nhớ (không ghi đĩa) ⇒ khởi động lại cần OTP, đổi lại không bao giờ có token cũ trên đĩa để bị gửi lại.
 8. Nghỉ trưa (11:30–13:00) / ATO / ATC: bot KHÔNG gửi MTL đóng và KHÔNG huỷ stop/chốt lời — hoãn tới phiên liên tục kế tiếp (`core/execution.py`, 10/11/2026). ❓ Sở có nhận lệnh LO / lệnh huỷ trong giờ nghỉ trưa không (nếu nhận LO thì có thể xếp hàng đóng sẵn cho 13:00) — chưa xác minh, hiện KHÔNG dựa vào; kiểm bằng UAT trước khi đổi.
-9. ❓ DNSE có cho MỘT cặp khoá API mở HAI kết nối feed cùng lúc không (recorder + runner paper cùng chạy trên laptop).
+9. ✅ (11/11/2026, laptop) MỘT cặp khoá mở HAI kết nối feed cùng lúc được: recorder + runner paper chạy song song từ 10:06, recorder vẫn 3.000–5.500 msg/phút, không ngắt; runner feed khoẻ. (Câu hỏi gốc: DNSE có cho MỘT cặp khoá API mở HAI kết nối feed cùng lúc không (recorder + runner paper cùng chạy trên laptop).
    Chưa xác minh — kiểm ngày đầu chạy paper: cả hai log có tick liên tục, không bị ngắt/từ chối. Không được ⇒
-   cho runner tự ghi tick (một kết nối) thay vì chạy recorder riêng.
+   cho runner tự ghi tick (một kết nối) thay vì chạy recorder riêng.)
 
 ## 4. Việc cần người dùng xác nhận khi đăng ký API
 - [ ] DNSE: base URL production, thời hạn trading token, hạn mức rate limit, có kênh sổ lệnh nhiều bước giá không.
