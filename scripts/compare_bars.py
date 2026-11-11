@@ -37,7 +37,7 @@ def compare(a: Path | str, b: Path | str, start: Optional[date] = None, end: Opt
     for k in sorted(ka & kb, key=lambda x: (x[1], x[0])):
         da = pd.read_parquet(ia[k], columns=cols).drop_duplicates("start").set_index("start")
         db = pd.read_parquet(ib[k], columns=cols).drop_duplicates("start").set_index("start")
-        j = da.join(db, how="inner", lsuffix="_a", rsuffix="_b")
+        j = da.merge(db, how="inner", left_index=True, right_index=True, suffixes=("_a", "_b"))
         n = len(j)
         diff = (j["close_a"] - j["close_b"]).abs() if n else pd.Series(dtype=float)
         ohlc = ((j["open_a"] == j["open_b"]) & (j["high_a"] == j["high_b"]) & (j["low_a"] == j["low_b"])

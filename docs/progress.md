@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-11 — Đối chiếu nến SSI với DNSE (Desktop): dùng được cho nghiên cứu
+
+- `compare_bars.py data/ssi data/history`: 132 ngày trùng, 31.811 phút chung; giá đóng lệch TB 0,079 điểm (< 1 bước), max 2,9; volume khớp hệt 98,5% phút (tổng 24,99tr / 24,97tr); OHLC khớp hệt 56,7% (lệch ở mở/cao/thấp — gán khớp lệnh ở biên phút khác nhau).
+- ⇒ SSI `volume_reliable=true` (zip mới; Desktop đổi tại chỗ bằng lệnh một dòng). Dùng chung: `--bars data/history/ohlc1m data/ssi/ohlc1m` — trùng thì bản đọc TRƯỚC (DNSE) thắng.
+- `compare_bars.py`: dùng `merge(suffixes=…)` thay `join(lsuffix/rsuffix)` (pandas mới báo deprecated).
+
 ## 2026-11-11 — Nến 1 phút VN30F từ SSI (kết nối Claude, nghiên cứu): 23/07/2025 → 11/11/2026 + `scripts/compare_bars.py`
 
 - Tải qua `marketdata_list_intraday_stock_infor` (25 lần × 30 ngày): 365 (HĐ, ngày), 90.516 nến, 326 ngày giao dịch, thiếu 8 ngày (đầu HĐ mới sau roll) + HĐ kế tiếp ở 5 ngày trước roll. Ghi `ssi/ohlc1m/<HĐ>/<ngày>.parquet` (cùng schema kho DNSE, `source=ssi`, `volume_reliable=false`) + `_manifest.json`; gửi người dùng dạng zip (2,3 MB) ⇒ giải nén vào `data/` (⇒ `data/ssi/ohlc1m`).

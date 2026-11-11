@@ -332,7 +332,7 @@ SignalR, `fc-tradeapi`) là thế hệ trước.
 - Độ sâu: dữ liệu từ ~22/07/2025 (16/07/2025 rỗng) ⇒ ~15–16 tháng (mô tả "730 ngày" là giới hạn tham số, không phải dữ
   liệu). Thiếu vài ngày đầu của HĐ mới sau roll (16–17/10/2025, 13/02, 16–20/04, 16–17/07/2026) và HĐ kế tiếp ngày trước
   roll ở 5 lần roll. Có giới hạn tốc độ (RATE_LIMITED, retryAfter 1–2 s).
-- Đã tải: 365 (HĐ, ngày), 90.516 nến, 23/07/2025 → 11/11/2026 ⇒ `data/ssi/ohlc1m` (volume_reliable=false tới khi đối chiếu).
+- Đã tải: 365 (HĐ, ngày), 90.516 nến, 23/07/2025 → 11/11/2026 ⇒ `data/ssi/ohlc1m`. Đối chiếu DNSE 132 ngày: giá đóng lệch TB 0,079 điểm, volume khớp 98,5% phút ⇒ `volume_reliable=true`.
 
 ## 2b. TCBS — iFlash Open API (broker thứ 3, tuỳ chọn, KHÔNG bật mặc định)
 
