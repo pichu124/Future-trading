@@ -1,5 +1,14 @@
 # Tiến độ
 
+## 2026-11-11 — Chốt lời từng phần (scale-out) trong đường đặt lệnh — CHƯA bật cho chiến lược nào
+
+- `Signal.take_profits = ((giá, KL), …)` (tổng KL ≤ qty, phần dư = runner chạy tới stop/EXIT/flatten) + `breakeven_after_first_tp`; kiểm hợp lệ trong `Signal.__post_init__`; không dùng chung với `take_profit` (giữ nguyên hành vi một mức).
+- `core/execution.py`: mỗi mức một LO `take_profit`; stop luôn MỘT lệnh KL = |net|; tổng KL TP đang chờ ≤ |net| (phân bổ mức gần trước, cắt cả trong một mức) ⇒ vào lệnh khớp một phần / stop khớp một phần không bao giờ làm đảo chiều; mức đã khớp không đặt lại, lệnh mức không đổi thì giữ; mức đầu khớp ⇒ dời stop về giá vốn (nếu bật). Mức chốt lời sai phía so với stop ⇒ bỏ tín hiệu.
+- `risk/risk_manager.py`: nhiều lệnh `take_profit` cùng chiều được nếu tổng KL chờ ≤ |net| (1 HĐ ⇒ TP thứ hai vẫn bị chặn như cũ); stop và lệnh đóng vẫn chỉ một.
+- Test `tests/test_scale_out.py` (22, gồm backtest: vào 3, chốt 1360 + 1370, dời hoà vốn, runner thoát 14:20); mutation 4 chốt (trần tổng TP, ghi KL mức, hoà vốn, risk) ⇒ đỏ.
+- Chưa bật: `risk.max_contracts` vẫn 1; chiến lược #3 vẫn 1 HĐ. Dùng cho cấu hình #3b (đăng ký trước, kiểm định) sau khi #3 qua kiểm định trên dữ liệu thêm.
+- Dữ liệu: DNSE lưu khớp lệnh ~7 tháng cuộn (15/04/2026 có, 16/03/2026 trống) ⇒ tải được thêm ~16/03→08/05/2026, phải tải SỚM (ngày cũ bị xoá dần).
+
 ## 2026-11-11 — Paper #3 chạy lần đầu trên laptop (kiểm vận hành)
 
 - 10:06 `live.runner --strategy strategy.morning_momentum:MorningMomentum` (paper): nạp lịch sử 10 phiên OK, Telegram báo khởi động kèm tên chiến lược, `/status` trả lời (phẳng, feed khoẻ, ping DNSE 1s). Khởi động sau 09:00 ⇒ hôm nay không vào lệnh (thiếu nến 09:00). Đang kiểm recorder + runner cùng mở feed.

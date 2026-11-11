@@ -110,9 +110,32 @@ class Signal:
     ts: datetime
     symbol: str
     stop_loss: Optional[float] = None     # bắt buộc với ENTER_* (risk manager kiểm)
-    take_profit: Optional[float] = None
+    take_profit: Optional[float] = None   # MỘT mức chốt lời cho toàn bộ KL
     reason: str = ""
     qty: int = 1
+    # Chốt lời từng phần: ((giá, KL), …) — mỗi mức một lệnh LO; tổng KL ≤ qty, phần dư (runner) chạy tới stop/EXIT.
+    # Không dùng chung với `take_profit`.
+    take_profits: tuple = ()
+    breakeven_after_first_tp: bool = False   # mức chốt lời đầu tiên khớp ⇒ dời stop về giá vốn
+
+    def __post_init__(self) -> None:
+        if not self.take_profits:
+            return
+        if self.take_profit is not None:
+            raise ValueError("Dùng take_profit HOẶC take_profits, không dùng cả hai")
+        total = 0
+        for leg in self.take_profits:
+            try:
+                px, q = leg
+            except (TypeError, ValueError):
+                raise ValueError(f"Mức chốt lời phải là (giá, KL), nhận {leg!r}") from None
+            if isinstance(q, bool) or not isinstance(q, int) or q < 1:
+                raise ValueError(f"KL mức chốt lời phải là số nguyên ≥ 1, nhận {q!r}")
+            if isinstance(px, bool) or not isinstance(px, (int, float)) or px <= 0:
+                raise ValueError(f"Giá mức chốt lời phải > 0, nhận {px!r}")
+            total += q
+        if total > self.qty:
+            raise ValueError(f"Tổng KL các mức chốt lời ({total}) > qty ({self.qty})")
 
 
 @dataclass(frozen=True)

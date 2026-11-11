@@ -7,8 +7,12 @@ Luồng:
   hợp đồng rồi MTL đóng `tag="exit"`; ENTER ngược chiều vị thế ⇒ chỉ đóng.
 - Mỗi lần khớp: `RiskManager.record_fill` NGAY trong callback (sổ sách luôn đúng), còn việc
   đặt/sửa lệnh bảo vệ được xếp hàng và chạy ở `drain()` (callback broker là đồng bộ).
-- Bảo vệ: sau mỗi lần khớp, đảm bảo đúng một STOP (`tag="stop"`) và, nếu tín hiệu có, một LO
-  chốt lời (`tag="take_profit"`) ngược chiều với khối lượng = |net|. Net về 0 ⇒ huỷ cả hai.
+- Bảo vệ: sau mỗi lần khớp, đảm bảo đúng một STOP (`tag="stop"`, KL = |net|) và các LO chốt lời
+  (`tag="take_profit"`): một mức (`Signal.take_profit`, toàn bộ KL) hoặc NHIỀU mức (`Signal.take_profits`,
+  chốt từng phần). Tổng KL chốt lời đang chờ ≤ |net| — phân bổ theo thứ tự mức (vào lệnh khớp một phần ⇒ chỉ
+  đặt mức đủ KL; stop khớp một phần ⇒ cắt mức xa) ⇒ không bao giờ đảo chiều vì chốt lời. Mức đã khớp không
+  đặt lại; lệnh mức không đổi thì giữ. `breakeven_after_first_tp` ⇒ mức đầu khớp thì dời stop về giá vốn.
+  Net về 0 ⇒ huỷ hết.
   Khối lượng lệch ⇒ huỷ rồi đặt lại (khoảng hở ngắn được `stop_grace_seconds` của risk che).
 - `handle_actions`: FLATTEN_* / KILL ⇒ huỷ lệnh chờ rồi MTL đóng `tag="flatten"`; KILL còn
   dừng nhận tín hiệu. EMERGENCY_HEDGE ⇒ `live.emergency.EmergencyHandler` (đối ứng trên broker
@@ -51,10 +55,24 @@ class ExecEvent:
 
 
 @dataclass
+class _Leg:
+    price: float
+    qty: int
+    done: int = 0                        # KL mức này đã khớp
+
+    @property
+    def left(self) -> int:
+        return max(0, self.qty - self.done)
+
+
+@dataclass
 class _Targets:
     stop: Optional[float]
     take_profit: Optional[float]
     side: Optional[Side] = None          # chiều của lệnh vào — net khác chiều ⇒ đảo chiều ngoài ý muốn
+    legs: list = field(default_factory=list)      # [_Leg] theo thứ tự mức (gần trước)
+    breakeven: bool = False
+    moved_to_breakeven: bool = False
 
 
 class ExecutionManager:
@@ -79,6 +97,7 @@ class ExecutionManager:
         self._queue: deque[Callable[[], Awaitable[None]]] = deque()
         self._deferred: dict[str, tuple] = {}         # symbol → (ngày, trạng thái phiên) đã báo hoãn
         self._action_logged: dict[tuple, datetime] = {}  # (loại, lý do) → lần ghi gần nhất
+        self._tp_leg: dict[str, tuple[str, int]] = {}   # client_order_id lệnh TP → (hợp đồng, chỉ số mức)
         broker.on_fill(self._on_fill)
         broker.on_order_update(self._on_update)
 
@@ -97,6 +116,7 @@ class ExecutionManager:
 
     def _on_fill(self, fill: Fill) -> None:
         self.risk.record_fill(self.state, fill)
+        self._account_leg(fill)
         log_event(log, "fill", client_order_id=fill.client_order_id, broker=fill.broker, symbol=fill.symbol,
                   side=fill.side, qty=fill.qty, price=fill.price, fee_vnd=fill.fee_vnd, fill_ts=fill.ts,
                   net_after=self.state.net_qty(fill.symbol))
@@ -123,16 +143,49 @@ class ExecutionManager:
         if net != 0 and (net > 0) != (side is Side.BUY):
             await self._close(sig.symbol, "exit")      # ngược chiều ⇒ chỉ đóng
             return
-        order = self._new_order(sig.symbol, side, sig.qty, OrderType.MARKET, "entry",
-                                stop_loss=self._round(sig.stop_loss))
+        stop = self._round(sig.stop_loss)
+        legs = self._legs_for(sig)
+        bad = [lg.price for lg in legs if stop is not None
+               and (lg.price <= stop if side is Side.BUY else lg.price >= stop)]
+        if bad:
+            self._event("rejected", f"Bỏ tín hiệu {sig.action.value}: mức chốt lời {bad} không ở phía lãi so với "
+                                    f"stop {stop}", sig.symbol)
+            return
+        order = self._new_order(sig.symbol, side, sig.qty, OrderType.MARKET, "entry", stop_loss=stop)
         previous = self._targets.get(sig.symbol)
-        self._targets[sig.symbol] = _Targets(self._round(sig.stop_loss), self._round(sig.take_profit), side)
+        self._targets[sig.symbol] = _Targets(stop, self._round(sig.take_profit), side, legs,
+                                             breakeven=bool(getattr(sig, "breakeven_after_first_tp", False)))
         placed = await self._submit(order)
         if placed is None or placed.status is OrderStatus.REJECTED:
             if previous is None:
                 self._targets.pop(sig.symbol, None)
             else:
                 self._targets[sig.symbol] = previous
+
+    def _legs_for(self, sig: Signal) -> list:
+        legs = getattr(sig, "take_profits", ()) or ()
+        if legs:
+            return [_Leg(self._round(px), int(q)) for px, q in legs]
+        if sig.take_profit is not None:
+            return [_Leg(self._round(sig.take_profit), int(sig.qty))]   # một mức: hành vi cũ
+        return []
+
+    def _account_leg(self, fill: Fill) -> None:
+        """Lệnh chốt lời khớp ⇒ ghi KL đã chốt của mức đó; mức đầu tiên ⇒ dời stop về giá vốn (nếu bật)."""
+        hit = self._tp_leg.get(fill.client_order_id)
+        if hit is None:
+            return
+        symbol, idx = hit
+        t = self._targets.get(symbol)
+        if t is None or idx >= len(t.legs):
+            return
+        t.legs[idx].done += fill.qty
+        if t.breakeven and not t.moved_to_breakeven:
+            pos = self.state.positions.get(f"{self.broker.name}:{symbol}")
+            if pos is not None and pos.qty != 0 and pos.avg_price:
+                t.stop = self._round(pos.avg_price)
+                t.moved_to_breakeven = True
+                self._event("info", f"Đã chốt lời phần đầu ⇒ dời stop về giá vốn {t.stop}", symbol)
 
     # ------------------------------------------------------------ hành động risk ----
 
@@ -279,9 +332,38 @@ class ExecutionManager:
             return
         side = Side.SELL if net > 0 else Side.BUY
         await self._sync(symbol, "stop", side, abs(net), OrderType.STOP, targets.stop)
-        if targets.take_profit is not None:
-            await self._sync(symbol, "take_profit", side, abs(net), OrderType.LIMIT,
-                             targets.take_profit)
+        await self._sync_take_profits(symbol, side, abs(net), targets)
+
+    async def _sync_take_profits(self, symbol: str, side: Side, net_abs: int, targets: _Targets) -> None:
+        """Đặt/giữ/huỷ lệnh chốt lời theo mức; tổng KL ≤ |net| (phân bổ mức gần trước)."""
+        want: dict[int, tuple[float, int]] = {}
+        cap = net_abs
+        for i, lg in enumerate(targets.legs):
+            if cap <= 0:
+                break
+            q = min(lg.left, cap)
+            if q > 0:
+                want[i] = (lg.price, q)
+                cap -= q
+        kept: set[int] = set()
+        for o in self._working(symbol, ("take_profit",)):
+            idx = self._tp_leg.get(o.client_order_id, (None, None))[1]
+            w = want.get(idx) if idx is not None else None
+            if (w is not None and idx not in kept and o.side is side and o.price == w[0]
+                    and o.qty - o.filled_qty == w[1]):
+                kept.add(idx)
+                continue
+            await self._cancel(o)
+        busy = {self._tp_leg.get(o.client_order_id, (None, None))[1]
+                for o in self._working(symbol, ("take_profit",))} - kept
+        if busy:
+            return            # huỷ chưa xác nhận ⇒ đợi vòng sau, không để tổng TP vượt |net| (golive #8)
+        for idx, (px, q) in want.items():
+            if idx in kept:
+                continue
+            placed = await self._submit(self._new_order(symbol, side, q, OrderType.LIMIT, "take_profit", price=px))
+            if placed is not None:
+                self._tp_leg[placed.client_order_id] = (symbol, idx)
 
     async def _sync(self, symbol: str, tag: str, side: Side, qty: int, otype: OrderType,
                     price: float) -> None:

@@ -266,7 +266,17 @@ class RiskManager:
         if reducing:
             # KHÔNG áp trần "kịch bản xấu nhất" cho lệnh giảm: stop + TP + lệnh đóng/đối ứng cộng lại
             # luôn vượt trần, và chặn chúng đúng lúc cần thoát còn nguy hiểm hơn (golive #1, #7).
-            # Thay bằng: không hai lệnh đóng (hoặc hai lệnh bảo vệ cùng loại) cùng chiều trên cùng broker.
+            # Thay bằng: không hai lệnh đóng (hoặc hai lệnh stop) cùng chiều trên cùng broker. Chốt lời từng phần:
+            # NHIỀU lệnh take_profit cùng chiều được, miễn tổng KL đang chờ (gồm lệnh mới) ≤ |net| ⇒ chốt lời
+            # không bao giờ làm đảo chiều; 1 HĐ thì lệnh TP thứ hai vẫn bị chặn như cũ.
+            if order.tag == "take_profit":
+                waiting = sum(o.qty - o.filled_qty for o in state.working_orders.values()
+                              if o.symbol == order.symbol and o.side is order.side
+                              and o.broker == order.broker and o.tag == "take_profit")
+                if waiting + order.qty > abs(net):
+                    return rej(RejectCode.DUPLICATE_CLOSE,
+                               f"Chốt lời đang chờ {waiting} + {order.qty} HĐ > vị thế {abs(net)} — sẽ đảo chiều")
+                return Approved(order)
             group = CLOSE_TAGS if order.tag in CLOSE_TAGS else (
                 (order.tag,) if order.tag in PROTECT_TAGS else None)
             if group:
