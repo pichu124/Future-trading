@@ -30,9 +30,7 @@
 
 **Việc tiếp theo (11/11/2026, trên LAPTOP `D:\Future-trading`, máy ghi dữ liệu + chạy bot):**
 
-1. **`.env` trên laptop**: chép các dòng DNSE từ `.env` của Desktop (USB; KHÔNG chép đè cả file nếu laptop đã có
-   dòng Telegram; không gửi qua chat/Dropbox/Zalo). Giữ `TRADING_MODE=paper`. Kiểm: `python scripts/dnse_trading_probe.py`
-   (chỉ đọc) ⇒ thấy số tiểu khoản + loan package 1306. Lỗi 401/403 ⇒ có thể VPN/proxy công ty — gửi lỗi.
+1. **`.env` trên laptop** — ✅ 11/11/2026: khoá DNSE đã thêm, probe chỉ đọc + tải bù 07–10/11 chạy được trên laptop.
 2. **Thử feed trong giờ giao dịch** (09:15–11:30 hoặc 13:00–14:25):
    `python scripts/dnse_feed_probe.py --krx 41I1GB000 --seconds 120` (41I1GB000 = VN30F2611; từ 19/11 là
    41I1GC000 = VN30F2612) ⇒ gửi phần tổng kết.
