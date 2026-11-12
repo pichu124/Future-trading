@@ -74,6 +74,7 @@ Người dùng có hai máy (desktop + laptop) và thư mục dữ liệu của 
 - `max_trades_per_day`, `max_consecutive_losses`.
 - Không mở vị thế mới: trong `no_entry_open_minutes` đầu phiên, sau `last_entry_time`, trong ngày đáo hạn (trừ khi bật cờ riêng).
 - `flatten_time`: đóng mọi vị thế trước phiên ATC.
+- `flatten_on_feed_silence_seconds`: đang có vị thế mà không có dữ liệu thị trường quá N giây trong phiên liên tục (nghỉ trưa không tính) → đóng hết bằng MTL (stop do bot giữ thì mất feed = stop mù). Lệch giá DNSE/SSI chỉ chặn mở vị thế mới.
 - Mọi lệnh vào phải có stop-loss tương ứng được đặt ngay sau khi khớp. Không có stop → huỷ vị thế.
 - Chống lệnh trùng: mỗi lệnh có `client_order_id` duy nhất, idempotent khi retry.
 - Mất kết nối broker > `broker_timeout_seconds` khi đang có vị thế → quy trình khẩn cấp (mục 3).

@@ -1,0 +1,11 @@
+{
+ "_note": "Body response THẬT từ DNSE production (dnse_trading_probe.py, 09/11/2026, tài khoản chưa có lệnh/vị thế). Đã bỏ số tiểu khoản.",
+ "orders": {"orders": []},
+ "positions": {"positions": [], "pageIndex": 0, "pageSize": 100, "pageNumber": 0, "total": 0},
+ "secdef": [{"marketId": "DVX", "boardId": "G1", "isin": "VN41I1GB0001", "symbol": "41I1GB000", "productGrpId": "FIO",
+             "securityGroupId": "FU", "basicPrice": 1828, "ceilingPrice": 1955.9, "floorPrice": 1700.1,
+             "openInterestQuantity": 34889, "securityStatus": "UNSPECIFIED", "symbolAdminStatusCode": "NRM",
+             "symbolTradingMethodStatusCode": "NRM", "symbolTradingSanctionStatusCode": "NRM", "finalTradeDate": null,
+             "listingDate": "2026-09-18T00:00:00Z", "time": "2026-11-09 19:58:48.828"}],
+ "rate_limit": {"accounts": "100000", "price": "10000"}
+}

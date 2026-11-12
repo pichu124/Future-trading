@@ -3,7 +3,7 @@
 Dán từng prompt vào Claude Code (mở trong thư mục repo này), xong một bước, review và chạy `python -m pytest -q` rồi mới sang bước tiếp.
 Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `docs/progress.md`.
 
-> ✅ Đã làm: P0.1, P0.2, P0.3, P1.0, P1.1. Bắt đầu từ **P1.2** (hoặc P1.6 nếu đã có API key — dữ liệu lịch sử thật cho backtest).
+> ✅ Đã làm: mọi bước P0.1–P5.2 (code + test). Chưa chạy với dữ liệu/API thật: live KHOÁ tới khi kiểm API (`api_verified`), backtest chưa có dữ liệu thật ⇒ chưa có bằng chứng edge. Trạng thái + việc của bạn: `docs/golive_checklist.md` mục 0.
 
 ---
 
@@ -28,65 +28,65 @@ Chỗ `[...]` là phần bạn tự điền. Trạng thái từng bước xem `d
 **P1.1 · Ghi chú tài liệu broker** ✅
 > Đọc tài liệu chính thức DNSE LightSpeed Market Data (bản sau KRX) và SSI FastConnect Data. Ghi vào `docs/broker_notes.md`: cách xác thực, giao thức streaming, cách subscribe tick khớp lệnh và sổ lệnh (top 3/top 10) cho hợp đồng tương lai VN30, tên field, đơn vị giá, cách lấy danh sách mã hợp đồng hiện hành. Đánh dấu rõ chỗ nào chưa chắc chắn. Không viết code.
 
-**P1.2 · Feed DNSE**
+**P1.2 · Feed DNSE** ✅ (message mẫu theo SDK; chờ khoá để kiểm với server thật)
 > Dựa trên broker_notes.md, viết `feeds/data_feed_dnse.py`: async, tự lấy mã F1M lúc khởi động, subscribe tick + sổ lệnh, chuẩn hoá về `Tick`, tự reconnect với backoff, phát hiện gap theo sequence nếu có, log số message/phút. Interface chung `DataFeed` ở `feeds/base.py`. Viết test với message mẫu (fixture JSON).
 
-**P1.3 · Feed SSI**
+**P1.3 · Feed SSI** ✅ (frame mẫu theo SDK; token SSI thật chờ P4.2)
 > Viết `feeds/data_feed_ssi.py` theo cùng interface `DataFeed`. Sau đó viết `feeds/composite.py`: chạy song song DNSE (chính) và SSI (dự phòng), phát cảnh báo khi lệch > `feed_divergence_ticks` hoặc một feed im > `feed_stale_seconds`, tự chuyển nguồn chính khi DNSE chết.
 
-**P1.4 · Recorder**
+**P1.4 · Recorder** ✅ (hướng dẫn Task Scheduler: `docs/recorder_windows.md`)
 > Viết `recorder/`: ghi tick và snapshot sổ lệnh từ composite feed ra Parquet theo ngày, flush mỗi N giây, không mất dữ liệu khi crash (ghi file tạm rồi rename). Script `scripts/record_today.py` chạy từ 8:30 đến 15:00 rồi tự thoát. Hướng dẫn tôi đặt Windows Task Scheduler chạy mỗi ngày giao dịch.
 
-**P1.5 · Kiểm định dữ liệu**
+**P1.5 · Kiểm định dữ liệu** ✅ (tự chạy cuối `record_today.py`)
 > Viết `scripts/validate_day.py`: với một ngày dữ liệu, báo cáo số tick, khoảng trống > 5 giây trong phiên liên tục, tick ngoài biên độ, chênh lệch DNSE vs SSI, và dựng bar 1 phút. So khớp OHLC 1 phút với dữ liệu vnstock của cùng ngày, liệt kê sai lệch.
 
-**P1.6 · Tải dữ liệu lịch sử thật**
+**P1.6 · Tải dữ liệu lịch sử thật** ✅ (code) — bước 1 `scripts/dnse_history_probe.py`; bước 2 `scripts/download_history.py` theo đặc tả OpenAPI chính thức, tự kiểm các ❓ còn lại. CHƯA chạy trên dây (cần khoá DNSE)
 > Theo `docs/broker_notes.md` §1.3 và §2.5: viết `scripts/download_history.py` tải OHLC 1 phút (`GET /price/ohlc`, `type=DERIVATIVE`) và lịch sử khớp lệnh (`GET /price/{symbol}/trades`, `boardId=G1`) của DNSE cho từng hợp đồng VN30F (mã KRX từ `core.contracts`), ghi `data/history/<loại>/<hợp đồng>/<ngày>.parquet` (ghi nguyên tử, chạy lại không tải trùng). Trước khi viết code: gọi thử bằng tay để chốt các mục ❓ (đơn vị `from`/`to`, độ sâu lịch sử hợp đồng đã đáo hạn) và cập nhật broker_notes. Tôn trọng HTTP 429 `retry_after`. Viết test với response mẫu.
 
 ---
 
 ## Giai đoạn 2 — Rủi ro & paper broker (trước mọi chiến lược)
 
-**P2.1 · Risk manager**
+**P2.1 · Risk manager** ✅
 > Viết `risk/risk_manager.py` thực thi từng luật ở mục 5 CLAUDE.md. Viết test TRƯỚC cho từng luật (một test/luật, cả trường hợp biên), rồi mới implement. Theo dõi net position trên nhiều broker. Trả về `Rejected(reason)` có lý do rõ ràng để log.
 
-**P2.2 · Paper broker**
+**P2.2 · Paper broker** ✅
 > Viết `brokers/base.py` (interface BrokerAdapter: place, cancel, modify, positions, on_fill callback) và `brokers/paper.py`: khớp theo bid/ask của tick kế tiếp, trượt giá cấu hình được, tính phí theo settings.yaml, mô phỏng độ trễ. Đây là broker dùng chung cho backtest và paper trading.
 
 ---
 
 ## Giai đoạn 3 — Backtest & chiến lược
 
-**P3.1 · Engine**
+**P3.1 · Engine** ✅
 > Viết `backtest/engine.py` replay dữ liệu Parquet qua đúng pipeline live: feed giả → strategy → risk_manager → paper broker. Xuất báo cáo theo mục 6 CLAUDE.md ra HTML. Thêm test chứng minh không có look-ahead: chiến lược "gian lận" dùng giá tương lai phải bị engine chặn hoặc lộ ra.
 
-**P3.2 · Chiến lược baseline**
+**P3.2 · Chiến lược baseline** ✅ (`strategy/baseline_orb.py`, chưa chạy in-sample)
 > Viết `strategy/baseline_[tên].py`: [mô tả chiến lược bằng lời của bạn — ví dụ: breakout biên độ 15 phút đầu phiên liên tục, vào lệnh khi bar 1 phút đóng ngoài biên, stop ở cạnh đối diện, chốt lời 1.5R, tối đa 2 lệnh/ngày]. Hàm thuần, tham số đọc từ settings. Chạy backtest in-sample [khoảng ngày], báo cáo, rồi liệt kê 5 lý do kết quả này có thể đẹp hơn thực tế.
 
-**P3.3 · Kiểm định độ bền**
+**P3.3 · Kiểm định độ bền** ✅ (`backtest/robustness.py`, chưa chạy dữ liệu thật)
 > Với chiến lược baseline: chạy out-of-sample và walk-forward, phân tích độ nhạy ±20% cho từng tham số, chạy lại với trượt giá 2 tick. Kết luận chiến lược có edge hay không, kèm bằng chứng. Nếu không có edge, nói thẳng.
 
 ---
 
 ## Giai đoạn 4 — Kết nối broker thật (paper trước)
 
-**P4.1 · Adapter DNSE**
+**P4.1 · Adapter DNSE** ✅ (`brokers/dnse.py`; OTP nhập tay qua Telegram `/otp` thay cho Gmail API — quyết định của người dùng; live khoá tới khi chạy `scripts/dnse_trading_probe.py` và đặt `api_verified`)
 > Đọc tài liệu LightSpeed Trading (bản sau KRX), cập nhật broker_notes.md, rồi viết `brokers/dnse.py`: đăng nhập JWT, lấy trading token qua emailOTP (đọc OTP từ Gmail API), tự gia hạn token, đặt/huỷ/sửa lệnh phái sinh, nhận trạng thái lệnh và vị thế. Idempotent theo client_order_id. Kiểm tra TRADING_MODE trước mọi lệnh thật. Viết chế độ `--dry-run` chỉ log payload.
 
-**P4.2 · Adapter SSI**
+**P4.2 · Adapter SSI** ✅ (`brokers/ssi.py`; OTP nhập tay `/otp ssi`; live khoá tới khi chạy `scripts/ssi_trading_probe.py`, điền `order_symbol_format`/`market_order_type` và `api_verified`)
 > Tương tự cho `brokers/ssi.py` với FastConnect Trading: ký RSA, OTP, stream trạng thái lệnh và danh mục phái sinh, lưu notify_id để reconnect không mất sự kiện.
 
-**P4.3 · Quy trình khẩn cấp**
+**P4.3 · Quy trình khẩn cấp** ✅ (`live/emergency.py`)
 > Viết `live/emergency.py`: khi broker chính mất kết nối quá `broker_timeout_seconds` mà đang có vị thế, đặt lệnh đối ứng trên broker dự phòng để net = 0, cảnh báo Telegram, khoá mở vị thế mới. Viết test mô phỏng các kịch bản: mất kết nối giữa chừng, khớp một phần, cả hai broker đều lỗi.
 
 ---
 
 ## Giai đoạn 5 — Chạy live
 
-**P5.1 · Runner + giám sát**
+**P5.1 · Runner + giám sát** ✅ (paper + live đã nối qua `live/wiring.py`; live còn khoá tới khi kiểm API — `docs/runner.md`)
 > Viết `live/runner.py`: khởi động (kiểm tra kết nối, lấy mã hợp đồng, đối soát vị thế thực tế với state), vòng lặp sự kiện, heartbeat mỗi 30 giây, kill-switch (file KILL và lệnh Telegram /kill /status /pnl). Cuối ngày gửi báo cáo Telegram: lệnh, P&L sau phí, lệnh bị risk từ chối và lý do.
 
-**P5.2 · Checklist trước live**
+**P5.2 · Checklist trước live** ✅ (`docs/golive_checklist.md`)
 > Rà toàn bộ repo theo CLAUDE.md và lập checklist go-live: test nào chưa có, luật rủi ro nào chưa được thực thi, chỗ nào có thể gửi lệnh trùng, chỗ nào log lộ secret. Chưa sửa gì, chỉ báo cáo.
 
 ---

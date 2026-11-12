@@ -8,6 +8,7 @@ paths:
   # tính từ gốc repo.
   data_dir: data
   state_dir: state
+  log_dir: logs        # log JSON theo ngày (bot_YYYY-MM-DD.jsonl, record_YYYY-MM-DD.jsonl)
   # Thư mục data_warehouse của vnstock-dashboard (chỉ để import dữ liệu cũ).
   # Ví dụ Windows: C:/vnstock/data_warehouse
   dashboard_warehouse: null
@@ -18,6 +19,9 @@ contract:
   tick_size_points: 0.1
   daily_limit_pct: 7.0
   roll_days_before_expiry: 1          # N phiên CUỐI của F1M (gồm ngày đáo hạn) bot giao dịch F2M; 0 = không roll sớm
+  # Chiến lược cần lịch sử nhiều ngày: chênh lệch roll = TRUNG VỊ (giá HĐ mới − HĐ cũ) của K phút chung cuối
+  # ngày trước roll (core/continuous.py) — backtest và live dùng chung khoá này.
+  roll_gap_median_minutes: 15
 
 # Lịch phiên phái sinh (giờ Asia/Ho_Chi_Minh, HH:MM). KIỂM TRA LẠI theo
 # thông báo hiện hành của HNX trước khi chạy live.
@@ -31,44 +35,196 @@ session:
   close: "14:45"
 
 # Phí & thuế tính theo VNĐ / hợp đồng / MỘT CHIỀU (mở hoặc đóng).
-# Điền theo biểu phí của broker bạn dùng. Backtest từ chối chạy khi còn null.
+# Nguồn: "Biểu phí dịch vụ giao dịch chứng khoán phái sinh tại DNSE", áp dụng từ 01/05/2026 (người dùng gửi 09/11/2026).
+# Tổng một chiều ≈ 1.000 + 2.700 + 2.550 + 17.100 = 23.350đ/HĐ (≈ 0,23 điểm). KIỂM LẠI khi DNSE đổi biểu phí.
+# Không tính ở đây: phí quản lý tài sản ký quỹ VSDC 0,0024%/tháng (tối thiểu 100.000đ, tối đa 1.600.000đ/tháng/tài
+# khoản) và phí nộp/rút ký quỹ 11.000đ/lần — không theo hợp đồng.
 fees:
-  broker_fee_vnd_per_contract: null
-  exchange_fee_vnd_per_contract: null
-  clearing_fee_vnd_per_contract: null   # phí bù trừ VSDC — FAQ KRX của DNSE ghi 2.550đ/HĐ mỗi giao dịch; kiểm biểu phí hiện hành
-  tax_vnd_per_contract: null            # thuế TNCN theo quy định hiện hành (tính theo giá trị giao dịch nếu cần)
+  # Phí giao dịch DNSE: < 100 HĐ khớp/ngày ⇒ 1.000đ/HĐ/chiều (100–<1.000 HĐ: 800đ; bot giao dịch ít ⇒ bậc thấp nhất).
+  broker_fee_vnd_per_contract: 1000
+  # Phí DNSE thu hộ sở: HĐ tương lai chỉ số 2.700đ/HĐ.
+  exchange_fee_vnd_per_contract: 2700
+  # Phí DNSE thu hộ VSDC — dịch vụ bù trừ vị thế: 2.550đ/HĐ cho 1 chiều Mua/Bán.
+  clearing_fee_vnd_per_contract: 2550
+  # Thuế TNCN mỗi chiều = 0,1% × (số HĐ × giá × 100.000 × tỷ lệ ký quỹ ban đầu VSD) / 2; tỷ lệ ký quỹ 18,48%
+  # ⇒ ≈ 9,24đ × giá. Ước lượng cố định ở giá ~1.850 điểm (giá 1.700 ⇒ ~15.700đ, 2.000 ⇒ ~18.500đ).
+  # Cập nhật khi giá đi xa mức này hoặc tỷ lệ ký quỹ đổi.
+  tax_vnd_per_contract: 17100
 
 backtest:
   slippage_ticks: 1                     # trượt giá tối thiểu mỗi lần khớp
-  initial_capital_vnd: null
+  initial_capital_vnd: 100000000             # vốn tài khoản (VNĐ) ⇒ báo cáo thêm % lợi nhuận / % drawdown; null ⇒ chỉ VNĐ
+  # Dữ liệu không có bid/ask (bar, hoặc khớp lệnh tải từ DNSE): bid/ask giả = giá ∓ max(1, ⌈N/2⌉) bước
+  # (cả mua lẫn bán chịu nửa spread; N = 0 ⇒ bid = ask = giá). Đo lại spread thật khi có dữ liệu recorder.
+  synthetic_spread_ticks: 1
+
+# Paper broker (dùng chung cho backtest và paper trading). Độ trễ từ lúc gửi lệnh tới lúc lệnh
+# có thể khớp. KIỂM TRA LẠI bằng đo thực tế round-trip tới DNSE khi có API key.
+paper:
+  latency_ms: 300
+  latency_jitter_ms: 200                # cộng ngẫu nhiên [0, jitter] mỗi lệnh
+  seed: 0                               # cố định để backtest lặp lại được
+  # Paper dùng feed tổng hợp DNSE + SSI (như live: lệch giá / một feed im ⇒ ngừng mở vị thế)?
+  # true ⇒ cần SSI_API_KEY/SECRET và Telegram để nhập /otp ssi <mã> lúc khởi động. false ⇒ chỉ feed DNSE.
+  composite_feed: false
 
 risk:
   max_contracts: 1
-  max_daily_loss_points: null
-  max_trades_per_day: null
-  max_consecutive_losses: null
+  max_daily_loss_points: 15            # 1,5 triệu/HĐ ≈ 1,5% vốn 100 triệu (người dùng chọn 09/11/2026)
+  max_trades_per_day: 2
+  max_consecutive_losses: 2
   no_entry_open_minutes: 15             # không vào lệnh N phút đầu phiên liên tục sáng
   last_entry_time: "14:15"
   flatten_time: "14:25"                 # đóng hết trước ATC
   trade_on_expiry_day: false
   broker_timeout_seconds: 10
+  # Vị thế phải có lệnh stop (tag "stop") được broker XÁC NHẬN trong N giây sau khi khớp,
+  # quá hạn ⇒ risk_manager yêu cầu đóng vị thế. KIỂM TRA LẠI theo độ trễ thực tế của broker.
+  stop_grace_seconds: 5
+  # Đang có vị thế mà KHÔNG có dữ liệu thị trường quá N giây trong phiên liên tục ⇒ đóng hết bằng
+  # MTL (stop do bot giữ thì mất feed = stop mù). Nghỉ trưa không tính. Lệch giá DNSE/SSI chỉ chặn mở.
+  flatten_on_feed_silence_seconds: 30
+
+# Tham số chiến lược. Mỗi lần đổi cấu hình để thử ⇒ ghi một dòng vào research/log.md và tăng
+# --n-trials khi chạy backtest (CLAUDE.md mục 6). KHÔNG tối ưu trên toàn bộ dữ liệu.
+strategy:
+  orb:                                  # strategy/baseline_orb.py — phá biên độ đầu phiên
+    range_minutes: 15                   # biên = đỉnh/đáy N phút đầu phiên liên tục sáng
+    reward_risk: 1.5                    # chốt lời = 1.5 × khoảng cách tới stop (cạnh đối diện)
+    max_trades_per_day: 2
+    qty: 1
+    # Cấu hình #2 (research/orb_range_filter.md): chỉ giao dịch ngày có (đỉnh − đáy biên) / ADR trong
+    # [min_ratio, max_ratio]; ADR = biên độ ngày trung bình `adr_days` phiên trước (cần lịch sử nhiều ngày:
+    # backtest tự cấp; live/paper nạp từ live.history_bar_dirs). Giá trị CHỐT TRƯỚC khi xem dữ liệu.
+    range_filter:
+      enabled: false
+      adr_days: 10
+      min_ratio: 0.10
+      max_ratio: 0.60
+
+  # Cấu hình #3 — đà sáng → chiều (strategy/morning_momentum.py). ĐĂNG KÝ TRƯỚC 10/11/2026 (research/log.md):
+  # đổi bất kỳ số nào = cấu hình mới (thêm dòng log, tăng n_trials). Cần lịch sử adr_days phiên (như ORB #2).
+  morning_momentum:
+    adr_days: 10
+    min_move_adr: 0.25                  # |đóng 11:29 − mở 09:00| ≥ 0,25 × ADR ⇒ vào theo hướng lúc 13:01
+    stop_adr: 0.30                      # stop = đóng nến 13:00 ∓ 0,30 × ADR
+    exit_bar: "14:19"                   # nến 14:19 đóng (14:20) ⇒ thoát nếu còn vị thế
+    qty: 1
+
+  # Cấu hình #4 — ngày xu hướng (strategy/trend_day.py). ĐĂNG KÝ TRƯỚC 10/11/2026 (research/log.md).
+  trend_day:
+    adr_days: 10
+    min_move_adr: 0.35                  # |đóng 09:59 − mở 09:00| ≥ 0,35 × ADR ⇒ vào theo hướng lúc 10:00
+    stop_adr: 0.30                      # stop = đóng nến 09:59 ∓ 0,30 × ADR
+    decision_bar: "09:59"
+    exit_bar: "14:19"
+    qty: 1
+
+  # Cấu hình #5 — đảo chiều về VWAP (strategy/vwap_reversion.py). ĐĂNG KÝ TRƯỚC 10/11/2026 (research/log.md).
+  vwap_reversion:
+    adr_days: 10
+    entry_dev_adr: 0.40                 # |đóng − VWAP| ≥ 0,40 × ADR ⇒ vào ngược chiều, chốt lời = VWAP
+    stop_adr: 0.25                      # stop = đóng ± 0,25 × ADR (xa thêm về phía lệch)
+    window_start: "09:29"               # xét nến giờ mở 09:29 … 13:59 (bỏ nến đóng 11:30 — nghỉ trưa)
+    window_end: "13:59"
+    max_trades_per_day: 2
+    exit_bar: "14:19"
+    qty: 1
+
+  # Cấu hình #6 — lấp gap mở cửa (strategy/gap_fade.py). ĐĂNG KÝ TRƯỚC 12/11/2026 (research/log.md).
+  gap_fade:
+    adr_days: 10
+    min_gap_adr: 0.30                   # |đóng 09:15 − đóng phiên trước| ≥ 0,30 × ADR ⇒ vào NGƯỢC gap lúc 09:16
+    stop_adr: 0.30                      # stop = đóng 09:15 ± 0,30 × ADR (xa thêm về phía gap); TP = đóng phiên trước
+    decision_bar: "09:15"
+    exit_bar: "11:24"                   # còn vị thế khi nến 11:24 đóng ⇒ thoát 11:25 (trước nghỉ trưa)
+    qty: 1
+
+# Tải lịch sử DNSE tự động mỗi chiều (scripts/download_today.py, Task Scheduler ~15:30 — docs/runner.md).
+history_download:
+  not_before: "14:50"                   # trước giờ này (chạy bù buổi sáng) ⇒ chỉ tải tới phiên trước
+  catchup_days: 5                       # tải N phiên gần nhất tới hôm nay (file đã có bỏ qua ⇒ tự bù ngày máy tắt)
+  history_days: 10                      # kiểm lịch sử đủ N phiên cho phiên kế tiếp (= adr_days của chiến lược paper)
+
+# Ghi tick ra data/raw/YYYY-MM-DD/ (recorder/, scripts/record_today.py).
+recorder:
+  flush_seconds: 5                      # crash mất tối đa ngần này giây dữ liệu chưa ghi
+  max_buffer_rows: 5000                 # đệm đầy thì ghi ngay, không chờ đủ giờ
+  start: "08:30"
+  stop: "15:00"
+  notify_end_of_day: true               # gửi tóm tắt kiểm định dữ liệu lên Telegram kênh trading sau khi dừng ghi
+  watch_max_age_seconds: 180             # scripts/check_recorder.py: file mới nhất cũ hơn ngần này (phiên liên tục) ⇒ báo Telegram
+  # Ngày trước roll: ghi thêm HĐ kế tiếp (cùng kết nối) để đo chênh lệch back-adjust cho chiến lược nhiều ngày.
+  # TẮT tới khi `python scripts/dnse_feed_probe.py --krx <mã chính> <mã kế tiếp> --extra-contract <tên>` xác nhận
+  # server nhận đăng ký nhiều mã trong một message (docs/broker_notes.md §1.4 ❓). Chưa bật ⇒ dùng downloader.
+  record_next_contract_on_roll_eve: false
 
 feeds:
   primary: dnse
   backup: ssi
   feed_divergence_ticks: 3
   feed_stale_seconds: 5
+  switch_back_after_seconds: 30         # DNSE sống lại liên tục N giây mới chuyển về làm nguồn chính
 
 brokers:
+  # Live: broker chính + dự phòng, chọn trong dnse | ssi | tcbs (phải khác nhau). Dự phòng CHỈ đặt lệnh đối ứng
+  # khẩn cấp (CLAUDE.md mục 3). Feed tổng hợp luôn là DNSE + SSI dù broker là gì. tcbs ⇒ cần tcbs_enabled.
   primary: dnse
   backup: ssi
+  # TCBS = broker THỨ 3, tuỳ chọn. CLAUDE.md: chỉ bật sau khi DNSE + SSI chạy ổn định.
   tcbs_enabled: false
+  tcbs:                                 # brokers/tcbs.py — khoá + số tài khoản ở .env (TCBS_*)
+    base_url: https://openapi.tcbs.com.vn
+    # CHỈ đặt true sau khi chạy scripts/tcbs_trading_probe.py và đối chiếu ❓ ở docs/broker_notes.md §2b.
+    api_verified: false
+    request_timeout_seconds: 10
+    poll_seconds: 1
+    uncertain_resolve_seconds: 15       # tài liệu TCBS: không thấy theo refId ⇒ chờ 10–15s tra lại
+    # Stop ĐIỀU KIỆN phía TCBS (SOU/SOL) thay cho stop do bot giữ: sống sót khi bot/feed chết, nhưng nhiều ❓
+    # (broker_notes §2b — thời hạn hiệu lực, liên kết lệnh kích hoạt). Chỉ bật sau khi thử với KL nhỏ.
+    broker_side_stops: false
+  dnse:                                 # brokers/dnse.py — số tiểu khoản đặt ở .env (DNSE_ACCOUNT_NO)
+    base_url: https://openapi.dnse.com.vn   # Sandbox (key riêng, tiền ảo): https://sb-openapi.dnse.com.vn — DNSE không cấp UAT
+    api_version: "2026-07-23"           # header `version` (SDK chính thức dnse-sdk-openapi 2.4.1)
+    # Gói vay phái sinh: GET /accounts/{tiểu khoản}/loan-packages?marketType=DERIVATIVE
+    # Probe 09/11/2026: id=1306 "Gói giao dịch 01", initialRate 0.1848 (= tỷ lệ ký quỹ 18,48% trong biểu phí).
+    loan_package_id: 1306
+    otp_type: email_otp                 # OTP nhập tay qua Telegram: /otp <mã>
+    # Thời hạn trading token = 8 giờ ✅✅ (trang Xác thực developers.dnse.com.vn + SDK 2.4.1 TTL_SECONDS, 12/11/2026)
+    trading_token_ttl_seconds: 28800
+    token_renew_before_seconds: 300     # xin OTP mới trước khi token hết hạn
+    otp_resend_seconds: 120             # không xin OTP dồn dập
+    # CHỈ đặt true sau khi chạy scripts/dnse_trading_probe.py (đọc + Sandbox đặt/huỷ thử) và đã đối
+    # chiếu các mục ❓ ở docs/broker_notes.md §1.5. false ⇒ adapter từ chối mọi lệnh thật ở production.
+    api_verified: false
+    request_timeout_seconds: 10
+    poll_seconds: 1                     # chu kỳ đọc sổ lệnh (khớp lệnh) — hạn mức rate limit ❓
+    uncertain_resolve_seconds: 15       # lệnh "không rõ" (timeout/5xx) không thấy trong sổ sau N giây ⇒ REJECTED
+  ssi:                                  # brokers/ssi.py — dự phòng; khoá ở .env (SSI_CLIENT_ID/API_KEY/API_SECRET/PRIVATE_KEY_PATH/ACCOUNT)
+    base_url: https://api.ssi.com.vn
+    stream_url: wss://stream.ssi.com.vn/ws/v3
+    # Mã hợp đồng SSI nhận khi ĐẶT LỆNH: krx (41I1GB000) hay name (VN30F2611) — ❓ broker_notes §2.3;
+    # scripts/ssi_trading_probe.py in mã masterdata trả về. null ⇒ không chạy live.
+    order_symbol_format: null
+    # Loại lệnh thị trường cho phái sinh: MTL hay MP (SDK: MTL = HOSE, MP = HNX) — ❓. null ⇒ không chạy live.
+    market_order_type: null
+    # CHỈ đặt true sau khi chạy scripts/ssi_trading_probe.py và đối chiếu ❓ ở docs/broker_notes.md §2.6.
+    api_verified: false
+    request_timeout_seconds: 10
+    poll_seconds: 1                     # đọc sổ lệnh REST (stream TRADING chỉ để nhanh hơn)
+    uncertain_resolve_seconds: 15       # không thấy clientRequestId trong sổ sau N giây ⇒ REJECTED
 
 live:
   # Hostname DUY NHẤT được chạy bot (Windows: biến COMPUTERNAME). Máy khác từ chối khởi động
   # ⇒ không bao giờ có hai máy cùng đặt lệnh. Xem CLAUDE.md mục 3b.
-  allowed_machine: null
+  allowed_machine: CFA-BINHLD-LT          # laptop (10/11/2026); Desktop chỉ backtest/tải dữ liệu
   lock_stale_after_seconds: 120
+  # Live: sau khi kết nối, chờ /otp <broker> <mã> cho DNSE + SSI tối đa N giây; quá ⇒ thoát, không giao dịch.
+  otp_wait_seconds: 600
+  # Chiến lược cần lịch sử nhiều ngày (`history_days > 0`): runner nạp bar 1 phút các phiên trước từ các thư mục
+  # này (tương đối gốc repo; trùng ⇒ thư mục đứng trước thắng). Thiếu phiên / thiếu HĐ kế tiếp ngày trước roll
+  # ⇒ runner KHÔNG giao dịch (live/history.py). null ⇒ từ chối chiến lược cần lịch sử.
+  history_bar_dirs: [data/history/ohlc1m, data/bars]
 
 monitoring:
   heartbeat_seconds: 30

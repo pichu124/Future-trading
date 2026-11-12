@@ -9,7 +9,7 @@ Quy ước:
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Optional
 
@@ -31,6 +31,10 @@ class OrderType(str, Enum):
     MARKET = "MTL"   # tên loại lệnh thị trường khác nhau theo broker — adapter tự map
     ATO = "ATO"
     ATC = "ATC"
+    # Stop thị trường: giá chạm `price` (giá kích hoạt) thì thành MTL. DNSE/SSI KHÔNG có loại lệnh
+    # này trong API lệnh thường (docs/broker_notes.md) ⇒ adapter thật phải tự giả lập; paper
+    # broker mô phỏng trực tiếp.
+    STOP = "STOP"
 
 
 # SSI FastConnect V3: client_request_id ≤ 20 ký tự, trùng trong ngày bị từ chối (HTTP 409).
@@ -58,7 +62,7 @@ class SignalAction(str, Enum):
     HOLD = "HOLD"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)      # slots: backtest giữ hàng chục triệu tick trong RAM
 class Tick:
     """Một sự kiện thị trường đã chuẩn hoá từ bất kỳ feed nào."""
     symbol: str                      # tên hợp đồng chuẩn VN30FYYMM
@@ -106,9 +110,32 @@ class Signal:
     ts: datetime
     symbol: str
     stop_loss: Optional[float] = None     # bắt buộc với ENTER_* (risk manager kiểm)
-    take_profit: Optional[float] = None
+    take_profit: Optional[float] = None   # MỘT mức chốt lời cho toàn bộ KL
     reason: str = ""
     qty: int = 1
+    # Chốt lời từng phần: ((giá, KL), …) — mỗi mức một lệnh LO; tổng KL ≤ qty, phần dư (runner) chạy tới stop/EXIT.
+    # Không dùng chung với `take_profit`.
+    take_profits: tuple = ()
+    breakeven_after_first_tp: bool = False   # mức chốt lời đầu tiên khớp ⇒ dời stop về giá vốn
+
+    def __post_init__(self) -> None:
+        if not self.take_profits:
+            return
+        if self.take_profit is not None:
+            raise ValueError("Dùng take_profit HOẶC take_profits, không dùng cả hai")
+        total = 0
+        for leg in self.take_profits:
+            try:
+                px, q = leg
+            except (TypeError, ValueError):
+                raise ValueError(f"Mức chốt lời phải là (giá, KL), nhận {leg!r}") from None
+            if isinstance(q, bool) or not isinstance(q, int) or q < 1:
+                raise ValueError(f"KL mức chốt lời phải là số nguyên ≥ 1, nhận {q!r}")
+            if isinstance(px, bool) or not isinstance(px, (int, float)) or px <= 0:
+                raise ValueError(f"Giá mức chốt lời phải > 0, nhận {px!r}")
+            total += q
+        if total > self.qty:
+            raise ValueError(f"Tổng KL các mức chốt lời ({total}) > qty ({self.qty})")
 
 
 @dataclass(frozen=True)
@@ -125,6 +152,10 @@ class Order:
     broker_order_id: Optional[str] = None
     filled_qty: int = 0
     tag: str = ""                    # "entry" | "stop" | "take_profit" | "flatten" | "emergency"
+    # Giá stop-loss bảo vệ, BẮT BUỘC với lệnh mở vị thế (risk_manager kiểm, CLAUDE.md mục 5).
+    # Lệnh stop thật được đặt riêng (tag "stop") ngay sau khi lệnh vào khớp.
+    stop_loss: Optional[float] = None
+    reject_reason: str = ""          # broker điền khi status = REJECTED
 
     def __post_init__(self) -> None:
         if not self.client_order_id or len(self.client_order_id) > MAX_CLIENT_ORDER_ID_LEN:
@@ -133,6 +164,8 @@ class Order:
             raise ValueError("qty phải > 0")
         if self.order_type is OrderType.LIMIT and self.price is None:
             raise ValueError("Lệnh LO phải có giá")
+        if self.order_type is OrderType.STOP and self.price is None:
+            raise ValueError("Lệnh STOP phải có giá kích hoạt")
         if not 0 <= self.filled_qty <= self.qty:
             raise ValueError("filled_qty ngoài [0, qty]")
 
@@ -195,12 +228,30 @@ class Position:
 
 @dataclass
 class AccountState:
-    """Ảnh chụp trạng thái cho risk manager. Có thể thay đổi (runner cập nhật)."""
+    """Trạng thái tài khoản cho risk manager. Có thể thay đổi.
+
+    Runner cập nhật `last_prices`, `broker_last_seen`, `feed_healthy`; còn vị thế, lệnh chờ và
+    bộ đếm trong ngày do `RiskManager.record_fill / on_order_update / new_day` ghi để mọi luật
+    dùng chung một sổ sách.
+    """
     positions: dict[str, Position] = field(default_factory=dict)   # key = f"{broker}:{symbol}"
     trades_today: int = 0
     consecutive_losses: int = 0
-    realized_points_today: float = 0.0
+    realized_points_today: float = 0.0       # điểm × số HĐ, chưa trừ phí
+    fees_points_today: float = 0.0           # phí quy ra điểm (fee_vnd / hệ số nhân)
     locked_for_day: bool = False
+    trading_day: Optional[date] = None       # ngày của các bộ đếm trên; lệch ngày ⇒ cấm mở vị thế
+    working_orders: dict[str, Order] = field(default_factory=dict)  # client_order_id → lệnh còn sống
+    approved_order_ids: set[str] = field(default_factory=set)       # id đã duyệt trong ngày
+    last_prices: dict[str, float] = field(default_factory=dict)     # symbol → giá đánh dấu
+    broker_last_seen: dict[str, datetime] = field(default_factory=dict)  # broker → lần cuối còn sống
+    feed_healthy: bool = True                # composite feed: lệch giá / im lặng ⇒ False
+    market_data_at: Optional[datetime] = None  # lần cuối có dữ liệu thị trường (runner/engine ghi)
+    kill_reason: Optional[str] = None        # đặt bởi kill-switch; chỉ xoá bằng tay
+    emergency_reason: Optional[str] = None   # quy trình khẩn cấp (broker chính mất kết nối); xoá bằng tay
+    round_trip_points: dict[str, float] = field(default_factory=dict)  # symbol → lãi/lỗ lượt đang mở
+    unprotected_since: dict[str, datetime] = field(default_factory=dict)  # symbol → lúc mất stop
+    unwinding: set[str] = field(default_factory=set)  # symbol đang gỡ hedge dở (fill không tính là lượt)
 
     def net_qty(self, symbol: str) -> int:
         """Vị thế ròng của một hợp đồng cộng trên MỌI broker (CLAUDE.md mục 3)."""

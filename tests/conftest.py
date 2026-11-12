@@ -33,3 +33,9 @@ def session_cfg() -> dict:
         "atc_start": "14:30",
         "close": "14:45",
     }
+
+
+@pytest.fixture(autouse=True)
+def _no_repo_logs(monkeypatch):
+    """`live.runner.main()` cài log JSONL vào logs/ của repo — test không được ghi vào đó."""
+    monkeypatch.setattr("live.runner.setup_logging", lambda *a, **k: None)
