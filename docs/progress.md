@@ -1,5 +1,12 @@
 # Tiến độ
 
+## 2026-11-12 — Hạ tầng: canh recorder từ bên ngoài (`scripts/check_recorder.py`)
+
+- Người dùng chọn tạm dừng tìm chiến lược, chuyển sang hạ tầng. Việc đầu: sự cố sáng nay (task recorder bị chặn khi laptop chạy pin, không ai biết tới 09:10).
+- `scripts/check_recorder.py`: trong phiên LIÊN TỤC, `data/raw/<hôm nay>` không có parquet hoặc file mới nhất cũ hơn `recorder.watch_max_age_seconds` (180 s; sát 09:00/13:00 tính từ giờ mở phiên) ⇒ Telegram `trading` + thoát 1; ngày nghỉ / ngoài phiên ⇒ im lặng, thoát 0; `--notify-ok` để thử kênh. Lỗi Telegram ⇒ log, vẫn thoát 1.
+- `tests/test_check_recorder.py` (18 test, viết trước); đột biến 6/6 bị bắt. `docs/recorder_windows.md` §2b: lệnh PowerShell tạo task "VN30F Recorder Watch" (09:10→14:10 mỗi 30′, `pythonw.exe`).
+- Rủi ro/giả định: dựa vào mtime file (đồng hồ máy đúng); laptop ngủ/tắt thì task canh cũng không chạy (StartWhenAvailable chạy bù khi bật lại); mất mạng ⇒ không gửi được Telegram.
+
 ## 2026-11-12 — Chiến lược #6 lấp gap mở cửa: KHÔNG CÓ EDGE ở cổng IS (dừng, không mở OOS)
 
 - Đăng ký trước trong `research/log.md` (n_trials = 6), `config/settings.yaml` `strategy.gap_fade`.

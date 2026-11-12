@@ -66,6 +66,36 @@ powercfg /setactive SCHEME_CURRENT
 Và tắt chế độ ngủ trong giờ giao dịch (Control Panel → Power Options → *Put the computer to sleep*:
 **Never**, hoặc ít nhất lớn hơn 7 tiếng).
 
+## 2b. Task canh recorder — báo Telegram khi không ghi (thêm 12/11/2026)
+
+Recorder không tự báo được khi nó KHÔNG chạy (12/11/2026: task bị Windows chặn vì laptop chạy pin, không ai
+biết). `scripts/check_recorder.py` chạy riêng, mỗi 30′ trong giờ giao dịch: trong phiên liên tục mà
+`data/raw/<hôm nay>` không có file, hoặc file mới nhất cũ hơn `recorder.watch_max_age_seconds` (180 s) ⇒ gửi
+⚠️ lên Telegram kênh `trading` (cần `TELEGRAM_TRADING_*` trong `.env`). Ngoài phiên liên tục / ngày nghỉ ⇒ im lặng.
+
+Thử kênh trước (trong giờ giao dịch, đang có recorder ⇒ nhận "✅ Recorder đang ghi"):
+
+```bat
+.venv\Scripts\python.exe scripts\check_recorder.py --notify-ok
+```
+
+Tạo task (PowerShell **Run as administrator**, sửa đường dẫn nếu repo không ở `D:\Future-trading`) — chạy
+09:10, 09:40, …, 14:10 các ngày T2–T6; `pythonw.exe` để không bật cửa sổ đen mỗi 30′:
+
+```powershell
+$repo = "D:\Future-trading"
+$act = New-ScheduledTaskAction -Execute "$repo\.venv\Scripts\pythonw.exe" -Argument "`"$repo\scripts\check_recorder.py`"" -WorkingDirectory $repo
+$trg = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At 09:10
+$trg.Repetition = (New-ScheduledTaskTrigger -Once -At 09:10 -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration (New-TimeSpan -Hours 5)).Repetition
+$set = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName "VN30F Recorder Watch" -Action $act -Trigger $trg -Settings $set -Force
+Start-ScheduledTask -TaskName "VN30F Recorder Watch"; Start-Sleep 10
+Get-ScheduledTaskInfo -TaskName "VN30F Recorder Watch" | Select LastRunTime, LastTaskResult, NextRunTime
+```
+
+`LastTaskResult`: `0` = recorder ổn (hoặc ngoài giờ), `1` = đã báo Telegram. Recorder chết lúc nghỉ trưa ⇒ báo ở
+lần 13:10. Chỉ báo khi có vấn đề ⇒ hỏng kéo dài thì nhận tin mỗi 30′ tới khi sửa.
+
 ## 3. Kiểm tra hằng ngày
 
 - Task Scheduler → *Last Run Result*:
