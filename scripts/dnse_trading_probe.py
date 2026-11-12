@@ -36,7 +36,7 @@ from typing import Any, Callable, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from brokers.dnse import (BASE_URL_UAT, MARKET_TYPE, ORDER_PARAMS, DnseBroker,  # noqa: E402
-                          DnseConfig, DnseHttp, _requests_transport, build_place_payload, to_krx)
+                          DnseConfig, DnseHttp, DnseTransportError, _requests_transport, build_place_payload, to_krx)
 from core.models import Order, OrderType, Side  # noqa: E402
 
 REDACT_KEYS = ("passcode", "tradingToken", "trading_token", "token", "accessToken", "refreshToken")
@@ -259,6 +259,12 @@ def main(argv=None) -> int:
                                     live_flag=args.live, notify=print)
                 asyncio.run(order_test(broker, symbol, price, with_modify=args.with_modify,
                                        read_otp=lambda: getpass.getpass("OTP trong email: ")))
+    except DnseTransportError as exc:
+        host = urllib.parse.urlsplit(cfg.base_url).hostname
+        print(f"❌ Không kết nối được {host}: {exc}\n"
+              "   Máy chủ không trả lời (timeout / bị chặn) — không phải lỗi khoá. Kiểm: "
+              f"Test-NetConnection {host} -Port 443 ; Resolve-DnsName {host}")
+        code = 2
     finally:
         summary = summarize(rec.records)
         (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")

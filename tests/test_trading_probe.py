@@ -64,3 +64,25 @@ def test_order_test_place_modify_cancel_on_fake_uat(tmp_path):
 def test_order_test_refused_outside_uat(capsys):
     assert main(["--order-test"]) == 2
     assert "UAT" in capsys.readouterr().out
+
+
+def test_unreachable_host_exits_2_with_clear_message(monkeypatch, tmp_path, capsys):
+    """12/11/2026: openapi-uat.dnse.com.vn timeout từ laptop ⇒ trước đây văng traceback dài; nay báo gọn, thoát 2,
+    vẫn ghi summary.json."""
+    import scripts.dnse_trading_probe as P
+    from core.settings import Settings, load_settings
+    base = load_settings()
+    data = {**base._data, "paths": {**base._data["paths"], "data_dir": str(tmp_path)}}
+    monkeypatch.setattr("core.settings.load_settings", lambda *a, **k: Settings(data))
+    monkeypatch.setenv("DNSE_API_KEY", "k")
+    monkeypatch.setenv("DNSE_API_SECRET", "s")
+
+    def dead(timeout_default):
+        async def transport(*a, **k):
+            raise TimeoutError("Connection to openapi-uat.dnse.com.vn timed out")
+        return transport
+    monkeypatch.setattr(P, "_requests_transport", dead)
+    assert P.main(["--uat"]) == 2
+    out = capsys.readouterr().out
+    assert "Không kết nối được" in out and "openapi-uat.dnse.com.vn" in out and "Traceback" not in out
+    assert list(tmp_path.glob("probe/dnse_trading_*/summary.json"))

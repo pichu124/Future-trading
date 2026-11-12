@@ -1,5 +1,10 @@
 # Tiến độ
 
+## 2026-11-12 — UAT DNSE: không kết nối được; probe báo lỗi gọn
+
+- `dnse_trading_probe.py --uat` trên laptop: `openapi-uat.dnse.com.vn:443` ConnectTimeout ⇒ chưa thử đặt lệnh được; chờ DNSE trả lời (broker_notes §1.2).
+- Probe: lỗi kết nối (`DnseTransportError`) ⇒ in "❌ Không kết nối được <host>" + lệnh kiểm `Test-NetConnection`/`Resolve-DnsName`, thoát 2, vẫn ghi `summary.json` (trước: traceback dài). Test `test_unreachable_host_exits_2_with_clear_message` viết trước.
+
 ## 2026-11-12 — Hạ tầng: tự khởi động paper runner 08:40 (Task Scheduler)
 
 - Không cần code mới: runner đã thoát 0 ngày nghỉ, chờ trước giờ mở (feed chỉ bị coi im lặng trong phiên liên tục), tự thoát sau 14:45 kèm báo cáo; lịch sử thiếu ⇒ 🚨 Telegram + thoát 2.
