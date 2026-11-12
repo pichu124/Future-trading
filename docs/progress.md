@@ -1,5 +1,14 @@
 # Tiến độ
 
+## 2026-11-12 — DNSE: Sandbox + sửa adapter theo SDK chính thức 2.4.1 / tài liệu
+
+- DNSE trả lời: không có UAT cho khách hàng, dùng Sandbox (`sb-openapi.dnse.com.vn`, key riêng, OTP 666666, token 8 giờ, lệnh tự khớp). Đọc trang Sandbox, Xác thực, place-order và mã nguồn `dnse-sdk-openapi` 2.4.1 (thêm `developers.dnse.com.vn` vào mạng của môi trường cloud).
+- **Sửa lỗi adapter** `brokers/dnse.py`: đặt lệnh `POST /accounts/{accountNo}/orders` (trước: `/accounts/orders` theo SDK cũ — lệnh thật sẽ hỏng); body bỏ `accountNo`, MTL bỏ `price`; gửi header `version` (`brokers.dnse.api_version`, mặc định 2026-07-23); nhận token cả `tradingToken` lẫn `trading-token`; `BASE_URL_SANDBOX` được coi là môi trường thử (như UAT). `live/wiring.py` truyền `api_version`.
+- `config/settings.yaml`: `trading_token_ttl_seconds: 28800` (✅✅ tài liệu + SDK), `api_version`. `.env.example`: `DNSE_SANDBOX_API_KEY/SECRET/ACCOUNT_NO`.
+- `scripts/dnse_trading_probe.py --sandbox`: key `DNSE_SANDBOX_*` (không bao giờ lấy key/tài khoản production), OTP 666666 tự điền, gói vay lấy từ `/loan-packages` Sandbox, `--order-test` cho Sandbox/UAT (production vẫn bị từ chối), Sandbox tự khớp ⇒ đặt lệnh đối ứng để phẳng.
+- Test viết trước (adapter: Sandbox, header version, token có gạch nối, body; probe: key/tài khoản Sandbox, OTP, đối ứng); đột biến 9/9 bị bắt (một đột biến sống lúc đầu ⇒ thêm test tài khoản).
+- Rủi ro/giả định: MTL không có `price` và `quantity` khi sửa lệnh khớp một phần còn ❓ (kiểm trên Sandbox); Sandbox là mô phỏng — không chứng minh hành vi khớp thật. Lệnh STOP/OCO phía sàn có cho phái sinh ⇒ cân nhắc module riêng.
+
 ## 2026-11-12 — UAT DNSE: không kết nối được; probe báo lỗi gọn
 
 - `dnse_trading_probe.py --uat` trên laptop: `openapi-uat.dnse.com.vn:443` ConnectTimeout ⇒ chưa thử đặt lệnh được; chờ DNSE trả lời (broker_notes §1.2).

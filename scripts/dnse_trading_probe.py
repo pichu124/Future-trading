@@ -35,11 +35,13 @@ from typing import Any, Callable, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from brokers.dnse import (BASE_URL_UAT, MARKET_TYPE, ORDER_PARAMS, DnseBroker,  # noqa: E402
+from brokers.dnse import (BASE_URL_SANDBOX, BASE_URL_UAT, MARKET_TYPE, ORDER_PARAMS, TEST_BASE_URLS,  # noqa: E402
+                          DnseBroker,
                           DnseConfig, DnseHttp, DnseTransportError, _requests_transport, build_place_payload, to_krx)
 from core.models import Order, OrderType, Side  # noqa: E402
 
-REDACT_KEYS = ("passcode", "tradingToken", "trading_token", "token", "accessToken", "refreshToken")
+REDACT_KEYS = ("passcode", "tradingToken", "trading-token", "trading_token", "token", "accessToken", "refreshToken")
+SANDBOX_OTP = "666666"          # developers.dnse.com.vn/docs/guide/sandbox: OTP mô phỏng, không gửi mã thật
 
 
 def redact(obj: Any) -> Any:
@@ -167,8 +169,9 @@ async def read_only(http: DnseHttp, account: Optional[str], krx: str) -> Optiona
 
 
 async def order_test(broker: DnseBroker, symbol: str, price: float, *, with_modify: bool,
-                     read_otp: Callable[[], str], sleep=asyncio.sleep, polls: int = 5) -> None:
-    """UAT: đặt 1 LO giá sàn → [sửa] → huỷ; đọc sổ lệnh sau mỗi bước để thấy chuỗi trạng thái."""
+                     read_otp: Callable[[], str], sleep=asyncio.sleep, polls: int = 5, flatten: bool = False) -> None:
+    """Môi trường thử (Sandbox/UAT): đặt 1 LO → [sửa] → huỷ; đọc sổ lệnh sau mỗi bước để thấy chuỗi trạng thái.
+    `flatten`: Sandbox tự khớp lệnh (PendingNew → New → PartiallyFilled → Filled) ⇒ còn vị thế thì đặt lệnh đối ứng."""
     await broker.connect()
     if not broker.token_valid():
         if not await broker.submit_otp(read_otp()):
@@ -176,24 +179,47 @@ async def order_test(broker: DnseBroker, symbol: str, price: float, *, with_modi
     o = Order("PROBE" + datetime.now().strftime("%H%M%S"), symbol, Side.BUY, 1, OrderType.LIMIT,
               datetime.now(), price=price, tag="probe")
 
-    async def watch(label):
+    async def watch(label, cid):
         for _ in range(polls):
             await sleep(1)
             await broker.sync()
-        cur = broker.order(o.client_order_id)
+        cur = broker.order(cid)
         print(f"{label}: {cur.status.value} orderId={cur.broker_order_id} khớp={cur.filled_qty}")
+        return cur
 
     placed = await broker.place(o)
     print(f"đặt: {placed.status.value} orderId={placed.broker_order_id} {placed.reject_reason}")
     if placed.status.is_terminal:
         return
-    await watch("sau đặt")
-    if with_modify:
+    cur = await watch("sau đặt", o.client_order_id)
+    if with_modify and not cur.status.is_terminal:
         m = await broker.modify(o.client_order_id, price=round(price + broker.config.tick_size, 1))
         print(f"sửa: orderId {placed.broker_order_id} → {m.broker_order_id}")
-        await watch("sau sửa")
-    await broker.cancel(o.client_order_id)
-    await watch("sau huỷ")
+        cur = await watch("sau sửa", o.client_order_id)
+    if not cur.status.is_terminal:
+        await broker.cancel(o.client_order_id)
+        await watch("sau huỷ", o.client_order_id)
+    if flatten:
+        pos = (await broker.positions()).get(symbol)
+        print(f"vị thế sau test: {pos.qty if pos else 0}")
+        if pos and pos.qty:
+            side = Side.SELL if pos.qty > 0 else Side.BUY
+            back = Order("PROBEX" + datetime.now().strftime("%H%M%S"), symbol, side, abs(pos.qty), OrderType.LIMIT,
+                         datetime.now(), price=price, tag="probe")
+            b = await broker.place(back)
+            print(f"đối ứng {side.value} {abs(pos.qty)}: {b.status.value} orderId={b.broker_order_id}")
+            if not b.status.is_terminal:
+                await watch("sau đối ứng", back.client_order_id)
+
+
+def _first_loan_package(records: list[dict]) -> Optional[int]:
+    """loanPackageId đầu tiên từ GET …/loan-packages đã ghi (Sandbox có gói vay riêng, khác production)."""
+    for r in reversed(records):
+        if r["path"].endswith("/loan-packages") and isinstance(r.get("body"), dict):
+            for p in r["body"].get("loanPackages") or []:
+                if isinstance(p, dict) and p.get("id") is not None:
+                    return int(p["id"])
+    return None
 
 
 def _floor_price(body: Any) -> Optional[float]:
@@ -212,8 +238,10 @@ def main(argv=None) -> int:
 
     ap = argparse.ArgumentParser(description="Thăm dò API giao dịch DNSE (P4.1)")
     ap.add_argument("--payload-only", action="store_true", help="chỉ in payload, không gọi mạng")
-    ap.add_argument("--uat", action="store_true", help=f"dùng {BASE_URL_UAT}")
-    ap.add_argument("--order-test", action="store_true", help="UAT: đặt/sửa/huỷ thử 1 lệnh LO giá sàn")
+    ap.add_argument("--uat", action="store_true", help=f"dùng {BASE_URL_UAT} (DNSE không cấp cho khách hàng)")
+    ap.add_argument("--sandbox", action="store_true",
+                    help=f"dùng Sandbox {BASE_URL_SANDBOX} với DNSE_SANDBOX_API_KEY/SECRET (tiền ảo, OTP {SANDBOX_OTP})")
+    ap.add_argument("--order-test", action="store_true", help="Sandbox/UAT: đặt/sửa/huỷ thử 1 lệnh LO")
     ap.add_argument("--with-modify", action="store_true")
     ap.add_argument("--live", action="store_true", help="cờ --live (cùng TRADING_MODE=live) cho lệnh UAT")
     ap.add_argument("--price", type=float, help="giá LO thử (mặc định: giá sàn từ secdef)")
@@ -225,8 +253,14 @@ def main(argv=None) -> int:
         pass
     settings = load_settings()
     cfg = DnseConfig.from_settings(settings, live=False)
+    if args.uat and args.sandbox:
+        print("❌ Chọn MỘT trong --uat / --sandbox")
+        return 2
     if args.uat:
         cfg = replace(cfg, base_url=BASE_URL_UAT)
+    if args.sandbox:      # tài khoản Sandbox khác production — không dùng DNSE_ACCOUNT_NO
+        cfg = replace(cfg, base_url=BASE_URL_SANDBOX, account_no=os.environ.get("DNSE_SANDBOX_ACCOUNT_NO") or None,
+                      loan_package_id=None)
     today = datetime.now(VN_TZ).date()
     symbol = contracts.trading_contract(today, TradingCalendar.default(),
                                         int(settings.get("contract.roll_days_before_expiry", 1)))
@@ -234,22 +268,26 @@ def main(argv=None) -> int:
     if args.payload_only:
         print(json.dumps(sample_payloads(cfg, symbol), ensure_ascii=False, indent=1))
         return 0
-    if args.order_test and cfg.base_url != BASE_URL_UAT:
-        print("❌ --order-test chỉ chạy trên UAT (thêm --uat). Production không bao giờ đặt lệnh thử.")
+    if args.order_test and cfg.base_url not in TEST_BASE_URLS:
+        print("❌ --order-test chỉ chạy trên Sandbox (thêm --sandbox). Production không bao giờ đặt lệnh thử.")
         return 2
-    key, secret = os.environ.get("DNSE_API_KEY"), os.environ.get("DNSE_API_SECRET")
-    if not key or not secret:
-        print("❌ Thiếu DNSE_API_KEY / DNSE_API_SECRET trong .env")
+    kv = ("DNSE_SANDBOX_API_KEY", "DNSE_SANDBOX_API_SECRET") if args.sandbox else ("DNSE_API_KEY", "DNSE_API_SECRET")
+    key, secret = os.environ.get(kv[0]), os.environ.get(kv[1])
+    if not key or not secret:     # Sandbox KHÔNG BAO GIỜ lấy key production (và ngược lại)
+        print(f"❌ Thiếu {kv[0]} / {kv[1]} trong .env")
         return 2
     out = settings.path("paths.data_dir") / "probe" / f"dnse_trading_{datetime.now():%Y%m%d_%H%M%S}"
     rec = RecordingTransport(_requests_transport(cfg.timeout_s), out)
-    http = DnseHttp(key, secret, base_url=cfg.base_url, timeout=cfg.timeout_s, transport=rec)
+    http = DnseHttp(key, secret, base_url=cfg.base_url, timeout=cfg.timeout_s, transport=rec,
+                    api_version=cfg.api_version)
     print(f"Base URL: {cfg.base_url} · hợp đồng {symbol} ({krx})")
     code = 0
     try:
         acc = asyncio.run(read_only(http, cfg.account_no, krx))
         if args.order_test and acc:
             secdef = next((r.get("body") for r in reversed(rec.records) if r["path"].endswith("/secdef")), None)
+            if cfg.loan_package_id is None:
+                cfg = replace(cfg, loan_package_id=_first_loan_package(rec.records))
             price = args.price or _floor_price(secdef)
             if price is None:
                 print("❌ Không đọc được giá sàn từ secdef — truyền --price")
@@ -257,8 +295,9 @@ def main(argv=None) -> int:
             else:
                 broker = DnseBroker(http, replace(cfg, account_no=acc), clock=SystemClock(),
                                     live_flag=args.live, notify=print)
+                read_otp = (lambda: SANDBOX_OTP) if args.sandbox else (lambda: getpass.getpass("OTP trong email: "))
                 asyncio.run(order_test(broker, symbol, price, with_modify=args.with_modify,
-                                       read_otp=lambda: getpass.getpass("OTP trong email: ")))
+                                       read_otp=read_otp, flatten=args.sandbox))
     except DnseTransportError as exc:
         host = urllib.parse.urlsplit(cfg.base_url).hostname
         print(f"❌ Không kết nối được {host}: {exc}\n"

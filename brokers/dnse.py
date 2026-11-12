@@ -56,7 +56,10 @@ from core.settings import MissingSetting, Settings
 log = logging.getLogger(__name__)
 
 BASE_URL_PROD = "https://openapi.dnse.com.vn"
-BASE_URL_UAT = "https://openapi-uat.dnse.com.vn"
+BASE_URL_UAT = "https://openapi-uat.dnse.com.vn"          # DNSE: KHÔNG cấp UAT cho khách hàng (12/11/2026)
+BASE_URL_SANDBOX = "https://sb-openapi.dnse.com.vn"       # Sandbox: key riêng, tiền ảo (docs/guide/sandbox)
+TEST_BASE_URLS = frozenset({BASE_URL_UAT, BASE_URL_SANDBOX})
+DEFAULT_API_VERSION = "2026-07-23"                        # header `version` — SDK dnse-sdk-openapi 2.4.1
 MARKET_TYPE = "DERIVATIVE"
 ORDER_CATEGORY = "NORMAL"
 ORDER_PARAMS = {"marketType": MARKET_TYPE, "orderCategory": ORDER_CATEGORY}
@@ -169,12 +172,14 @@ class DnseHttp:
     """Client REST ký HMAC. MỘT request = MỘT lần gửi: không retry 429/5xx/timeout."""
 
     def __init__(self, api_key: str, api_secret: str, base_url: str = BASE_URL_PROD,
-                 timeout: float = 10.0, transport: Optional[Transport] = None):
+                 timeout: float = 10.0, transport: Optional[Transport] = None,
+                 api_version: str = DEFAULT_API_VERSION):
         if not api_key or not api_secret:
             raise ValueError("Thiếu DNSE api_key/api_secret")
         self._key, self._secret = api_key, api_secret
         self.base_url = base_url.rstrip("/")
         self.timeout = float(timeout)
+        self.api_version = str(api_version)
         self._transport = transport or _requests_transport(self.timeout)
 
     def __repr__(self) -> str:
@@ -184,6 +189,7 @@ class DnseHttp:
                       json_body: Optional[dict] = None, trading_token: Optional[str] = None) -> DnseResponse:
         method = method.upper()
         headers = sign_headers(method, path, self._key, self._secret)
+        headers["version"] = self.api_version           # SDK 2.4.1 gửi ở mọi request (không nằm trong chữ ký)
         if trading_token:
             headers["trading-token"] = trading_token
         try:
@@ -219,10 +225,11 @@ class DnseConfig:
     fee_vnd_per_contract: float = 0.0
     tick_size: float = 0.1
     positions_page_size: int = 100
+    api_version: str = DEFAULT_API_VERSION
 
     @property
     def is_production(self) -> bool:
-        return self.base_url.rstrip("/") != BASE_URL_UAT
+        return self.base_url.rstrip("/") not in TEST_BASE_URLS
 
     @classmethod
     def from_settings(cls, s: Settings, env: Optional[Mapping[str, str]] = None, *,
@@ -242,7 +249,7 @@ class DnseConfig:
             loan = s.require("brokers.dnse.loan_package_id")
             ttl = s.require("brokers.dnse.trading_token_ttl_seconds")
             fee_vals = [s.require(f"fees.{k}") for k in FEE_KEYS]
-            if base_url != BASE_URL_UAT and not verified:
+            if base_url not in TEST_BASE_URLS and not verified:
                 raise LiveTradingNotAllowed(
                     "brokers.dnse.api_verified=false — chạy scripts/dnse_trading_probe.py, đối chiếu "
                     "các mục ❓ trong docs/broker_notes.md rồi mới đặt true")
@@ -261,6 +268,7 @@ class DnseConfig:
             uncertain_resolve_s=float(g("uncertain_resolve_seconds", 15)),
             fee_vnd_per_contract=fee,
             tick_size=float(s.require("contract.tick_size_points")),
+            api_version=str(g("api_version") or DEFAULT_API_VERSION),
         )
 
 
@@ -281,7 +289,9 @@ def _on_tick(price: float, tick: float) -> float:
 
 
 def build_place_payload(order: Order, config: DnseConfig) -> dict:
-    """Body `POST /accounts/orders` đúng khuôn SDK `PlaceOrderRequest` (camelCase, có cả null)."""
+    """Body `POST /accounts/{accountNo}/orders` theo SDK chính thức dnse-sdk-openapi 2.4.1 + trang Sandbox:
+    `symbol, side, orderType, quantity, price, loanPackageId` — không có accountNo (đã nằm trên path); MTL bỏ `price`
+    (❓ kiểm trên Sandbox)."""
     code = _TYPE_CODE.get(order.order_type)
     if code is None:
         raise ValueError(f"loại lệnh {order.order_type.value} không gửi được qua API DNSE "
@@ -293,9 +303,11 @@ def build_place_payload(order: Order, config: DnseConfig) -> dict:
         if order.price is None:
             raise ValueError("lệnh LO cần giá")
         price = _on_tick(float(order.price), config.tick_size)
-    return {"accountNo": config.account_no, "symbol": to_krx(order.symbol), "side": _SIDE_CODE[order.side],
-            "orderType": code, "quantity": int(order.qty), "price": price,
-            "loanPackageId": config.loan_package_id}
+    body = {"symbol": to_krx(order.symbol), "side": _SIDE_CODE[order.side], "orderType": code,
+            "quantity": int(order.qty), "price": price, "loanPackageId": config.loan_package_id}
+    if price is None:
+        del body["price"]
+    return body
 
 
 def _norm_status(raw: Any) -> str:
@@ -420,6 +432,10 @@ class DnseBroker(BrokerAdapter):
             raise BrokerError("thiếu DNSE_ACCOUNT_NO (.env) — số tiểu khoản phái sinh")
         return self.config.account_no
 
+    def _orders_path(self) -> str:
+        """`POST /accounts/{accountNo}/orders` (đặc tả place-order + SDK 2.4.1). Dry-run thiếu số TK vẫn log được."""
+        return f"/accounts/{self.config.account_no or '{accountNo}'}/orders"
+
     def _set(self, cid: str, new: Order) -> Order:
         t = self._tracks[cid]
         if new != t.order:
@@ -492,7 +508,8 @@ class DnseBroker(BrokerAdapter):
         except DnseTransportError as exc:
             await self._say(f"❌ DNSE: không gửi được OTP ({exc}) — thử lại /otp")
             return False
-        token = r.body.get("tradingToken") if r.ok and isinstance(r.body, dict) else None
+        # SDK 2.4.1 đọc "tradingToken"; trang Xác thực/Sandbox của DNSE ghi {"trading-token": …} ⇒ nhận cả hai
+        token = (r.body.get("tradingToken") or r.body.get("trading-token")) if r.ok and isinstance(r.body, dict) else None
         if not token:
             await self._say(f"❌ DNSE từ chối OTP ({DnseApiError(r.status, r.body)}) — xin mã mới rồi /otp lại")
             return False
@@ -570,7 +587,7 @@ class DnseBroker(BrokerAdapter):
         except ValueError as exc:
             return self._reject(cid, f"payload không hợp lệ: {exc}")
         if self.dry_run:
-            self._dry("POST", "/accounts/orders", ORDER_PARAMS, payload)
+            self._dry("POST", self._orders_path(), ORDER_PARAMS, payload)
             return self._reject(cid, "dry-run: không gửi lệnh (chỉ log payload)")
         try:
             self._guard()
@@ -594,7 +611,7 @@ class DnseBroker(BrokerAdapter):
         t = self._tracks[cid]
         known_before = frozenset(self._seen_ids)
         try:
-            r = await self.http.request("POST", "/accounts/orders", params=ORDER_PARAMS,
+            r = await self.http.request("POST", self._orders_path(), params=ORDER_PARAMS,
                                         json_body=payload, trading_token=self._token)
         except DnseTransportError as exc:
             return await self._uncertain(cid, known_before, payload, str(exc))
@@ -898,7 +915,7 @@ class DnseBroker(BrokerAdapter):
             self._reject(cid, f"stop chạm nhưng payload lỗi: {exc}")
             return
         if self.dry_run:
-            self._dry("POST", "/accounts/orders", ORDER_PARAMS, payload)
+            self._dry("POST", self._orders_path(), ORDER_PARAMS, payload)
             self._reject(cid, "dry-run: stop chạm, không gửi lệnh")
             return
         try:

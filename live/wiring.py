@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Iterable, Mapping, Optional
 
 from brokers.base import LiveTradingNotAllowed
-from brokers.dnse import DnseBroker, DnseConfig, DnseHttp, fetch_vn30_futures, verify_contracts
+from brokers.dnse import DEFAULT_API_VERSION, DnseBroker, DnseConfig, DnseHttp, fetch_vn30_futures, verify_contracts
 from brokers.ssi import SsiBroker, SsiConfig, SsiHttp, SsiOrderStream, SsiTokenManager, load_private_key
 from core.clock import MarketClock
 from core.settings import MissingSetting, Settings
@@ -100,14 +100,15 @@ def build_live(settings: Settings, env: Mapping[str, str], *, live_flag: bool, m
     if "dnse" in roles:
         dnse_cfg = DnseConfig.from_settings(settings, env, live=True)
         dnse_http = DnseHttp(dnse_key, dnse_secret, base_url=dnse_cfg.base_url, timeout=dnse_cfg.timeout_s,
-                             transport=dnse_transport)
+                             transport=dnse_transport, api_version=dnse_cfg.api_version)
         brokers["dnse"] = DnseBroker(dnse_http, dnse_cfg, clock=clock, name="dnse", live_flag=True, env=env,
                                      notify=notify)
     else:
         dnse_http = DnseHttp(dnse_key, dnse_secret, base_url=str(settings.get("brokers.dnse.base_url") or
                                                                   "https://openapi.dnse.com.vn"),
                              timeout=float(settings.get("brokers.dnse.request_timeout_seconds", 10)),
-                             transport=dnse_transport)
+                             transport=dnse_transport,
+                             api_version=str(settings.get("brokers.dnse.api_version") or DEFAULT_API_VERSION))
 
     # ---- SSI: broker (nếu được chọn) + luôn có token cho feed (một phiên mỗi apiKey ⇒ dùng chung) ----
     ssi_url = str(settings.get("brokers.ssi.stream_url") or "wss://stream.ssi.com.vn/ws/v3")

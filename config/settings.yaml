@@ -177,16 +177,17 @@ brokers:
     # (broker_notes §2b — thời hạn hiệu lực, liên kết lệnh kích hoạt). Chỉ bật sau khi thử với KL nhỏ.
     broker_side_stops: false
   dnse:                                 # brokers/dnse.py — số tiểu khoản đặt ở .env (DNSE_ACCOUNT_NO)
-    base_url: https://openapi.dnse.com.vn   # UAT: https://openapi-uat.dnse.com.vn
+    base_url: https://openapi.dnse.com.vn   # Sandbox (key riêng, tiền ảo): https://sb-openapi.dnse.com.vn — DNSE không cấp UAT
+    api_version: "2026-07-23"           # header `version` (SDK chính thức dnse-sdk-openapi 2.4.1)
     # Gói vay phái sinh: GET /accounts/{tiểu khoản}/loan-packages?marketType=DERIVATIVE
     # Probe 09/11/2026: id=1306 "Gói giao dịch 01", initialRate 0.1848 (= tỷ lệ ký quỹ 18,48% trong biểu phí).
     loan_package_id: 1306
     otp_type: email_otp                 # OTP nhập tay qua Telegram: /otp <mã>
-    # Thời hạn trading token — CHƯA biết (❓ broker_notes §1.1); hỏi DNSE / đo bằng probe. null ⇒ không chạy live.
-    trading_token_ttl_seconds: null
+    # Thời hạn trading token = 8 giờ ✅✅ (trang Xác thực developers.dnse.com.vn + SDK 2.4.1 TTL_SECONDS, 12/11/2026)
+    trading_token_ttl_seconds: 28800
     token_renew_before_seconds: 300     # xin OTP mới trước khi token hết hạn
     otp_resend_seconds: 120             # không xin OTP dồn dập
-    # CHỈ đặt true sau khi chạy scripts/dnse_trading_probe.py (đọc + UAT đặt/huỷ thử) và đã đối
+    # CHỈ đặt true sau khi chạy scripts/dnse_trading_probe.py (đọc + Sandbox đặt/huỷ thử) và đã đối
     # chiếu các mục ❓ ở docs/broker_notes.md §1.5. false ⇒ adapter từ chối mọi lệnh thật ở production.
     api_verified: false
     request_timeout_seconds: 10

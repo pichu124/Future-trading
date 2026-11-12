@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from brokers.base import BrokerError, LiveTradingNotAllowed
-from brokers.dnse import (BASE_URL_PROD, BASE_URL_UAT, DnseApiError, DnseBroker, DnseConfig, DnseHttp,
+from brokers.dnse import (BASE_URL_PROD, BASE_URL_SANDBOX, BASE_URL_UAT, DEFAULT_API_VERSION, DnseApiError, DnseBroker, DnseConfig, DnseHttp,
                           DnseTransportError, build_place_payload, map_order_status, sanitize_metadata,
                           sign_headers)
 from core.clock import FakeClock
@@ -61,6 +61,7 @@ class FakeTransport:
         self.otp_ok = True
         self.place_creates_on_failure = False      # timeout/5xx nhưng lệnh VẪN tới sàn
         self.cancel_status = "Cancelled"
+        self.token_key = "tradingToken"          # SDK 2.4.1; trang Xác thực ghi "trading-token"
 
     def add_order(self, **kw) -> dict:
         self.next_id += 1
@@ -86,7 +87,7 @@ class FakeTransport:
                            "json": json_body, "headers": dict(headers)})
         if self.fail_next:
             f = self.fail_next.pop(0)
-            if method == "POST" and path == "/accounts/orders" and self.place_creates_on_failure:
+            if method == "POST" and path == f"/accounts/{ACC}/orders" and self.place_creates_on_failure:
                 self._create_from(json_body)
             if isinstance(f, Exception):
                 raise f
@@ -96,7 +97,7 @@ class FakeTransport:
 
     def _create_from(self, b):
         return self.add_order(symbol=b["symbol"], side=b["side"], orderType=b["orderType"],
-                              quantity=b["quantity"], leaveQuantity=b["quantity"], price=b["price"])
+                              quantity=b["quantity"], leaveQuantity=b["quantity"], price=b.get("price"))
 
     def _route(self, method, path, params, b):
         ok = lambda body, st=200: (st, {}, json.dumps(body))  # noqa: E731
@@ -106,9 +107,9 @@ class FakeTransport:
             return 200, {}, ""
         if path == "/registration/trading-token":
             if self.otp_ok and b.get("passcode") == OTP:
-                return ok({"tradingToken": TOKEN})
+                return ok({self.token_key: TOKEN})
             return ok({"code": "INVALID_OTP", "message": "otp sai"}, 400)
-        if path == "/accounts/orders" and method == "POST":
+        if path == f"/accounts/{ACC}/orders" and method == "POST":
             return ok(self._create_from(b))
         if path == f"/accounts/{ACC}/orders" and method == "GET":
             return ok({"orders": list(self.orders.values())})
@@ -201,10 +202,18 @@ class TestSigningAndHttp:
         assert c["url"] == f"{BASE_URL_PROD}/accounts/{ACC}/orders" and c["params"] == {"marketType": "DERIVATIVE"}
         assert "trading-token" not in {k.lower() for k in c["headers"]}
 
+    def test_version_header_sent(self):
+        """SDK 2.4.1 gửi header `version` (mặc định 2026-07-23) ở mọi request."""
+        tr = FakeTransport()
+        run(DnseHttp(KEY, SECRET, transport=tr).request("GET", "/accounts"))
+        assert tr.calls[0]["headers"]["version"] == DEFAULT_API_VERSION == "2026-07-23"
+        run(DnseHttp(KEY, SECRET, transport=tr, api_version="2026-01-01").request("GET", "/accounts"))
+        assert tr.calls[1]["headers"]["version"] == "2026-01-01"
+
     def test_trading_token_header_only_when_given(self):
         tr = FakeTransport()
         http = DnseHttp(KEY, SECRET, transport=tr)
-        run(http.request("POST", "/accounts/orders", json_body={"symbol": KRX, "side": "NB", "orderType": "LO",
+        run(http.request("POST", f"/accounts/{ACC}/orders", json_body={"symbol": KRX, "side": "NB", "orderType": "LO",
                                                                  "quantity": 1, "price": 1.0},
                          trading_token=TOKEN))
         assert tr.calls[0]["headers"]["trading-token"] == TOKEN
@@ -259,6 +268,16 @@ class TestConfig:
         with pytest.raises(MissingSetting):
             DnseConfig.from_settings(self.settings(**vals), env={"DNSE_ACCOUNT_NO": ACC}, live=True)
 
+    def test_sandbox_live_config_without_verification(self):
+        s = self.settings(base_url=BASE_URL_SANDBOX, loan_package_id=1036, trading_token_ttl_seconds=28800)
+        c = DnseConfig.from_settings(s, env={"DNSE_ACCOUNT_NO": ACC}, live=True)
+        assert c.base_url == BASE_URL_SANDBOX and not c.is_production
+
+    def test_api_version_from_settings(self):
+        assert DnseConfig.from_settings(self.settings(), env={}, live=False).api_version == "2026-07-23"
+        assert DnseConfig.from_settings(self.settings(api_version="2026-01-01"), env={}, live=False).api_version \
+            == "2026-01-01"
+
     def test_live_requires_account_in_env(self):
         s = self.settings(loan_package_id=1036, trading_token_ttl_seconds=28800, api_verified=True)
         with pytest.raises(MissingSetting, match="DNSE_ACCOUNT_NO"):
@@ -278,12 +297,13 @@ class TestConfig:
 class TestPayload:
     def test_limit_buy(self):
         p = build_place_payload(order(), cfg())
-        assert p == {"accountNo": ACC, "symbol": KRX, "side": "NB", "orderType": "LO", "quantity": 1,
+        # SDK chính thức dnse-sdk-openapi 2.4.1: body KHÔNG có accountNo (số tiểu khoản nằm trên path)
+        assert p == {"symbol": KRX, "side": "NB", "orderType": "LO", "quantity": 1,
                      "price": 1350.0, "loanPackageId": 1036}
 
     def test_market_sell_has_no_price(self):
         p = build_place_payload(order(side=Side.SELL, otype=OrderType.MARKET, price=None, qty=2), cfg())
-        assert p["side"] == "NS" and p["orderType"] == "MTL" and p["price"] is None and p["quantity"] == 2
+        assert p["side"] == "NS" and p["orderType"] == "MTL" and "price" not in p and p["quantity"] == 2
 
     def test_off_tick_price_rejected(self):
         with pytest.raises(ValueError, match="bước giá"):
@@ -324,19 +344,26 @@ class TestGuards:
         b, tr, *_ = make(env={"TRADING_MODE": "paper"})
         with pytest.raises(LiveTradingNotAllowed):
             run(b.place(order()))
-        assert "/accounts/orders" not in tr.paths()
+        assert f"/accounts/{ACC}/orders" not in tr.paths("POST")
 
     def test_requires_live_flag(self):
         b, tr, *_ = make(live_flag=False)
         with pytest.raises(LiveTradingNotAllowed):
             run(b.place(order()))
-        assert "/accounts/orders" not in tr.paths()
+        assert f"/accounts/{ACC}/orders" not in tr.paths("POST")
 
     def test_production_requires_verified_api(self):
         b, tr, *_ = make(config=cfg(api_verified=False))
         with pytest.raises(LiveTradingNotAllowed, match="api_verified"):
             run(b.place(order()))
-        assert "/accounts/orders" not in tr.paths()
+        assert f"/accounts/{ACC}/orders" not in tr.paths("POST")
+
+    def test_sandbox_allowed_before_verification(self):
+        """Sandbox DNSE (developers.dnse.com.vn/docs/guide/sandbox) — key riêng, tiền ảo ⇒ như UAT."""
+        b, tr, *_ = make(config=cfg(api_verified=False, base_url=BASE_URL_SANDBOX))
+        assert not b.config.is_production
+        o = run(b.place(order()))
+        assert o.status is OrderStatus.PENDING and tr.calls[-1]["url"] == f"{BASE_URL_SANDBOX}/accounts/{ACC}/orders"
 
     def test_uat_allowed_before_verification(self):
         b, tr, *_ = make(config=cfg(api_verified=False, base_url=BASE_URL_UAT))
@@ -361,7 +388,15 @@ class TestGuards:
         run(b.connect())
         with pytest.raises(BrokerError, match="trading token"):
             run(b.place(order()))
-        assert "/accounts/orders" not in tr.paths()
+        assert f"/accounts/{ACC}/orders" not in tr.paths("POST")
+
+    def test_token_key_with_hyphen_accepted(self):
+        """Trang Xác thực DNSE trả {"trading-token": …}, SDK 2.4.1 đọc "tradingToken" ⇒ nhận cả hai."""
+        tr = FakeTransport()
+        tr.token_key = "trading-token"
+        b, *_ = make(transport=tr, token=False)
+        run(b.connect())
+        assert run(b.submit_otp(OTP)) and b.token_valid()
 
     def test_guard_checked_on_every_call_not_only_startup(self):
         b, tr, *_ = make()
@@ -369,7 +404,7 @@ class TestGuards:
         b.env = {}
         with pytest.raises(LiveTradingNotAllowed):
             run(b.place(order("E2")))
-        assert tr.paths("POST").count("/accounts/orders") == 1
+        assert tr.paths("POST").count(f"/accounts/{ACC}/orders") == 1
 
 
 class TestDryRun:
@@ -379,7 +414,7 @@ class TestDryRun:
         o = run(b.place(order()))
         assert o.status is OrderStatus.REJECTED and "dry-run" in o.reject_reason
         assert not [c for c in tr.calls if c["method"] in ("POST", "PUT", "DELETE")]
-        assert b.dry_log[-1]["json"]["symbol"] == KRX and b.dry_log[-1]["path"] == "/accounts/orders"
+        assert b.dry_log[-1]["json"]["symbol"] == KRX and b.dry_log[-1]["path"] == f"/accounts/{ACC}/orders"
         assert KRX in caplog.text
 
     def test_dry_run_cancel_does_not_call_api(self):
@@ -398,7 +433,7 @@ class TestPlace:
     def test_sends_sdk_shape_with_token(self):
         b, tr, _, _, updates, _ = make()
         o = run(b.place(order()))
-        c = [c for c in tr.calls if c["path"] == "/accounts/orders"][0]
+        c = [c for c in tr.calls if c["path"] == f"/accounts/{ACC}/orders"][0]
         assert c["method"] == "POST" and c["params"] == {"marketType": "DERIVATIVE", "orderCategory": "NORMAL"}
         assert c["json"]["side"] == "NB" and c["json"]["symbol"] == KRX
         assert c["headers"]["trading-token"] == TOKEN
@@ -410,7 +445,7 @@ class TestPlace:
         a = run(b.place(order()))
         again = run(b.place(order()))
         assert again.broker_order_id == a.broker_order_id
-        assert tr.paths("POST").count("/accounts/orders") == 1
+        assert tr.paths("POST").count(f"/accounts/{ACC}/orders") == 1
 
     def test_business_reject_returned_not_raised(self):
         b, tr, _, _, updates, _ = make()
@@ -420,14 +455,14 @@ class TestPlace:
         assert updates[-1].status is OrderStatus.REJECTED
         tr.calls.clear()
         run(b.sync())
-        assert "/accounts/orders" not in tr.paths("POST")              # không gửi lại
+        assert f"/accounts/{ACC}/orders" not in tr.paths("POST")              # không gửi lại
 
     def test_rate_limited_is_rejected_not_retried(self):
         b, tr, *_ = make()
         tr.fail_next = [(429, {"message": "slow"})]
         o = run(b.place(order()))
         assert o.status is OrderStatus.REJECTED and "429" in o.reject_reason
-        assert tr.paths("POST").count("/accounts/orders") == 1
+        assert tr.paths("POST").count(f"/accounts/{ACC}/orders") == 1
 
     def test_expired_token_rejects_and_requests_otp(self):
         b, tr, clock, _, _, notes = make()
@@ -451,7 +486,7 @@ class TestUncertainPlacement:
         assert o.status is OrderStatus.PENDING and o.broker_order_id is None
         run(b.place(order()))                                           # execution gọi lại cùng id
         run(b.sync())
-        assert tr.paths("POST").count("/accounts/orders") == 1
+        assert tr.paths("POST").count(f"/accounts/{ACC}/orders") == 1
 
     def test_found_in_order_book_then_tracked(self):
         b, tr, clock, fills, updates, _ = make()
@@ -504,7 +539,7 @@ class TestUncertainPlacement:
         run(b.sync())
         assert updates[-1].client_order_id == "E1" and updates[-1].status is OrderStatus.REJECTED
         assert "sổ lệnh" in updates[-1].reject_reason
-        assert tr.paths("POST").count("/accounts/orders") == 1
+        assert tr.paths("POST").count(f"/accounts/{ACC}/orders") == 1
 
     def test_uncertain_order_cannot_be_cancelled_yet(self):
         b, tr, *_ = make()
@@ -697,10 +732,10 @@ class TestLocalStop:
         b, tr, clock, fills, _, _ = make()
         run(b.place(self.stop()))
         run(b.on_tick(Tick(SYM, T0, last=1341.0, bid=1340.9, ask=1341.1)))
-        assert "/accounts/orders" not in tr.paths("POST")
+        assert f"/accounts/{ACC}/orders" not in tr.paths("POST")
         run(b.on_tick(Tick(SYM, T0, last=1340.0, bid=1339.9, ask=1340.1)))
         run(b.on_tick(Tick(SYM, T0, last=1339.0)))
-        posts = [c for c in tr.calls if c["path"] == "/accounts/orders"]
+        posts = [c for c in tr.calls if c["path"] == f"/accounts/{ACC}/orders" and c["method"] == "POST"]
         assert len(posts) == 1 and posts[0]["json"]["side"] == "NS" and posts[0]["json"]["orderType"] == "MTL"
         bid = b.order("S1").broker_order_id
         assert not bid.startswith("local")
@@ -712,14 +747,14 @@ class TestLocalStop:
         b, tr, *_ = make()
         run(b.place(self.stop(side=Side.BUY, trigger=1360.0)))
         run(b.on_tick(Tick(SYM, T0, bid=1359.9, ask=1360.0)))
-        posts = [c for c in tr.calls if c["path"] == "/accounts/orders"]
+        posts = [c for c in tr.calls if c["path"] == f"/accounts/{ACC}/orders" and c["method"] == "POST"]
         assert len(posts) == 1 and posts[0]["json"]["side"] == "NB"
 
     def test_other_symbol_ignored(self):
         b, tr, *_ = make()
         run(b.place(self.stop()))
         run(b.on_tick(Tick("VN30F2612", T0, last=1000.0)))
-        assert "/accounts/orders" not in tr.paths("POST")
+        assert f"/accounts/{ACC}/orders" not in tr.paths("POST")
 
     def test_trigger_rejected_is_reported(self):
         b, tr, clock, _, updates, _ = make()
@@ -734,11 +769,11 @@ class TestLocalStop:
         m = run(b.modify("S1", price=1338.0))
         assert m.price == 1338.0
         run(b.on_tick(Tick(SYM, T0, last=1339.0)))
-        assert "/accounts/orders" not in tr.paths("POST")              # trigger mới 1338
+        assert f"/accounts/{ACC}/orders" not in tr.paths("POST")              # trigger mới 1338
         c = run(b.cancel("S1"))
         assert c.status is OrderStatus.CANCELLED and not tr.paths("DELETE")
         run(b.on_tick(Tick(SYM, T0, last=1300.0)))
-        assert "/accounts/orders" not in tr.paths("POST")
+        assert f"/accounts/{ACC}/orders" not in tr.paths("POST")
 
 
 # --------------------------------------------------------------------------- vị thế ----

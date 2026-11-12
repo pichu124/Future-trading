@@ -45,14 +45,38 @@ Trang hướng dẫn: hdsd.dnse.com.vn → "DNSE LightSpeed API V2"; đăng ký 
   1. `POST /registration/send-email-otp` → DNSE gửi OTP vào email;
   2. `POST /registration/trading-token` body `{"otpType": "email_otp" | "smart_otp", "passcode": "123456"}` → nhận token;
   3. gửi kèm header `trading-token` ở các lệnh thay đổi.
-- Hết hạn token ⇒ SDK ném `DnseSessionExpiredError`, phải xác thực OTP lại ✅. **Thời hạn token** ❓.
+- Hết hạn token ⇒ SDK ném `DnseSessionExpiredError`, phải xác thực OTP lại ✅. **Thời hạn token = 8 giờ** ✅✅ (trang Xác thực developers.dnse.com.vn + SDK `dnse-sdk-openapi` 2.4.1 `TTL_SECONDS = 8 * 3600`, 12/11/2026) ⇒ `trading_token_ttl_seconds: 28800`. OTP email sống 2 phút, Smart OTP 30 giây; tài khoản chỉ bật MỘT phương thức, gửi sai `otpType` ⇒ 400 `OA-100`. Response token: trang tài liệu ghi `{"trading-token": …}`, SDK 2.4.1 đọc `tradingToken` ⇒ adapter nhận cả hai. Header `Date` lệch quá ±1 phút ⇒ bị từ chối (`OA-400`).
 - Rate limit: HTTP 429 kèm `retry_after`; header hạn mức được SDK đọc ✅. **Hạn mức cụ thể** ❓.
 
 ### 1.2 Môi trường
-- UAT: `https://openapi-uat.dnse.com.vn` ✅ (servers trong đặc tả).
+- **Sandbox** (DNSE trả lời 12/11/2026: KHÔNG cấp UAT cho khách hàng, dùng Sandbox — developers.dnse.com.vn/docs/guide/sandbox) ✅:
+  REST `https://sb-openapi.dnse.com.vn`, WebSocket `wss://ws-sb-openapi.dnse.com.vn`; **bộ key riêng** (đăng ký ở trang
+  LightSpeed API DNSE → "Đăng ký Sandbox", secret chỉ hiện MỘT lần; chỉ cho tài khoản đã đăng ký LightSpeed API
+  production); cùng path + cùng cách ký như production. Tài khoản, tiền, gói vay Sandbox khác production ⇒ đọc lại
+  `/accounts`, `/balances`, `/loan-packages`, `/ppse`. OTP mô phỏng: `passcode` **666666** (email_otp hoặc smart_otp),
+  token 8 giờ. Lệnh tự chạy vòng đời `PendingNew → New → PartiallyFilled → Filled` (STOP/OCO: `New → Activated →` lệnh
+  NORMAL …). Dữ liệu mô phỏng, có thể bị reset, có rate limit. WebSocket Sandbox: `order.{market_type}.{encoding}`,
+  `position.{market_type}.{encoding}`. Probe: `dnse_trading_probe.py --sandbox [--order-test]` (key `DNSE_SANDBOX_*`).
+- UAT: `https://openapi-uat.dnse.com.vn` (servers trong đặc tả cũ) — DNSE không cấp cho khách hàng.
   - 12/11/2026 (laptop, `dnse_trading_probe.py --uat`): **kết nối TCP 443 quá hạn (ConnectTimeout 10 s)** — tên miền phân giải được nhưng máy chủ không trả lời ⇒ UAT nhiều khả năng không mở công khai (cần đăng ký/whitelist IP) ❓. `Test-NetConnection`: UAT 103.151.242.23:443 **False** (ping cũng timeout), production 103.151.242.24:443 **True** cùng mạng Wi-Fi ⇒ mạng ra ngoài không chặn cổng 443 nói chung; chặn ở phía UAT (hoặc riêng IP đó). Cần hỏi DNSE: khoá V2 có dùng cho UAT không, đăng ký UAT ở đâu, tài khoản UAT có tiểu khoản phái sinh + tiền ảo không, OTP email UAT và thời hạn trading-token.
 - Production: `https://openapi.dnse.com.vn` — SDK dùng làm mặc định nhưng tự ghi chú "placeholder" ❓ → xác nhận khi đăng ký.
 - WebSocket: `wss://ws-openapi.dnse.com.vn/v1/stream?encoding=json|msgpack` ✅ (SDK).
+
+### 1.2b Đối chiếu SDK chính thức `dnse-sdk-openapi` 2.4.1 + trang tài liệu (12/11/2026) — đã sửa adapter
+- **Đặt lệnh: `POST /accounts/{accountNo}/orders?marketType=DERIVATIVE&orderCategory=NORMAL`** (trang place-order + SDK
+  2.4.1 `post_order`). Adapter cũ gửi `POST /accounts/orders` theo SDK `dnse` 0.5.0 — ĐÃ SỬA (production chưa từng
+  đặt lệnh nên chưa gây hậu quả). Body: `symbol, side (NB/NS), orderType, quantity, price, loanPackageId` — không có
+  `accountNo`; MTL bỏ `price` (❓ kiểm trên Sandbox).
+- Header `version` (mặc định `2026-07-23`, một vài endpoint dùng `2026-01-01`) gửi ở mọi request, không nằm trong chữ
+  ký ⇒ adapter gửi theo `brokers.dnse.api_version`.
+- Sửa lệnh `PUT /accounts/{acc}/orders/{id}` = huỷ-rồi-đặt, trả id MỚI ✅; ví dụ SDK đổi `quantity` 100 → 200 ⇒ nhiều
+  khả năng `quantity` là TỔNG mới (adapter đang gửi phần còn lại = tổng − đã khớp; với lệnh chưa khớp hai cách như
+  nhau; lệnh khớp một phần ❓ — kiểm trên Sandbox).
+- **Lệnh điều kiện qua API có cho phái sinh**: `orderCategory=STOP` (`stopPrice`, `conditionOperator`, `durationType`) và
+  `orderCategory=OCO` (chỉ phái sinh: `stopPrice`, `stopOrderPrice`, `durationType`). Hiện bot tự giữ stop (mất feed ⇒
+  stop mù, phải flatten); stop phía sàn là cải tiến an toàn lớn — đánh giá thành module riêng SAU khi Sandbox chạy được.
+- Đóng vị thế: `POST /positions/{positionId}/close?marketType=…`, đảo: `/positions/{id}/reverse` (SDK 2.4.1).
+- Rate limit (header ví dụ trang place-order): `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`.
 
 ### 1.3 REST — endpoint dùng cho bot (đều ký HMAC)
 | Việc | Method + path | Tham số chính |
