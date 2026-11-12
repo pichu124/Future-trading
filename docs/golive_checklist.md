@@ -34,6 +34,7 @@
 2. **Thử feed trong giờ giao dịch** — ✅ 11/11/2026 09:34: 4.450 tick/120 s (sau khi sửa giao thức theo SDK chính thức 2.4.1).
 3. **Chạy tay recorder** — ✅ 11/11/2026 09:42–09:56: 69.282 dòng, 169 part, 0 lỗi ghi, gộp file ngày OK (~3.000–7.400 message/phút).
 4. **Hẹn giờ** — ✅ 11/11/2026: task `VN30F Recorder` (T2–T6 08:20) tạo được bằng cmd *Run as administrator* (cmd thường báo Access is denied). Chạy thử `schtasks /Run` lúc recorder tay đang chạy ⇒ Last Result 3 (khoá chặn tiến trình thứ hai ✅), đường dẫn đúng, chạy dưới user Administrator. Còn: chỉnh Properties theo `docs/recorder_windows.md` §2 + tắt Sleep.
+   12/11/2026: task bị Windows chặn khi chạy pin (`0x800710E0`) ⇒ sửa Settings bằng PowerShell (`docs/recorder_windows.md` §2) ✅; thêm task canh **VN30F Recorder Watch** (§2b, 09:10→14:10 mỗi 30′) ✅ chạy được (LastTaskResult 0), Telegram nhận "✅ Recorder đang ghi: 269 file" ✅.
    Tối 11/11: `download_history.py --start 2026-11-11 --end 2026-11-11` (bù 09:00–09:42 + khoảng ngắt; lịch sử đủ cho paper 12/11).
 5. **Telegram** — ✅ 10/11/2026: bot `@binh_vn30f_bot`, `TELEGRAM_TRADING_*` trong `.env` laptop, gửi tin thử OK.
 
