@@ -44,6 +44,8 @@
 
 **Hạ tầng (12/11/2026):** UAT DNSE không kết nối được (443 bị chặn phía UAT, production OK) ⇒ chờ DNSE trả lời (broker_notes §1.2). SSI FastConnect: **đã đăng ký, chờ SSI cấp khoá** ⇒ khi có: điền `SSI_*` vào `.env` laptop, `ssi_trading_probe.py --payload-only` rồi `ssi_trading_probe.py` (chỉ đọc, cần OTP).
 
+**Tự động hoá trên laptop (12/11/2026) ✅:** task Recorder 08:20 · Paper Runner 08:40 · Recorder Watch 09:10→14:10 mỗi 30′ · Download History 15:30 (`download_today.py --notify-ok` thử OK, Telegram nhận). Recorder gửi báo cáo cuối ngày từ 13/11. Lịch nghỉ có 24/11/2026 — laptop đã `git pull`.
+
 **Đã xong:** settings (phí, vốn 100tr, lỗ ngày 15 điểm, 2 lượt, thua 2, `allowed_machine = CFA-BINHLD-LT`);
 probe DNSE chỉ đọc + lịch sử (trên Desktop); tải 6 tháng lịch sử (+ chép sang laptop, check 133/133);
 ORB #1/#2 robustness nến + tick ⇒ KHÔNG CÓ EDGE.
