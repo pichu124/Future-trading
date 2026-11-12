@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-12 — Hạ tầng: tự khởi động paper runner 08:40 (Task Scheduler)
+
+- Không cần code mới: runner đã thoát 0 ngày nghỉ, chờ trước giờ mở (feed chỉ bị coi im lặng trong phiên liên tục), tự thoát sau 14:45 kèm báo cáo; lịch sử thiếu ⇒ 🚨 Telegram + thoát 2.
+- `docs/runner.md` mục "Tự khởi động hằng ngày": PowerShell tạo task "VN30F Paper Runner" (T2–T6 08:40, `pythonw.exe`, chạy pin được, chạy bù khi lỡ, tối đa 7 giờ), cách kiểm, dừng, đổi chiến lược. Chỉ cho paper.
+- Rủi ro/giả định: chưa từng chạy runner từ trước 09:00 trên máy thật (test có từ 08:59:30); lỗi trước khi Telegram sẵn sàng (vd thiếu khoá) chỉ vào log; pythonw nuốt traceback chưa bắt ⇒ xem LastTaskResult + log.
+
 ## 2026-11-12 — Hạ tầng: canh recorder từ bên ngoài (`scripts/check_recorder.py`)
 
 - Người dùng chọn tạm dừng tìm chiến lược, chuyển sang hạ tầng. Việc đầu: sự cố sáng nay (task recorder bị chặn khi laptop chạy pin, không ai biết tới 09:10).

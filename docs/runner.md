@@ -79,6 +79,33 @@ Runner chạy MỘT chiến lược mỗi lần (một broker chính, CLAUDE.md 
 Runner: khoá phiên (máy được phép + file khoá) → đối soát vị thế → mỗi giây: tick → bar → strategy →
 risk → paper broker; heartbeat khoá mỗi `monitoring.heartbeat_seconds`; tự thoát sau 14:45 kèm báo cáo.
 
+## Tự khởi động hằng ngày (Task Scheduler, thêm 12/11/2026)
+
+Runner tự lo phần lịch: ngày nghỉ ⇒ thoát 0 ngay; trước 09:00 chờ (feed không bị coi là im lặng ngoài phiên liên
+tục); sau 14:45 gửi báo cáo rồi thoát. Nên chỉ cần Task Scheduler gọi nó **08:40 thứ Hai–Sáu**. Chiến lược #3
+cần nến 09:00 ⇒ khởi động sau 09:00 thì hôm đó không vào lệnh (đúng thiết kế).
+
+PowerShell **Run as administrator** (sửa `$repo` nếu cần; `pythonw.exe` ⇒ không có cửa sổ để lỡ tay đóng —
+mọi thứ vẫn vào `logs/bot_YYYY-MM-DD.jsonl` và Telegram):
+
+```powershell
+$repo = "D:\Future-trading"
+$args_ = "-m live.runner --assume-computed-contract --strategy strategy.morning_momentum:MorningMomentum"
+$act = New-ScheduledTaskAction -Execute "$repo\.venv\Scripts\pythonw.exe" -Argument $args_ -WorkingDirectory $repo
+$trg = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At 08:40
+$set = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 7) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName "VN30F Paper Runner" -Action $act -Trigger $trg -Settings $set -Force
+```
+
+- Kiểm tra mỗi sáng: Telegram nhận "🤖 Runner paper khởi động … · chiến lược Đà sáng → chiều (#3)" lúc ~08:40;
+  thiếu lịch sử ⇒ nhận 🚨 nêu ngày cần `download_history.py` (runner thoát 2, không giao dịch).
+- Không thấy tin: `Get-ScheduledTaskInfo -TaskName "VN30F Paper Runner" | Select LastRunTime, LastTaskResult`
+  (mã thoát như mục dưới; `267009` = đang chạy) và xem `logs/bot_<ngày>.jsonl`.
+- Dừng hôm nay: `Stop-ScheduledTask -TaskName "VN30F Paper Runner"` (paper ⇒ không có vị thế thật). Tắt hẳn:
+  `Disable-ScheduledTask -TaskName "VN30F Paper Runner"`. Chạy tay song song ⇒ bản sau thoát 3 (khoá phiên).
+- Đổi chiến lược: sửa `$args_` rồi chạy lại `Register-ScheduledTask … -Force`.
+- CHỈ dùng cho paper. Live không chạy bằng task tự động (cần `/otp` và người theo dõi).
+
 ## Điều khiển
 - Telegram (chỉ từ đúng `TELEGRAM_TRADING_CHAT_ID`): `/kill`, `/status`, `/pnl`, `/help`.
 - File `KILL` ở thư mục gốc repo ⇒ như `/kill`. Kill-switch và khoá khẩn cấp **không tự mở** — xoá
