@@ -42,6 +42,8 @@
    12/11/2026: task **VN30F Paper Runner** (T2–T6 08:40, `docs/runner.md`) tạo xong; chạy thử ⇒ mã 3 vì runner tay đang giữ khoá (khoá phiên ✅). Lần chạy tự động đầu tiên: 13/11 08:40 — kiểm tin Telegram "🤖 Runner paper khởi động"; KHÔNG bật tay nữa.
    `python -m live.runner --assume-computed-contract --strategy strategy.morning_momentum:MorningMomentum`; 18/11 tối: `download_history.py --start 2026-11-18 --end 2026-11-18` (lấy cả VN30F2612) trước phiên 19/11.
 
+**Hạ tầng (12/11/2026):** UAT DNSE không kết nối được (443 bị chặn phía UAT, production OK) ⇒ chờ DNSE trả lời (broker_notes §1.2). SSI FastConnect: **đã đăng ký, chờ SSI cấp khoá** ⇒ khi có: điền `SSI_*` vào `.env` laptop, `ssi_trading_probe.py --payload-only` rồi `ssi_trading_probe.py` (chỉ đọc, cần OTP).
+
 **Đã xong:** settings (phí, vốn 100tr, lỗ ngày 15 điểm, 2 lượt, thua 2, `allowed_machine = CFA-BINHLD-LT`);
 probe DNSE chỉ đọc + lịch sử (trên Desktop); tải 6 tháng lịch sử (+ chép sang laptop, check 133/133);
 ORB #1/#2 robustness nến + tick ⇒ KHÔNG CÓ EDGE.
