@@ -117,6 +117,52 @@ async def record_session(feed: DataFeed, recorder: TickRecorder, mclock: MarketC
     return code
 
 
+def eod_message(day, code: int, vcode: Optional[int], rep, error: Optional[str]) -> str:
+    """Tin Telegram cuối ngày: một dòng trạng thái + mỗi nguồn một dòng + tối đa 5 vấn đề."""
+    bad = []
+    if code:
+        bad.append("feed dừng bất thường / flush lỗi (xem log)")
+    if error:
+        bad.append(f"kiểm định lỗi: {error}")
+    elif vcode == 2:
+        bad.append("không có dữ liệu")
+    elif vcode == 1:
+        bad.append("kiểm định có vấn đề")
+    lines = [f"{'⚠️' if bad else '✅'} Recorder {day}" + (": " + "; ".join(bad) if bad else ": dữ liệu ổn")]
+    if rep is not None:
+        for name, src in sorted(rep.sources.items()):
+            gap_total = sum(g.seconds for g in src.gaps)
+            vol = src.volume or {}
+            vol_txt = f"hụt KL {vol.get('missing')}" if vol.get("checked") else "không kiểm được KL"
+            span = (f"{src.first_ts:%H:%M:%S}→{src.last_ts:%H:%M:%S}" if src.first_ts and src.last_ts else "—")
+            lines.append(f"{name}: {src.n_ticks:,} tick, {span}, {len(src.gaps)} khoảng trống ({gap_total:.0f}s), "
+                         f"{vol_txt}, {len(rep.bars.get(name, []))} bar")
+        issues = list(rep.issues)
+        lines += [f"! {i}" for i in issues[:5]]
+        if len(issues) > 5:
+            lines.append(f"! +{len(issues) - 5} vấn đề khác (data/validation/{day}.json)")
+    return "\n".join(lines)
+
+
+def finish(day, code: int, settings, *, validate, notify) -> int:
+    """Kiểm định cuối ngày + tin Telegram. Không bao giờ văng; trả nguyên mã thoát của recorder."""
+    vcode, rep, error = None, None, None
+    try:
+        vcode, rep = validate(day, settings)
+        log.info("Kiểm định dữ liệu:\n%s", rep.summary())
+        if vcode == 1:
+            log.warning("Dữ liệu hôm nay có vấn đề — xem data/validation/%s.json", day)
+    except Exception as exc:
+        log.exception("Kiểm định dữ liệu cuối ngày lỗi (dữ liệu tick đã lưu không bị ảnh hưởng)")
+        error = f"{type(exc).__name__}: {exc}"
+    if settings.get("recorder.notify_end_of_day", False):
+        try:
+            notify(eod_message(day, code, vcode, rep, error))
+        except Exception as exc:                  # cảnh báo hỏng không được đổi kết quả recorder
+            log.error("Gửi báo cáo cuối ngày lên Telegram thất bại: %s", exc)
+    return code
+
+
 def main(argv=None) -> int:
     from core.settings import load_settings
     from feeds.data_feed_dnse import DnseFeed
@@ -181,15 +227,13 @@ def main(argv=None) -> int:
         code = asyncio.run(go())
     finally:
         lock.release()
-    try:                                    # kiểm định + dựng bar 1 phút cho backtest (P1.5)
-        from scripts.validate_day import run as validate
-        vcode, rep = validate(mclock.now().date(), settings)
-        log.info("Kiểm định dữ liệu:\n%s", rep.summary())
-        if vcode == 1:
-            log.warning("Dữ liệu hôm nay có vấn đề — xem data/validation/%s.json", mclock.now().date())
-    except Exception:
-        log.exception("Kiểm định dữ liệu cuối ngày lỗi (dữ liệu tick đã lưu không bị ảnh hưởng)")
-    return code
+    # kiểm định + dựng bar 1 phút cho backtest (P1.5) + báo cáo Telegram
+    import socket
+    from monitoring.telegram import send_message
+    from scripts.validate_day import run as validate
+    host = socket.gethostname()
+    return finish(today, code, settings, validate=validate,
+                  notify=lambda text: send_message(f"{text}\n({host})", channel="trading", parse_mode=""))
 
 
 if __name__ == "__main__":

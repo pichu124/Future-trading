@@ -96,6 +96,10 @@ Get-ScheduledTaskInfo -TaskName "VN30F Recorder Watch" | Select LastRunTime, Las
 `LastTaskResult`: `0` = recorder ổn (hoặc ngoài giờ), `1` = đã báo Telegram. Recorder chết lúc nghỉ trưa ⇒ báo ở
 lần 13:10. Chỉ báo khi có vấn đề ⇒ hỏng kéo dài thì nhận tin mỗi 30′ tới khi sửa.
 
+Báo cáo cuối ngày (thêm 12/11/2026): sau khi dừng ghi (15:00) và kiểm định, recorder gửi một tin lên Telegram
+kênh `trading` — "✅ Recorder <ngày>: dữ liệu ổn" hoặc "⚠️ …" kèm số tick, giờ đầu→cuối, khoảng trống, hụt KL, số
+bar, tối đa 5 vấn đề (`recorder.notify_end_of_day`). Không nhận tin lúc ~15:01 ⇒ recorder không chạy tới cuối ngày.
+
 ## 3. Kiểm tra hằng ngày
 
 - Task Scheduler → *Last Run Result*:

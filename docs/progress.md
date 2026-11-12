@@ -1,5 +1,10 @@
 # Tiến độ
 
+## 2026-11-12 — Hạ tầng B: recorder gửi báo cáo cuối ngày lên Telegram
+
+- `scripts/record_today.py`: `eod_message` (✅/⚠️ + mỗi nguồn: tick, giờ đầu→cuối, khoảng trống, hụt KL, bar; ≤ 5 vấn đề) và `finish` (kiểm định không văng, gửi tin theo `recorder.notify_end_of_day`, lỗi Telegram chỉ log, giữ nguyên mã thoát recorder).
+- `tests/test_record_eod_message.py` (9 test, viết trước); đột biến 4/4 bị bắt. `docs/recorder_windows.md` cập nhật.
+
 ## 2026-11-12 — Hạ tầng A: tải lịch sử tự động mỗi chiều (`scripts/download_today.py`)
 
 - Phiên tải cuối = hôm nay (ngày giao dịch, sau 14:50) hoặc phiên trước (chạy bù sáng / ngày nghỉ); tải `catchup_days` (5) phiên tới đó qua `download_history` (ngày trước roll thêm HĐ kế tiếp); kiểm lịch sử `history_days` (10) cho phiên kế tiếp bằng `live.history.load_live_history` (đúng hàm runner). Lỗi tải / hết hạn mức (thoát 3) / thiếu ⇒ Telegram; ổn ⇒ im lặng (`--notify-ok` để thử).

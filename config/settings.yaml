@@ -152,6 +152,7 @@ recorder:
   max_buffer_rows: 5000                 # đệm đầy thì ghi ngay, không chờ đủ giờ
   start: "08:30"
   stop: "15:00"
+  notify_end_of_day: true               # gửi tóm tắt kiểm định dữ liệu lên Telegram kênh trading sau khi dừng ghi
   watch_max_age_seconds: 180             # scripts/check_recorder.py: file mới nhất cũ hơn ngần này (phiên liên tục) ⇒ báo Telegram
   # Ngày trước roll: ghi thêm HĐ kế tiếp (cùng kết nối) để đo chênh lệch back-adjust cho chiến lược nhiều ngày.
   # TẮT tới khi `python scripts/dnse_feed_probe.py --krx <mã chính> <mã kế tiếp> --extra-contract <tên>` xác nhận
