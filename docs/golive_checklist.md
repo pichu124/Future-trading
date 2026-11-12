@@ -39,6 +39,7 @@
 5. **Telegram** — ✅ 10/11/2026: bot `@binh_vn30f_bot`, `TELEGRAM_TRADING_*` trong `.env` laptop, gửi tin thử OK.
 
 6. **Paper #3** — ▶️ chạy lần đầu 11/11/2026 10:06 trên laptop (khởi động sau 09:00 ⇒ hôm nay #3 không vào lệnh — thiếu nến 09:00, đúng thiết kế; mục đích: kiểm vận hành). Telegram khởi động + `/status` OK (feed khoẻ, ping DNSE 1s). Chạy song song recorder ✅ hai kết nối feed cùng lúc được (broker_notes §3.9). Từ 12/11: khởi động TRƯỚC 09:00.
+   12/11/2026: task **VN30F Paper Runner** (T2–T6 08:40, `docs/runner.md`) tạo xong; chạy thử ⇒ mã 3 vì runner tay đang giữ khoá (khoá phiên ✅). Lần chạy tự động đầu tiên: 13/11 08:40 — kiểm tin Telegram "🤖 Runner paper khởi động"; KHÔNG bật tay nữa.
    `python -m live.runner --assume-computed-contract --strategy strategy.morning_momentum:MorningMomentum`; 18/11 tối: `download_history.py --start 2026-11-18 --end 2026-11-18` (lấy cả VN30F2612) trước phiên 19/11.
 
 **Đã xong:** settings (phí, vốn 100tr, lỗ ngày 15 điểm, 2 lượt, thua 2, `allowed_machine = CFA-BINHLD-LT`);
