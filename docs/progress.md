@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-12 — Hạ tầng C: lịch nghỉ — thêm 24/11/2026, Tết 2027 dự kiến
+
+- Tìm kiếm phát hiện ngày nghỉ MỚI năm nay: **24/11/2026 Ngày Văn hóa Việt Nam** — HNX (10/11) và HOSE (11/11) thông báo nghỉ giao dịch, giao dịch lại 25/11. Chưa có trong `config/holidays.yaml` ⇒ đã thêm (thiếu ⇒ recorder/runner chạy ngày sàn đóng, task canh báo nhầm, và 25/11 runner đòi dữ liệu 24/11 ⇒ từ chối chạy).
+- 2027: thêm Tết Đinh Mùi DỰ KIẾN 04/02–10/02 (lịch nghỉ công chức, TB 11483/TB-BNV) — sở chưa công bố; Giỗ Tổ, Quốc khánh, 24/11/2027, ngày nghỉ bù chưa thêm. `check_calendar.py` vẫn cảnh báo 2027 (7 < 9 ngày) để nhắc. Đáo hạn VN30F2702 (18/02/2027) không bị ảnh hưởng.
+- Việc cần làm: `git pull` trên laptop TRƯỚC 24/11; khi HNX/HOSE công bố lịch 2027 ⇒ đối chiếu, bỏ chữ "dự kiến".
+
 ## 2026-11-12 — Hạ tầng B: recorder gửi báo cáo cuối ngày lên Telegram
 
 - `scripts/record_today.py`: `eod_message` (✅/⚠️ + mỗi nguồn: tick, giờ đầu→cuối, khoảng trống, hụt KL, bar; ≤ 5 vấn đề) và `finish` (kiểm định không văng, gửi tin theo `recorder.notify_end_of_day`, lỗi Telegram chỉ log, giữ nguyên mã thoát recorder).

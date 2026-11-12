@@ -1,7 +1,8 @@
 # holidays.yaml — ngày NGHỈ GIAO DỊCH (ngoài thứ 7, CN).
 #
-# 2026: ĐỦ (nguồn + kiểm chéo dữ liệu bên dưới). 2027: CHƯA ĐỦ — mới có ngày lễ dương lịch cố định; Tết,
-# Giỗ Tổ, ngày nghỉ bù PHẢI bổ sung khi HNX/HOSE công bố lịch nghỉ 2027 (thường cuối năm trước).
+# 2026: ĐỦ (nguồn + kiểm chéo dữ liệu bên dưới; thêm 24/11 ngày 12/11/2026). 2027: CHƯA ĐỦ — ngày lễ dương lịch cố
+# định + Tết DỰ KIẾN theo lịch nghỉ công chức; Giỗ Tổ, Quốc khánh, 24/11, ngày nghỉ bù PHẢI bổ sung/đối chiếu khi
+# HNX/HOSE công bố lịch nghỉ 2027 (thường cuối năm trước).
 # `python scripts/check_calendar.py` cảnh báo khi một năm còn thiếu.
 #
 # Định dạng: YYYY-MM-DD: mô tả
@@ -38,6 +39,16 @@
 "2026-08-31": Quốc khánh — hoán đổi (làm bù thứ Bảy 22/08, sở KHÔNG giao dịch ngày làm bù)
 "2026-09-01": Quốc khánh
 "2026-09-02": Quốc khánh
+# Bổ sung 12/11/2026: Ngày Văn hóa Việt Nam (Nghị quyết 28/2026/QH16, hiệu lực 01/07/2026). HNX thông báo 10/11/2026,
+# HOSE 11/11/2026 (bổ sung TB 2294/TB-SGDHCM): nghỉ giao dịch thứ Ba 24/11, giao dịch lại 25/11 (cafef.vn, index.vn).
+"2026-11-24": Ngày Văn hóa Việt Nam
 
 "2027-01-01": Tết Dương lịch
+# Tết Đinh Mùi — DỰ KIẾN: công chức nghỉ 04/02 → 10/02/2027 (TB 11483/TB-BNV ngày 09/10/2026 theo VB 10065/VPCP-KGVX;
+# dantri.com.vn). Sở thường theo lịch này (2026 khớp) nhưng CHƯA công bố ⇒ đối chiếu khi HNX/HOSE ra thông báo.
+"2027-02-04": Tết Nguyên đán Đinh Mùi (dự kiến — chờ thông báo sở)
+"2027-02-05": Tết Nguyên đán Đinh Mùi (dự kiến — chờ thông báo sở)
+"2027-02-08": Tết Nguyên đán Đinh Mùi (dự kiến — chờ thông báo sở)
+"2027-02-09": Tết Nguyên đán Đinh Mùi (dự kiến — chờ thông báo sở)
+"2027-02-10": Tết Nguyên đán Đinh Mùi (dự kiến — chờ thông báo sở)
 "2027-04-30": Ngày Giải phóng miền Nam
