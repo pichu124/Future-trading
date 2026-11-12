@@ -50,7 +50,7 @@ Trang hướng dẫn: hdsd.dnse.com.vn → "DNSE LightSpeed API V2"; đăng ký 
 
 ### 1.2 Môi trường
 - UAT: `https://openapi-uat.dnse.com.vn` ✅ (servers trong đặc tả).
-  - 12/11/2026 (laptop, `dnse_trading_probe.py --uat`): **kết nối TCP 443 quá hạn (ConnectTimeout 10 s)** — tên miền phân giải được nhưng máy chủ không trả lời ⇒ UAT nhiều khả năng không mở công khai (cần đăng ký/whitelist IP) ❓. Cần hỏi DNSE: khoá V2 có dùng cho UAT không, đăng ký UAT ở đâu, tài khoản UAT có tiểu khoản phái sinh + tiền ảo không, OTP email UAT và thời hạn trading-token.
+  - 12/11/2026 (laptop, `dnse_trading_probe.py --uat`): **kết nối TCP 443 quá hạn (ConnectTimeout 10 s)** — tên miền phân giải được nhưng máy chủ không trả lời ⇒ UAT nhiều khả năng không mở công khai (cần đăng ký/whitelist IP) ❓. `Test-NetConnection`: UAT 103.151.242.23:443 **False** (ping cũng timeout), production 103.151.242.24:443 **True** cùng mạng Wi-Fi ⇒ mạng ra ngoài không chặn cổng 443 nói chung; chặn ở phía UAT (hoặc riêng IP đó). Cần hỏi DNSE: khoá V2 có dùng cho UAT không, đăng ký UAT ở đâu, tài khoản UAT có tiểu khoản phái sinh + tiền ảo không, OTP email UAT và thời hạn trading-token.
 - Production: `https://openapi.dnse.com.vn` — SDK dùng làm mặc định nhưng tự ghi chú "placeholder" ❓ → xác nhận khi đăng ký.
 - WebSocket: `wss://ws-openapi.dnse.com.vn/v1/stream?encoding=json|msgpack` ✅ (SDK).
 
