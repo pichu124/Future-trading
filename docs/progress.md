@@ -1,5 +1,12 @@
 # Tiến độ
 
+## 2026-11-12 — Hạ tầng A: tải lịch sử tự động mỗi chiều (`scripts/download_today.py`)
+
+- Phiên tải cuối = hôm nay (ngày giao dịch, sau 14:50) hoặc phiên trước (chạy bù sáng / ngày nghỉ); tải `catchup_days` (5) phiên tới đó qua `download_history` (ngày trước roll thêm HĐ kế tiếp); kiểm lịch sử `history_days` (10) cho phiên kế tiếp bằng `live.history.load_live_history` (đúng hàm runner). Lỗi tải / hết hạn mức (thoát 3) / thiếu ⇒ Telegram; ổn ⇒ im lặng (`--notify-ok` để thử).
+- `config/settings.yaml` `history_download.*`; `docs/runner.md`: task "VN30F Download History" T2–T6 15:30.
+- `tests/test_download_today.py` (15 test, viết trước, gồm lắp ghép `main`); đột biến 10/10 bị bắt.
+- Rủi ro: `history_days` = 10 phải theo chiến lược paper đang chạy (đổi chiến lược cần ADR dài hơn ⇒ sửa); hạn mức DNSE 10.000 request/24h (5 phiên đã có file ⇒ hầu như không tốn request).
+
 ## 2026-11-12 — Sandbox DNSE: đặt lệnh thử chạy được
 
 - `--sandbox` chỉ đọc ✅ (ký HMAC + header version được nhận; secdef 404 trên Sandbox). `--order-test --price 1900` ✅: token OTP 666666, đặt lệnh `POST /accounts/{acc}/orders` 200, trạng thái `Pending → New → Filled`, vị thế đọc đúng, lệnh đối ứng về phẳng.

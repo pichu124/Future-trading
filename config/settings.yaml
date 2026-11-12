@@ -140,6 +140,12 @@ strategy:
     exit_bar: "11:24"                   # còn vị thế khi nến 11:24 đóng ⇒ thoát 11:25 (trước nghỉ trưa)
     qty: 1
 
+# Tải lịch sử DNSE tự động mỗi chiều (scripts/download_today.py, Task Scheduler ~15:30 — docs/runner.md).
+history_download:
+  not_before: "14:50"                   # trước giờ này (chạy bù buổi sáng) ⇒ chỉ tải tới phiên trước
+  catchup_days: 5                       # tải N phiên gần nhất tới hôm nay (file đã có bỏ qua ⇒ tự bù ngày máy tắt)
+  history_days: 10                      # kiểm lịch sử đủ N phiên cho phiên kế tiếp (= adr_days của chiến lược paper)
+
 # Ghi tick ra data/raw/YYYY-MM-DD/ (recorder/, scripts/record_today.py).
 recorder:
   flush_seconds: 5                      # crash mất tối đa ngần này giây dữ liệu chưa ghi

@@ -106,6 +106,28 @@ Register-ScheduledTask -TaskName "VN30F Paper Runner" -Action $act -Trigger $trg
 - Đổi chiến lược: sửa `$args_` rồi chạy lại `Register-ScheduledTask … -Force`.
 - CHỈ dùng cho paper. Live không chạy bằng task tự động (cần `/otp` và người theo dõi).
 
+## Tải lịch sử tự động mỗi chiều (thêm 12/11/2026)
+
+Runner nghiêm ngặt về lịch sử (thiếu một phiên ⇒ thoát 2). `scripts/download_today.py` thay việc chạy tay
+`download_history.py` mỗi tối: tải 5 phiên gần nhất tới hôm nay (file đã có bỏ qua ⇒ tự bù ngày máy tắt; ngày trước
+roll tự tải thêm HĐ kế tiếp — vd 18/11/2026 tải cả VN30F2612), rồi kiểm lịch sử đủ cho phiên kế tiếp bằng đúng hàm
+runner dùng. Có lỗi / hết hạn mức / thiếu ⇒ ⚠️ Telegram; ổn ⇒ im lặng. Chạy bù buổi sáng (máy tắt lúc 15:30) hoặc
+ngày nghỉ ⇒ tải tới phiên trước và kiểm cho phiên sắp tới.
+
+Thử: `.venv\Scripts\python.exe scripts\download_today.py --notify-ok` (nhận "✅ tải lịch sử …").
+
+PowerShell **Run as administrator**:
+
+```powershell
+$repo = "D:\Future-trading"
+$act = New-ScheduledTaskAction -Execute "$repo\.venv\Scripts\pythonw.exe" -Argument "`"$repo\scripts\download_today.py`"" -WorkingDirectory $repo
+$trg = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At 15:30
+$set = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 1) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName "VN30F Download History" -Action $act -Trigger $trg -Settings $set -Force
+```
+
+`LastTaskResult`: `0` ổn · `1` có vấn đề (đã báo Telegram) · `2` thiếu khoá · `3` hết hạn mức DNSE (chạy lại sau mốc reset).
+
 ## Điều khiển
 - Telegram (chỉ từ đúng `TELEGRAM_TRADING_CHAT_ID`): `/kill`, `/status`, `/pnl`, `/help`.
 - File `KILL` ở thư mục gốc repo ⇒ như `/kill`. Kill-switch và khoá khẩn cấp **không tự mở** — xoá
