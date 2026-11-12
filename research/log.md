@@ -147,3 +147,19 @@ Ghi TRƯỚC khi chạy `backtest.pooled` cho #4 trên DNSE và TRƯỚC khi ch�
 - **Công cụ:** `backtest.pooled` hiện chỉ nhận `--ticks` ⇒ mở rộng nhận thêm một nguồn nến cho cửa sổ riêng
   (viết test trước), rồi mới chạy. Không đổi gì trong engine/chiến lược.
 - CÓ EDGE vẫn phải qua paper ổn định trước khi tính đến live (như giai đoạn thứ hai).
+
+### Kết quả #4 giai đoạn kiểm tra thứ hai (12/11/2026, laptop, `backtest.pooled`, kho 25/03→11/11/2026)
+
+- **#4 Ngày xu hướng: CHƯA ĐỦ BẰNG CHỨNG** theo chữ của luật (20 lệnh gộp < 30). Cửa sổ 25/03→08/05: 4 lệnh,
+  **−2.436.800đ**; cửa sổ 01/09→nay: 16 lệnh, +3.062.800đ; gộp 20 lệnh, +626.000đ, p 0,464 (×5 = 1,0); trượt 2 tick
+  gộp +226.000đ.
+- **Hệ quả logic ⇒ DỪNG #4, không chạy SSI.** Điều kiện (b) "P&L > 0 ở MỌI cửa sổ" đã trượt VĨNH VIỄN: cửa sổ
+  25/03→08/05 là dữ liệu cố định, đã lỗ, và có mặt trong cả luật 2 cửa sổ lẫn luật 3 cửa sổ (SSI). Vì vậy không
+  còn đường nào ra CÓ EDGE: thêm SSI hay chờ dữ liệu mới chỉ có thể dẫn tới CHƯA ĐỦ (< 30 lệnh) hoặc KHÔNG CÓ EDGE
+  (≥ 30 lệnh). Chạy tiếp chỉ tốn công mà không đổi được quyết định ⇒ coi #4 như KHÔNG CÓ EDGE. Đây là kết luận
+  thận trọng hơn chữ của luật, không phải nới luật. Ngoài ra p gộp 0,464 cũng ở rất xa ngưỡng 0,02.
+- Luật giai đoạn thứ ba (SSI) đăng ký 12/11 vì thế **không dùng cho #4**. Nến SSI 23/07/2025→24/03/2026 vẫn
+  CHƯA ai chạy chiến lược nào ⇒ còn sạch cho chiến lược MỚI (phải đăng ký trước, n_trials tăng).
+- **Tổng kết 5 cấu hình (n_trials = 5):** ORB #1, #2 KHÔNG CÓ EDGE (nến và tick); #3 KHÔNG CÓ EDGE (gộp); #4 dừng
+  (như trên); #5 KHÔNG CÓ EDGE thực tế. Chưa có ứng viên nào ⇒ `max_contracts` giữ 1, scale-out (#3b) chưa đăng ký,
+  không paper/live vì lý do edge (paper #3 chỉ để kiểm vận hành).

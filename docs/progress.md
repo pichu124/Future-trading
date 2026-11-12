@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-12 — #4 kiểm định gộp DNSE: CHƯA ĐỦ (20 lệnh) nhưng dừng #4
+
+- 25/03→08/05: 4 lệnh, −2,44tr; 01/09→nay: 16 lệnh, +3,06tr; gộp 20 lệnh +0,63tr, p 0,464, trượt 2 tick +0,23tr.
+- Cửa sổ 25/03→08/05 đã lỗ (dữ liệu cố định) ⇒ điều kiện "lãi mọi cửa sổ" trượt vĩnh viễn ⇒ không thể ra CÓ EDGE ⇒ dừng #4, KHÔNG làm phần nến SSI cho `backtest.pooled`.
+- Cả 5 cấu hình đều không có edge. Nến SSI 07/2025→03/2026 còn sạch cho chiến lược mới (đăng ký trước).
+
 ## 2026-11-12 — Đăng ký trước giai đoạn kiểm tra THỨ BA (nến SSI) cho #4
 
 - `research/log.md`: luật cho W0 = nến SSI 23/07/2025→24/03/2026 (chế độ nến), chỉ cho #4, tham số chốt 10/11, `n_trials` giữ 5. Ghi TRƯỚC khi chạy pooled #4 trên DNSE.
