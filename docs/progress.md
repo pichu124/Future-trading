@@ -1,5 +1,13 @@
 # Tiến độ
 
+## 2026-11-12 — Chiến lược #6 lấp gap mở cửa: KHÔNG CÓ EDGE ở cổng IS (dừng, không mở OOS)
+
+- Đăng ký trước trong `research/log.md` (n_trials = 6), `config/settings.yaml` `strategy.gap_fade`.
+- `strategy/gap_fade.py` (`GapFade`): C₋₁ = nến cuối của đúng phiên liền trước theo lịch nghỉ (thiếu ⇒ không giao dịch); quyết định ở nến 09:15; |g| ≥ 0,30·ADR10 ⇒ vào ngược gap, TP = C₋₁, stop 0,30·ADR; EXIT 11:25. Lịch nghỉ đọc lúc dựng (`TradingCalendar.default()`), `on_bar` thuần.
+- `tests/test_strategy_gap_fade.py` (30 test, viết trước): cấu hình, ngưỡng, mốc = nến cuối phiên trước, thiếu phiên trước, ngày nghỉ, thiếu nến 09:15, một lần/ngày, thoát 11:24, engine chốt lời/thoát giờ, CLI robustness. Đột biến 7/7 bị bắt.
+- IS (nến SSI 22/07→31/12/2025, dữ liệu cắt): 8 lệnh, −2,76tr, 0/6 độ nhạy, 0/4 walk-forward ⇒ dừng. OOS-A SSI 2026 vẫn chưa nhìn.
+- Rủi ro/giả định: IS chỉ 8 lệnh (nhiễu lớn); chế độ nến bi quan; lịch nghỉ 2025 chưa kiểm chéo (17/10/2025 không có dữ liệu).
+
 ## 2026-11-12 — #4 kiểm định gộp DNSE: CHƯA ĐỦ (20 lệnh) nhưng dừng #4
 
 - 25/03→08/05: 4 lệnh, −2,44tr; 01/09→nay: 16 lệnh, +3,06tr; gộp 20 lệnh +0,63tr, p 0,464, trượt 2 tick +0,23tr.

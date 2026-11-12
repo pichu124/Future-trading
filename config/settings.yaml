@@ -131,6 +131,15 @@ strategy:
     exit_bar: "14:19"
     qty: 1
 
+  # Cấu hình #6 — lấp gap mở cửa (strategy/gap_fade.py). ĐĂNG KÝ TRƯỚC 12/11/2026 (research/log.md).
+  gap_fade:
+    adr_days: 10
+    min_gap_adr: 0.30                   # |đóng 09:15 − đóng phiên trước| ≥ 0,30 × ADR ⇒ vào NGƯỢC gap lúc 09:16
+    stop_adr: 0.30                      # stop = đóng 09:15 ± 0,30 × ADR (xa thêm về phía gap); TP = đóng phiên trước
+    decision_bar: "09:15"
+    exit_bar: "11:24"                   # còn vị thế khi nến 11:24 đóng ⇒ thoát 11:25 (trước nghỉ trưa)
+    qty: 1
+
 # Ghi tick ra data/raw/YYYY-MM-DD/ (recorder/, scripts/record_today.py).
 recorder:
   flush_seconds: 5                      # crash mất tối đa ngần này giây dữ liệu chưa ghi
