@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-12 — Sandbox DNSE: đặt lệnh thử chạy được
+
+- `--sandbox` chỉ đọc ✅ (ký HMAC + header version được nhận; secdef 404 trên Sandbox). `--order-test --price 1900` ✅: token OTP 666666, đặt lệnh `POST /accounts/{acc}/orders` 200, trạng thái `Pending → New → Filled`, vị thế đọc đúng, lệnh đối ứng về phẳng.
+- Phát hiện: item sổ lệnh REST (Sandbox) không có `averagePrice` ⇒ giá khớp đang tạm lấy giá lệnh / giá feed (có cảnh báo). Cần kiểm REST production hoặc lấy giá từ vị thế / WebSocket lệnh trước khi live.
+- Còn ❓: sửa/huỷ lệnh (Sandbox khớp ngay nên chưa thử được), MTL không `price`, `quantity` khi sửa lệnh khớp một phần.
+
 ## 2026-11-12 — DNSE: Sandbox + sửa adapter theo SDK chính thức 2.4.1 / tài liệu
 
 - DNSE trả lời: không có UAT cho khách hàng, dùng Sandbox (`sb-openapi.dnse.com.vn`, key riêng, OTP 666666, token 8 giờ, lệnh tự khớp). Đọc trang Sandbox, Xác thực, place-order và mã nguồn `dnse-sdk-openapi` 2.4.1 (thêm `developers.dnse.com.vn` vào mạng của môi trường cloud).
