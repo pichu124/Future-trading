@@ -46,6 +46,23 @@ Sau đó mở **Task Scheduler** → *VN30F Recorder* → *Properties* và chỉ
 | Conditions | Bỏ *Start the task only if the computer is on AC power*; tích *Wake the computer to run this task*; tích *Start only if the following network connection is available: Any connection* |
 | Settings | Tích *Run task as soon as possible after a scheduled start is missed*; *Stop the task if it runs longer than*: **8 hours**; *If the task is already running*: **Do not start a new instance** |
 
+Hoặc làm phần Conditions/Settings bằng PowerShell **Run as administrator** (đã dùng trên laptop 12/11/2026):
+
+```powershell
+$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 8) -MultipleInstances IgnoreNew
+Set-ScheduledTask -TaskName "VN30F Recorder" -Settings $s
+(Get-ScheduledTask -TaskName "VN30F Recorder").Settings | Select StartWhenAvailable, WakeToRun, DisallowStartIfOnBatteries, ExecutionTimeLimit
+# mong đợi: True True False PT8H
+powercfg /change standby-timeout-ac 0                                   # cắm sạc: không ngủ
+powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0        # cắm sạc: gập màn hình không ngủ
+powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP RTCWAKE 1            # cho task đánh thức máy
+powercfg /setactive SCHEME_CURRENT
+```
+
+> Laptop: task tạo bằng `schtasks /Create` mặc định **chỉ chạy khi cắm sạc**. Chạy pin ⇒ Windows bỏ qua lượt chạy,
+> *Last Run Result* `0x800710E0` (PowerShell hiện `-2147020576`), không có log/dữ liệu (gặp 12/11/2026). Lệnh trên sửa.
+> *Logon Mode: Interactive only* ⇒ chỉ chạy khi đúng *Run As User* đang đăng nhập (khoá màn hình vẫn chạy).
+
 Và tắt chế độ ngủ trong giờ giao dịch (Control Panel → Power Options → *Put the computer to sleep*:
 **Never**, hoặc ít nhất lớn hơn 7 tiếng).
 
@@ -55,10 +72,12 @@ Và tắt chế độ ngủ trong giờ giao dịch (Control Panel → Power Opt
   - `0x0`: êm (kể cả ngày nghỉ — script thoát ngay);
   - `0x1`: feed chết bất thường — dữ liệu tới lúc đó vẫn được lưu, xem log;
   - `0x2`: thiếu khoá trong `.env`;
-  - `0x3`: đang có một recorder khác chạy trên máy.
+  - `0x3`: đang có một recorder khác chạy trên máy;
+  - `0x41301` (`267009`): đang chạy;
+  - `0x800710E0` (`-2147020576`): Windows từ chối chạy (thường do đang dùng pin) — xem mục 2.
 - Dữ liệu: `C:\vnbot\data\raw\YYYY-MM-DD\ticks.parquet` (sau 15:00). Còn file `part-*.parquet` nghĩa là
   bước gộp cuối ngày chưa chạy xong — không mất gì, lần chạy sau / `compact_day` sẽ gộp.
-- Log: `C:\vnbot\logs\record_YYYY-MM-DD.log` — tìm `im lặng`, `mất kết nối`, `ghi … thất bại`.
+- Log: `logs\record_YYYY-MM-DD.jsonl` (PowerShell 5.1: `Get-Content … -Encoding UTF8` để đọc đúng dấu) — tìm `im lặng`, `mất kết nối`, `ghi … thất bại`.
 - Cuối log có báo cáo kiểm định (khoảng trống, hụt khớp lệnh, lệch DNSE/SSI, so với bar vnstock);
   bản đầy đủ ở `data\validation\YYYY-MM-DD.json`, bar 1 phút ở `data\bars\YYYY-MM-DD.parquet`.
   Chạy lại tay: `.venv\Scripts\python.exe scripts\validate_day.py YYYY-MM-DD --ref-price <giá TC>`.
