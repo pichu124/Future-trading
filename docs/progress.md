@@ -1,5 +1,12 @@
 # Tiến độ
 
+## 2026-11-12 — Đăng ký trước giai đoạn kiểm tra THỨ BA (nến SSI) cho #4
+
+- `research/log.md`: luật cho W0 = nến SSI 23/07/2025→24/03/2026 (chế độ nến), chỉ cho #4, tham số chốt 10/11, `n_trials` giữ 5. Ghi TRƯỚC khi chạy pooled #4 trên DNSE.
+- Thứ tự: pooled DNSE trước; KHÔNG CÓ EDGE ⇒ dừng, không chạy SSI; CHƯA ĐỦ/CÓ EDGE ⇒ kiểm tra dữ liệu (≥ 80% lệnh DNSE có lệnh SSI cùng ngày/chiều ở W1/W2) rồi kết luận 3 cửa sổ (≥ 30 lệnh, lãi cả 3 cửa sổ, p×5 < 0,1, trượt 2 tick > 0).
+- Việc còn: mở rộng `backtest.pooled` nhận thêm nguồn nến cho cửa sổ riêng (test trước).
+- Rủi ro/giả định: chế độ nến bi quan ~0,2 điểm/lệnh (thiên về KHÔNG CÓ EDGE); lịch nghỉ 2025 chưa kiểm chéo; ~8 ngày SSI thiếu quanh roll.
+
 ## 2026-11-11 — Đối chiếu nến SSI với DNSE (Desktop): dùng được cho nghiên cứu
 
 - `compare_bars.py data/ssi data/history`: 132 ngày trùng, 31.811 phút chung; giá đóng lệch TB 0,079 điểm (< 1 bước), max 2,9; volume khớp hệt 98,5% phút (tổng 24,99tr / 24,97tr); OHLC khớp hệt 56,7% (lệch ở mở/cao/thấp — gán khớp lệnh ở biên phút khác nhau).

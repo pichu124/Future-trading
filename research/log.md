@@ -112,3 +112,38 @@ Thứ tự làm: #3 → #4 → #5, mỗi chiến lược một module (test trư
   DỪNG #3 như một ứng viên có edge; KHÔNG tune lại. (Paper #3 vẫn chạy được để kiểm VẬN HÀNH, P&L paper không mang
   ý nghĩa bằng chứng.)
 
+
+### Đăng ký trước: giai đoạn kiểm tra THỨ BA = nến SSI 23/07/2025 → 24/03/2026, chỉ cho #4 (ghi 12/11/2026)
+
+Ghi TRƯỚC khi chạy `backtest.pooled` cho #4 trên DNSE và TRƯỚC khi chạy bất kỳ chiến lược nào trên nến SSI.
+Đến lúc ghi, kho SSI mới chỉ được dùng để đối chiếu chất lượng với DNSE (132 ngày trùng 25/03→11/11/2026,
+`scripts/compare_bars.py`). Giai đoạn 2025 → 24/03/2026 chưa ai chạy chiến lược nào lên ⇒ là OOS sạch cho #4.
+
+- **Chỉ áp dụng cho #4 Ngày xu hướng**, đúng tham số chốt 10/11/2026 (`decision_bar 09:59`, `min_move_adr 0,35`,
+  `stop_adr 0,30`, EXIT 14:20, 1 HĐ, 1 lệnh/ngày). Không phải cấu hình mới ⇒ `n_trials` giữ **5** (không thêm dòng
+  bảng). #1, #2, #3, #5 đã KHÔNG CÓ EDGE ⇒ KHÔNG chạy lại trên SSI để "cứu".
+- **Thứ tự cố định:**
+  1. Chạy #4 trên DNSE theo luật giai đoạn thứ hai (cửa sổ 25/03→08/05 và 01/09→mới nhất, tick) và ghi kết quả.
+  2. DNSE ra **KHÔNG CÓ EDGE** ⇒ DỪNG #4, KHÔNG chạy SSI (đã trượt mà tìm thêm dữ liệu = tự lừa mình).
+  3. DNSE ra **CHƯA ĐỦ** hoặc **CÓ EDGE** ⇒ chạy bước kiểm tra dữ liệu rồi kết luận 3 cửa sổ dưới đây. Kết luận
+     3 cửa sổ là kết luận CUỐI, thay kết luận DNSE (CÓ EDGE trên DNSE mà trượt 3 cửa sổ ⇒ KHÔNG CÓ EDGE).
+- **Cửa sổ W0 (SSI):** 23/07/2025 → 24/03/2026 (kết thúc trước ngày đầu có tick DNSE, không trùng W1). Chạy chế độ
+  NẾN (`--bars data/ssi/ohlc1m`): bid/ask giả ∓ `synthetic_spread_ticks`, trượt `slippage_ticks`, stop khớp ở cực
+  trị nến, nến chứa cả TP lẫn SL ⇒ SL thắng; cùng phí trong `settings.yaml` (biểu phí 01/05/2026 áp cho cả 2025).
+  F1M + roll theo `contract.roll_days_before_expiry` như engine; ~10 phiên đầu làm lịch sử ADR, không giao dịch
+  được — chấp nhận. Chế độ nến bi quan hơn tick ~0,2 điểm/lệnh (≈ 20.000đ) ⇒ thiên về KẾT LUẬN KHÔNG CÓ EDGE;
+  chấp nhận (thà bỏ sót edge còn hơn tin nhầm).
+- **Kiểm tra dữ liệu TRƯỚC khi kết luận (không phải bằng chứng edge):** chạy #4 chế độ nến trên SSI ở CHÍNH hai
+  cửa sổ DNSE (W1, W2) và so với lệnh tick DNSE: ≥ 80% lệnh DNSE phải có lệnh SSI cùng ngày, cùng chiều. Không đạt ⇒
+  đường ống SSI (mã HĐ, roll, lịch 2025, giờ) đáng ngờ ⇒ KHÔNG kết luận từ W0, tìm lỗi trước. Đồng thời báo số ngày
+  SSI thiếu so với lịch (`missing_trading_days`, đã biết ~8 ngày quanh roll) và ngày có dữ liệu mà lịch ghi nghỉ
+  (lịch nghỉ 2025 chưa kiểm chéo); > 10 ngày thiếu trong W0 ⇒ cũng dừng để kiểm tra.
+- **Luật kết luận 3 cửa sổ** (W0 nến SSI ∪ W1 25/03→08/05/2026 tick ∪ W2 01/09/2026→mới nhất tick), gộp lệnh theo
+  ngày VÀO: CÓ EDGE ⇔ (a) ≥ 30 lệnh gộp; (b) P&L sau phí > 0 ở **CẢ BA** cửa sổ (0 lệnh = trượt); (c) p sign-flip
+  chuỗi gộp × 5 < 0,1; (d) P&L gộp > 0 khi trượt 2 tick (W0 cũng chạy lại với trượt 2 tick). Thiếu (a) ⇒ CHƯA ĐỦ (W2
+  tiếp tục kéo dài bằng dữ liệu mới, KHÔNG đổi tham số); trượt bất kỳ (b)(c)(d) ⇒ KHÔNG CÓ EDGE, dừng #4.
+- Báo thêm (không đổi kết luận): kết quả riêng W0; P&L theo tháng trong W0; chênh nến−tick trung bình/lệnh ở bước
+  kiểm tra dữ liệu.
+- **Công cụ:** `backtest.pooled` hiện chỉ nhận `--ticks` ⇒ mở rộng nhận thêm một nguồn nến cho cửa sổ riêng
+  (viết test trước), rồi mới chạy. Không đổi gì trong engine/chiến lược.
+- CÓ EDGE vẫn phải qua paper ổn định trước khi tính đến live (như giai đoạn thứ hai).
