@@ -7,8 +7,10 @@
 - `scripts/import_ssi_intraday.py` (kết quả thô SSI → Parquet), `scripts/check_bar_store.py` (ngày thiếu theo cửa sổ), `backtest.pooled --bars`, `backtest.robustness --until`.
 - Kiểm tra dữ liệu: bản tải lại SSI trên cloud thiếu 40/115 phiên IS ⇒ dừng theo luật; cần kho SSI 11/11 trên laptop. #8 KHÔNG KIỂM ĐƯỢC (nến chỉ số SSI chỉ có từ 15/10/2026).
 
+- Kết quả (laptop, kho SSI 11/11, `scripts/is_gate.py`): bước 1 ✅ cả ba cửa sổ. **#7 trượt cổng IS** (41 lệnh, −15,36tr, 0/6 biến thể lãi); **#9 trượt cổng IS** (40 lệnh, −2,17tr, 3/6 biến thể lãi, 1/4 đoạn) ⇒ dừng cả hai, KHÔNG mở OOS. Tổng: 9 cấu hình, chưa có edge (research/log.md).
+
 **Người dùng cần làm**
-- [ ] Trên laptop (có `data/ssi/ohlc1m` tải 11/11): `git pull`, chạy bước 1 rồi cổng IS cho #7 và #9 (lệnh trong tin nhắn 16/11), gửi lại kết quả. KHÔNG chạy `backtest.pooled` trước khi cổng IS đạt.
+- [ ] Xoá thư mục phụ trên laptop khi không cần: `git worktree remove ..\ft-research` (chạy trong `D:\Future-trading`).
 - [ ] Quyết định có lưu nến chỉ số VN30 mỗi ngày để kiểm #8 về sau không.
 
 ## 2026-11-16 — Nghiên cứu: nhật ký regime "shadow" của nhóm AI (gói 1)

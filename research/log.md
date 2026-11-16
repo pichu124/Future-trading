@@ -83,8 +83,8 @@ Thứ tự làm: #3 → #4 → #5, mỗi chiến lược một module (test trư
 | 2026-11-10 | Đảo chiều VWAP (`strategy/vwap_reversion.py`) — cấu hình #5 | \|C − VWAP\| ≥ 0,40·ADR10 (09:30–14:00) ⇒ ngược chiều, TP = VWAP, stop 0,25·ADR10 xa thêm; EXIT 14:20; ≤ 2 lệnh/ngày | như #3 — **chạy 10/11/2026** | IS: 46 lệnh, −10.788.200đ; OOS: 28 lệnh, −5.157.600đ (PF 0,55, win 32%) | OOS p 0,903 | **CHƯA ĐỦ (28 < 30) nhưng rõ ràng KHÔNG CÓ EDGE**: IS và OOS đều lỗ, 6/6 biến thể IS lỗ, 1/4 đoạn lãi, lỗ cả trước phí (−38,5 điểm OOS). DỪNG #5. KHÔNG thử phiên bản đảo ngược (= đào dữ liệu). | Đăng ký trước 10/11/2026. Làm rõ thực thi (10/11, trước khi chạy): bỏ nến đóng đúng 11:30 (risk chặn mở trong giờ trưa — tín hiệu chỉ phí lượt). |
 | 2026-11-12 | Lấp gap mở cửa (`strategy/gap_fade.py`) — cấu hình #6 | g = đóng nến 09:15 − đóng phiên trước (back-adjust); \|g\| ≥ 0,30·ADR10 ⇒ vào NGƯỢC g lúc 09:16; TP = đóng phiên trước; stop 0,30·ADR10; EXIT 11:25; 1 lệnh/ngày | IS nến SSI 23/07→31/12/2025 · OOS-A nến SSI 01/01→24/03/2026 · OOS-B tick DNSE 25/03/2026→ — **IS chạy 12/11/2026** (cloud, nến SSI cắt tới 31/12/2025) | IS: 8 lệnh, −2.763.600đ (PF 0,53); trượt 2 tick −2.893.600đ | IS p 0,776 | **KHÔNG CÓ EDGE — trượt cổng IS, KHÔNG mở OOS.** 0/6 biến thể độ nhạy lãi (min_gap 0,24 ⇒ 17 lệnh −6,06tr), 0/4 đoạn walk-forward lãi. Gap ≥ 0,30·ADR hiếm (10/107 ngày; ADR 2025 ~39 điểm). Luật: mục "Đăng ký trước #6". |
 | 2026-11-16 | Đảo chiều qua ngày (`strategy/prev_day_reversal.py`) — cấu hình #7 | m = đóng − mở phiên trước; \|m\| ≥ 0,50·ADR10 ⇒ vào NGƯỢC m lúc 09:16; stop 0,40·ADR10; EXIT 14:20; 1 lệnh/ngày | IS nến SSI 22/07→31/12/2025 (kho tải 11/11, laptop) — **IS chạy 16/11/2026**; OOS KHÔNG mở | IS: 41 lệnh, −15.364.700đ (thắng 29%, PF 0,58); trượt 2 tick −17.074.700đ | — | **KHÔNG CÓ EDGE — trượt cổng IS** (cả 3 điều kiện): 0/6 biến thể lãi, 1/4 đoạn walk-forward lãi. Lỗ cả trước phí. Đăng ký trước 16/11/2026 (mục "Đăng ký trước #7, #8, #9"). |
-| 2026-11-16 | Basis quá đà (`strategy/basis_reversion.py`) — cấu hình #8 | d = basis − trung bình basis 30′ trước; \|d\| ≥ 0,10·ADR10 (09:30–14:00) ⇒ vào NGƯỢC d; stop 0,15·ADR10; thoát khi d về 0 hoặc giữ 30′; EXIT 14:20; ≤ 2 lệnh/ngày | như #7 + nến 1 phút chỉ số VN30 (SSI) — **chưa chạy** | | | Đăng ký trước 16/11/2026. |
-| 2026-11-16 | Đà cuối phiên (`strategy/late_momentum.py`) — cấu hình #9 | r = đóng nến 13:49 − đóng phiên trước; \|r\| ≥ 0,30·ADR10 ⇒ vào THEO r lúc 13:50; stop 0,20·ADR10; EXIT 14:20; 1 lệnh/ngày | như #7 — **chưa chạy** | | | Đăng ký trước 16/11/2026. |
+| 2026-11-16 | Basis quá đà (`strategy/basis_reversion.py`) — cấu hình #8 | d = basis − trung bình basis 30′ trước; \|d\| ≥ 0,10·ADR10 (09:30–14:00) ⇒ vào NGƯỢC d; stop 0,15·ADR10; thoát khi d về 0 hoặc giữ 30′; EXIT 14:20; ≤ 2 lệnh/ngày | như #7 + nến 1 phút chỉ số VN30 (SSI) — **KHÔNG KIỂM ĐƯỢC** | — | — | Nến chỉ số SSI chỉ có từ 15/10/2026, DNSE không có OHLC lịch sử ⇒ lỗi dữ liệu, không phải kết luận; chưa viết code. Đăng ký trước 16/11/2026. |
+| 2026-11-16 | Đà cuối phiên (`strategy/late_momentum.py`) — cấu hình #9 | r = đóng nến 13:49 − đóng phiên trước; \|r\| ≥ 0,30·ADR10 ⇒ vào THEO r lúc 13:50; stop 0,20·ADR10; EXIT 14:20; 1 lệnh/ngày | như #7 — **IS chạy 16/11/2026**; OOS KHÔNG mở | IS: 40 lệnh, −2.168.000đ (thắng 40%, PF 0,88); trượt 2 tick −2.968.000đ | — | **KHÔNG CÓ EDGE — trượt cổng IS** (cả 3 điều kiện): 3/6 biến thể lãi (< 75%), 1/4 đoạn walk-forward lãi. Trước phí ≈ hoà. Đăng ký trước 16/11/2026. |
 
 ### Kết quả #3–#5 và kế hoạch (10/11/2026)
 
@@ -369,4 +369,23 @@ chạy được trên cloud; chế độ nến bi quan hơn tick ~0,2 điểm/l�
   thường tăng tiếp ⇒ giai đoạn này theo đà qua ngày, NGƯỢC giả thuyết. KHÔNG thử bản đảo ngược trên dữ liệu này (ý
   tưởng sinh ra SAU khi nhìn kết quả = đào dữ liệu); muốn thử phải là cấu hình mới đăng ký trước, kiểm trên dữ liệu
   chưa nhìn. OOS-A vẫn sạch với #7.
+
+### Kết quả #9 — cổng IS (16/11/2026, laptop, `scripts/is_gate.py`, kho SSI tải 11/11/2026)
+
+- **#9: KHÔNG CÓ EDGE — DỪNG, KHÔNG mở OOS.** IS 40 lệnh, −2.168.000đ (thắng 40%, PF 0,88); trượt 2 tick −2,97tr. Phí
+  ~1,87tr ⇒ trước phí ≈ −0,3tr (hoà). Độ nhạy 3/6 lãi (adr_days 8/12: +0,64/−2,25tr; min_move_adr 0,24/0,36:
+  −1,85/+4,03tr; stop_adr 0,16/0,24: −1,99/+0,14tr) — dấu đổi qua lại quanh 0 = nhiễu. Walk-forward 1/4 (−0,25 /
+  −3,48 / +3,55 / −2,13tr). Theo tháng: 08 −0,25 · 09 −4,38 · 10 +0,90 · 11 +2,86 · 12 −1,30tr. Long 29 lệnh +3,84tr;
+  Short 11 lệnh −6,00tr. Thoát: theo giờ 21, stop 19. Lệnh vào đúng 31/12/2025 (công cụ tính là OOS): 1 lệnh −0,14tr.
+- Ghi nhận (không đổi kết luận): lãi dồn vào phía Long trong giai đoạn thị trường tăng (cuối 2025) — giống phơi nhiễm
+  thị trường hơn là đà cuối phiên. KHÔNG thử bản "chỉ Long" hay ngưỡng 0,36 (biến thể tốt nhất) — chọn sau khi nhìn =
+  đào dữ liệu.
+
+### Tổng kết gói 2 (16/11/2026): 9 cấu hình, CHƯA có cấu hình nào có edge
+
+- #7 trượt cổng IS (lỗ cả trước phí); #8 KHÔNG KIỂM ĐƯỢC (thiếu dữ liệu chỉ số); #9 trượt cổng IS (trước phí ≈ hoà).
+- OOS-A (nến SSI 01/01→24/03/2026) vẫn CHƯA ai chạy chiến lược nào ⇒ còn sạch cho ý tưởng sau (đăng ký trước,
+  `n_trials` = 10 trở lên).
+- Mẫu hình chung của 9 lần thử: các ý tưởng giữ lệnh trong ngày, 1 HĐ, chi phí ~0,9 điểm/lượt, chưa lần nào có lãi
+  trước phí đủ lớn để bù phí một cách ổn định. `max_contracts` giữ 1; không paper/live vì lý do edge.
 
