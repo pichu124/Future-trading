@@ -8,6 +8,7 @@
 - `tests/test_regime_call.py`, `tests/test_score_regime_calls.py` (viết trước), `tests/test_regime_shadow_isolation.py` (bot không được chạm vào nhật ký này).
 - `config/settings.yaml` mục `research.regime_shadow`; `research/regime_shadow.md` (quy trình hằng sáng + công thức gom dữ liệu đã gọi thử); `research/log.md` (đăng ký trước luật kết luận, `n_trials` giữ 6).
 - Chạy bằng tác vụ Claude hẹn giờ trên cloud, 07:50 thứ Hai–thứ Sáu (giờ VN), ghi vào nhánh `claude/regime-shadow-calls` qua worktree `../regime-calls`. Tác vụ bắn vào CHÍNH phiên Claude đã dựng nó: tác vụ tạo phiên mới mỗi sáng không mang theo connector SSI/DNSE/Finhay (tham số connector không dùng được cho tài khoản này).
+- Chạy thử cả đường ống ngày 16/11 (dry-run trong phiên, file ở `research/regime_calls/dryrun/` trên nhánh nhận định, không chấm): gom dữ liệu → agent đơn → 2 vòng tranh luận → trọng tài → ghi → push hết khoảng 8 phút. `debate` và `single` lệch nhau ≤ 0,02 ở mọi lớp. Lần chạy theo lịch đầu tiên: 07:50 ngày 17/11 — việc tác vụ tự đánh thức phiên CHƯA được kiểm.
 
 **Giả định / rủi ro còn mở**
 - Không có dữ liệu thế giới qua đêm (connector Finhay đóng băng từ 24/10/2026, SSI chỉ có số tuần). Muốn có phải mở mạng của môi trường cloud cho một nguồn giá.
