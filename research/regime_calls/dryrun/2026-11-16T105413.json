@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "trade_date": "2026-11-16",
+  "created_at": "2026-11-16T10:54:13+07:00",
+  "contract": "VN30F2611",
+  "dry_run": true,
+  "model": "claude-fable-5-2",
+  "inputs": {
+    "d_minus_1": "2026-11-13",
+    "adr10": 31.46,
+    "prev_close": 1851.0,
+    "basis_prev": 6.09,
+    "sources": [
+      "mcp__SSI_MCP__marketdata_list_stock_daily_data",
+      "mcp__DNSE_MCP__price_list_derivative_contracts",
+      "mcp__SSI_MCP__marketdata_list_index_daily_data",
+      "mcp__Finhay__get_index_foreign_trading_history",
+      "mcp__SSI_MCP__marketdata_list_foreign_currency_converter",
+      "mcp__Finhay__list_news",
+      "mcp__SSI_MCP__marketdata_list_intraday_stock_infor",
+      "WebSearch"
+    ],
+    "missing": [
+      "số liệu chứng khoán thế giới qua đêm, dầu, vàng",
+      "tin từ 15:00 ngày 13/11 đến tối 15/11 chưa quét",
+      "khối ngoại/tự doanh và OI trên phái sinh"
+    ],
+    "note": "CHẠY THỬ lúc đang trong phiên 16/11/2026: dữ liệu đã lọc về trước giờ mở nhưng lượt này không phải dự báo thật",
+    "data_pack": "== BA CÂU HỎI (cố định) ==\nThực tế tính trên nến 1 phút của hợp đồng trong khoảng 09:00 → 14:45: mở = giá mở nến 09:00, đỉnh/đáy = cực trị cả phiên, đóng = giá đóng nến ATC 14:45. ADR10 = trung bình (đỉnh − đáy) của 10 phiên liền trước.\n- vol (low / normal / high): (đỉnh − đáy) / ADR10 < 0,8 ⇒ low; > 1,2 ⇒ high; còn lại normal.\n- day_type (trend / range): |đóng − mở| / (đỉnh − đáy) ≥ 0,5 ⇒ trend; còn lại range.\n- direction (up / flat / down): (đóng − mở) ≥ +0,2 × ADR10 ⇒ up; ≤ −0,2 × ADR10 ⇒ down; còn lại flat.\nMỗi câu trả lời là một PHÂN PHỐI XÁC SUẤT trên các lớp (tổng = 1). Chấm bằng Brier: nói đúng mức tự tin thì điểm tốt nhất; không chắc thì để gần tần suất thường gặp, đừng dồn về một lớp.\n\n== GÓI DỮ LIỆU TRƯỚC GIỜ MỞ — D0 = 16/11/2026 (thứ Hai), D-1 = 13/11/2026, hợp đồng VN30F2611 (= VN30F1M) ==\n1. VN30F1M 10 phiên gần nhất (điểm): ngày | mở | đỉnh | đáy | đóng | biên độ | |đóng−mở|/biên độ\n13/11 | 1839,0 | 1851,0 | 1831,1 | 1851,0 | 19,9 | 0,60\n12/11 | 1855,0 | 1859,2 | 1828,6 | 1842,3 | 30,6 | 0,42\n11/11 | 1858,1 | 1858,4 | 1836,2 | 1850,0 | 22,2 | 0,36\n10/11 | 1849,5 | 1872,8 | 1846,6 | 1856,3 | 26,2 | 0,26\n09/11 | 1853,0 | 1855,9 | 1812,0 | 1828,0 | 43,9 | 0,57\n06/11 | 1833,0 | 1858,0 | 1828,3 | 1847,8 | 29,7 | 0,498\n05/11 | 1869,9 | 1879,8 | 1866,0 | 1867,4 | 13,8 | 0,18\n04/11 | 1813,1 | 1865,4 | 1812,6 | 1862,0 | 52,8 | 0,93\n03/11 | 1815,3 | 1828,5 | 1805,2 | 1819,4 | 23,3 | 0,18\n02/11 | 1850,1 | 1852,2 | 1800,0 | 1818,0 | 52,2 | 0,61\nADR10 = 31,46 (⇒ low nếu biên độ < 25,2; high nếu > 37,8; flat nếu |đóng − mở| < 6,3). Đóng D-1 = 1851,0. Tham chiếu DNSE 1851,0; trần 1980,5; sàn 1721,5. Đáo hạn 19/11/2026 (thứ Năm tuần này; hôm nay không phải ngày đáo hạn).\n2. Chỉ số (đóng, % so phiên trước): VN30 13/11 1844,91 (+0,30%) · 12/11 1839,43 (−0,85%) · 11/11 1855,27 (−0,30%) · 10/11 1860,93 (+1,68%) · 09/11 1830,13 (−0,88%). VN-Index 13/11 1734,93 (+0,01%) · 12/11 1734,75 (−0,70%) · 11/11 1746,90 (+0,22%) · 10/11 1743,07 (+1,68%) · 09/11 1714,32 (−0,64%). Basis D-1 = +6,09 điểm.\n3. Khối ngoại trên rổ VN30 (ròng, tỷ đồng): 13/11 +140,0 · 12/11 −603,9 · 11/11 +335,4 · 10/11 +397,5 · 09/11 −365,5 · 06/11 −108,7 · 05/11 −317,9 · 04/11 +205,8 · 03/11 −118,3 · 02/11 −631,6. Cộng 5 phiên −96,5; 10 phiên −1.067,2.\n4. USD/VND VCB ngày 13/11: bán 25.870 (12/11: 25.850; 09/11: 25.780).\n5. Dáng phiên D-1: mở 1839,0 (dưới tham chiếu 3,3), đáy 1831,1 lúc 09:13; hồi lên 1848,0 trong giờ 10h; cuối sáng 1837,3. Chiều 1837,9 → 1847,1, dao động 1834,5–1849,0; ATC khớp 1851,0 = đỉnh phiên. Khối lượng 180.435 (thấp thứ hai trong 10 phiên).\n6. Tin sáng 16/11: \"Phố Wall biến động nhẹ\" (Tuổi Trẻ 08:40); \"USD có khả năng duy trì sức mạnh trong tuần này\", kỳ vọng Fed tăng lãi suất (QĐND 06:09); \"Giá dầu thế giới có xu hướng giảm\" (QĐND 06:16), \"Giá dầu châu Á ổn định sau các vụ tấn công mới tại Trung Đông\" (08:10); \"Tín hiệu từ sự sụp đổ của tỷ phú Jensen Huang\" — CEO Nvidia rời vị trí, Mỹ điều tra Nvidia (Tiền Phong 06:08); \"Kremlin: Nga sẽ dùng vũ lực… nếu không thể thỏa thuận với châu Âu\" (VTC 06:42); \"VN-Index khi nào kết thúc giai đoạn điều chỉnh, tích lũy kéo dài?\" — thanh khoản giảm, độ rộng tiêu cực (08:16).\n7. Thế giới qua đêm: KHÔNG có số đáng tin (chỉ có định tính từ tiêu đề tin).\nTHIẾU: số liệu chứng khoán thế giới qua đêm, dầu, vàng; tin từ 15:00 ngày 13/11 đến tối 15/11 chưa quét; khối ngoại/tự doanh và OI trên phái sinh."
+  },
+  "single": {
+    "vol": {
+      "low": 0.41,
+      "normal": 0.37,
+      "high": 0.22
+    },
+    "day_type": {
+      "trend": 0.38,
+      "range": 0.62
+    },
+    "direction": {
+      "up": 0.32,
+      "flat": 0.31,
+      "down": 0.37
+    }
+  },
+  "debate": {
+    "vol": {
+      "low": 0.4,
+      "normal": 0.36,
+      "high": 0.24
+    },
+    "day_type": {
+      "trend": 0.4,
+      "range": 0.6
+    },
+    "direction": {
+      "up": 0.33,
+      "flat": 0.3,
+      "down": 0.37
+    }
+  },
+  "transcript": {
+    "single": "Biên độ (vol). Trong 10 phiên, so với ngưỡng hiện tại có 4 low, 3 normal, 3 high. ADR10 = 31,46 bị ba phiên lớn (52,8; 52,2; 43,9) kéo lên, trung vị chỉ khoảng 28. Bốn phiên gần nhất co lại (26,2 → 22,2 → 30,6 → 19,9) và khối lượng D-1 thấp thứ hai trong 10 phiên, nên tôi nghiêng về low/normal. Tôi vẫn giữ đuôi high khoảng 1/5 vì đây là tuần đáo hạn, tin Nvidia, Fed và địa chính trị có thể gây sốc, và gói dữ liệu thiếu số liệu thế giới qua đêm.\nDạng phiên (day_type). 4/10 phiên đạt tỷ lệ ≥ 0,5 (một phiên 0,498 sát ngưỡng). Thị trường đang tích lũy trong vùng 1830–1860, thanh khoản giảm, nên tôi đặt range cao hơn tần suất mẫu một chút.\nHướng (direction). 10 phiên chia 4 up, 2 flat, 4 down với ngưỡng ±6,3 điểm. Biên độ kỳ vọng hẹp làm flat tăng lên. Tôi nghiêng nhẹ về down vì: basis +6,09 điểm là khá dương khi còn 3 phiên tới đáo hạn, dễ hội tụ về chỉ số; ATC D-1 khớp ngay đỉnh phiên, dễ bị điều chỉnh; khối ngoại bán ròng 1.067 tỷ trong 10 phiên, tỷ giá USD/VND nhích lên, độ rộng thị trường tiêu cực. Phiên D-1 hồi và khối ngoại mua ròng +140 tỷ nên mức nghiêng này nhỏ.",
+    "trend_advocate": "[Vòng 1]\nLý lẽ cho ngày xu hướng / biến động cao, nghiêng GIẢM:\n1. Nén rồi bung: D-1 biên độ 19,9 (0,63×ADR10), khối lượng thấp thứ hai trong 10 phiên. Bốn phiên gần nhất đều dưới 31 điểm, trong khi 3/10 phiên vượt ngưỡng high (43,9; 52,8; 52,2).\n2. Chất xúc tác: thứ Hai sau hai ngày tin chưa quét, tuần đáo hạn (19/11). Tin sáng thiên về rủi ro: CEO Nvidia rời vị trí và bị điều tra, Kremlin doạ dùng vũ lực, USD mạnh, kỳ vọng Fed tăng lãi suất, tỷ giá VCB 25.780 → 25.870.\n3. Hướng giảm: giá đóng 1851,0 nằm sát trần vùng 1830–1860 (đỉnh 11–12/11 là 1858–1859). Trong 10 phiên, 5 phiên mở cửa quanh 1850–1858 thì 4 phiên đóng dưới giá mở (02/11, 09/11, 11/11, 12/11). Basis +6,09 do ATC kéo lên đỉnh, dễ co lại trước đáo hạn. Khối ngoại bán ròng 1.067 tỷ trong 10 phiên, độ rộng tiêu cực.\n4. Flat hiếm: chỉ 2/10 phiên có |đóng − mở| < 6,3.\nThừa nhận: ADR10 bị hai phiên 52 điểm kéo lên nên low vẫn là lớp dễ xảy ra nhất (4/10). \"Phố Wall biến động nhẹ\" và không có số liệu qua đêm, nên chưa thấy cú sốc. Tỷ lệ trend gần đây chỉ 4/10. D-1 đóng ở đỉnh phiên cũng là động lượng tăng. Vì vậy chỉ nhích xác suất khỏi tần suất nền.\n{\"vol\": {\"low\": 0.37, \"normal\": 0.33, \"high\": 0.30}, \"day_type\": {\"trend\": 0.45, \"range\": 0.55}, \"direction\": {\"up\": 0.34, \"flat\": 0.26, \"down\": 0.40}}\n\n[Vòng 2]\nPhản biện REVERSION: flat 0,34 mâu thuẫn với chính điều họ thừa nhận (chỉ 2/10 phiên có |đóng − mở| < 6,3). Biên độ nhỏ không kéo theo flat: D-1 chỉ 19,9 điểm mà vẫn +12. \"Biến động đang co\" dựa trên bốn phiên; 05/11 (13,8) nằm ngay sau 52,8 rồi lại bung lên 29,7 và 43,9, tức biên độ không bền.\nPhản biện SKEPTIC: sai số ±15 điểm % đúng, nhưng nó cũng không ủng hộ việc kéo flat lên 0,29. Basis +6,09 trước đáo hạn là lập luận cơ học chứ không phải tần suất mẫu, nên down đáng hơn mức \"nghiêng nhẹ\".\nĐiểm làm tôi đổi ý: sốc tin qua đêm chủ yếu vào gap mở cửa, trong khi cả ba câu đo từ giá mở 09:00 (SKEPTIC); và trung vị biên độ khoảng 28 thấp hơn ADR10. Tôi hạ high và trend.\n{\"vol\": {\"low\": 0.38, \"normal\": 0.34, \"high\": 0.28}, \"day_type\": {\"trend\": 0.43, \"range\": 0.57}, \"direction\": {\"up\": 0.33, \"flat\": 0.27, \"down\": 0.40}}",
+    "reversion_advocate": "[Vòng 1]\n1. ADR10 = 31,46 đang bị ba phiên lớn (52,2; 52,8; 43,9) kéo lên; trung vị 10 phiên chỉ khoảng 28. Bốn phiên gần nhất có biên độ 26,2 / 22,2 / 30,6 / 19,9, trung bình 24,7, tức đã nằm dưới ngưỡng low 25,2. So với ngưỡng hiện tại, 10 phiên chia 4 low / 3 normal / 3 high, và biến động đang co lại.\n2. Bốn phiên gần nhất đóng cửa trong dải hẹp 1842–1856, giữa biên 10 phiên (1800–1880). D-1 có khối lượng thấp thứ hai trong 10 phiên, phiên chiều chỉ dao động 1834,5–1849; tin sáng cũng nói thanh khoản giảm, \"điều chỉnh, tích lũy kéo dài\".\n3. ATC D-1 khớp đúng đỉnh 1851 với basis +6,09 khi còn ba phiên là đáo hạn. Phần chênh này dễ bị kéo về, nên giá khó chạy tiếp theo đà ATC và nghiêng nhẹ về phía giảm/đi ngang.\n4. Khối ngoại đổi dấu liên tục (5 phiên chỉ −96,5 tỷ), không có dòng tiền một chiều. \"Phố Wall biến động nhẹ\".\n5. Tỷ lệ thân/biên độ: 6/10 phiên dưới 0,5, nên range là lớp nền.\nThừa nhận: chỉ 2/10 phiên có |đóng − mở| < 6,3, nên flat không thể cao. Sáng thứ Hai, tuần đáo hạn, có tin Nvidia/Fed/địa chính trị và không có số liệu thế giới qua đêm, nên vẫn giữ khoảng 1/4 cho high.\n{\"vol\": {\"low\": 0.42, \"normal\": 0.34, \"high\": 0.24}, \"day_type\": {\"trend\": 0.38, \"range\": 0.62}, \"direction\": {\"up\": 0.30, \"flat\": 0.34, \"down\": 0.36}}\n\n[Vòng 2]\nPhản biện TREND: \"nén rồi bung\" không có bằng chứng trong gói. Phiên hẹp nhất (05/11: 13,8) được nối bằng một phiên normal (29,7), không phải high. Lập luận \"mở quanh 1850–1858 thì 4/5 phiên giảm\" giả định giá mở D0, thứ chưa ai biết; nếu basis co ngay lúc mở thì phần giảm nằm ở gap, không tính vào đóng − mở.\nPhản biện SKEPTIC: đã tự đếm low 4/10 và thừa nhận phân phối lệch phải, nhưng lại đặt low 0,38, thấp hơn chính tần suất nền của mình. Co biên 4 phiên là ít dữ liệu, nhưng nó cùng chiều với khối lượng thấp, không ngược.\nĐiểm làm tôi đổi ý: flat chỉ 2/10 và n=10 quá nhỏ (SKEPTIC), nên tôi hạ flat từ 0,34 xuống 0,32 và low từ 0,42 xuống 0,41. Sốc tin chủ yếu vào gap (SKEPTIC) nên giữ high thấp.\n{\"vol\": {\"low\": 0.41, \"normal\": 0.34, \"high\": 0.25}, \"day_type\": {\"trend\": 0.39, \"range\": 0.61}, \"direction\": {\"up\": 0.31, \"flat\": 0.32, \"down\": 0.37}}",
+    "skeptic": "[Vòng 1]\nTần suất nền (10 phiên, ngưỡng ADR10 hiện tại): vol low 4 / normal 3 / high 3; trend 4 / range 6 (06/11 ở 0,498 sát ngưỡng); up 4 / flat 2 / down 4. Với n=10, sai số chuẩn của mỗi tỷ lệ khoảng ±15 điểm %, nên không phân biệt được 30% với 45%. Nhãn vol của các phiên cũ lẽ ra phải tính theo ADR10 của chính chúng, gói không có.\nSuy diễn dễ đi quá dữ liệu:\n- Phía \"trend/biến động cao\": tin Nvidia, Kremlin, USD mạnh nghe to nhưng tiêu đề khác lại ghi \"Phố Wall biến động nhẹ\" và không có số qua đêm. Sốc qua đêm chủ yếu vào gap mở cửa, trong khi cả ba câu đo từ giá mở 09:00.\n- Phía \"range/biến động thấp\": 4 phiên gần nhất trung bình 24,7 điểm và khối lượng thấp gợi ý co biên, nhưng chỉ là 4 điểm dữ liệu. Phiên 05/11 (13,8) nằm ngay sau phiên 52,8.\n- Phân phối biên độ lệch phải (trung vị ≈ 28 < trung bình 31,5) nên low hơi nhiều hơn high về mặt cơ học. Đây là lý do duy nhất để nghiêng về low.\n- Hướng: basis +6,1 khi còn 3 phiên tới đáo hạn, ATC kéo lên đúng đỉnh, khối ngoại bán ròng 10 phiên. Chỉ nghiêng nhẹ về down, không hơn.\nGói không cho biết: số liệu thế giới qua đêm, tin từ chiều 13/11 đến tối 15/11, OI và dòng tiền phái sinh, hiệu ứng thứ Hai và tuần đáo hạn (không có mẫu).\n{\"vol\": {\"low\": 0.38, \"normal\": 0.35, \"high\": 0.27}, \"day_type\": {\"trend\": 0.41, \"range\": 0.59}, \"direction\": {\"up\": 0.34, \"flat\": 0.29, \"down\": 0.37}}\n\n[Vòng 2]\nTREND_ADVOCATE đi quá dữ liệu: \"Nén rồi bung\": sau 3 phiên biên độ thấp (03/11, 05/11, 11/11), phiên kế tiếp là 1 high, 2 normal. Với n=3, đây chưa phải quy luật. \"Mở quanh 1850–1858 thì 4/5 phiên giảm\": khoảng giá chọn sau khi nhìn kết quả, n=5, và giá mở D0 chưa biết.\nREVERSION_ADVOCATE đi quá dữ liệu: Flat 0,34 mâu thuẫn với chính tần suất 2/10 mà họ thừa nhận. \"Co biên tiếp diễn\": cũng 3 phiên trên cho thấy sau phiên low chưa lần nào low tiếp. Basis co lại có thể do chỉ số tăng, không nhất thiết hợp đồng giảm.\nĐứng vững: Biên độ lệch phải nên low nhỉnh hơn high. Range là lớp nền (6/10). Nghiêng nhẹ về down. Nhưng cả hai phe dùng chung một bằng chứng (basis/ATC), nên đồng thuận này không phải xác nhận độc lập.\nTôi giữ gần tần suất nền, chỉ bớt low một điểm.\n{\"vol\": {\"low\": 0.37, \"normal\": 0.36, \"high\": 0.27}, \"day_type\": {\"trend\": 0.41, \"range\": 0.59}, \"direction\": {\"up\": 0.34, \"flat\": 0.29, \"down\": 0.37}}",
+    "judge": "Nhận: (1) Biên độ lệch phải (trung vị ≈ 28 < ADR10 31,46) nên low nhỉnh hơn high về mặt cơ học; bốn phiên gần nhất (26,2 / 22,2 / 30,6 / 19,9) và khối lượng thấp cùng chiều với điều đó. (2) Sốc tin qua đêm chủ yếu nằm ở gap mở cửa, trong khi cả ba câu đo từ giá mở 09:00, nên tin Nvidia/Kremlin/USD không đủ để nâng high hay trend. (3) Range là lớp nền (6/10). (4) Basis +6,09 do ATC kéo lên đúng đỉnh, còn ba phiên tới đáo hạn: chỉ nghiêng nhẹ về down, vì phần co có thể rơi vào gap hoặc do chỉ số tăng.\nBác: \"nén rồi bung\" (n=3, sau phiên low là 1 high, 2 normal); \"mở quanh 1850–1858 thì 4/5 phiên giảm\" (khoảng giá chọn sau kết quả, giá mở D0 chưa biết); flat 0,32–0,34 của REVERSION (tần suất mẫu 2/10). Tuy vậy tôi để flat hơi trên 2/10 vì biên độ kỳ vọng thấp làm ngưỡng 6,3 điểm dễ chạm hơn, và n=10 quá nhỏ. Hiệu ứng thứ Hai/tuần đáo hạn không có mẫu nên không dùng."
+  }
+}
