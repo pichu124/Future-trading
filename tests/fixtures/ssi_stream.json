@@ -1,0 +1,17 @@
+{
+  "_note": "Frame MẪU dựng theo mã nguồn SDK chính thức ssi-sdk 3.3.2 (services/streaming.py _parse_data_message, models/streaming.py TradeMessage/QuoteMessage.from_dict, transport/dispatch.py). CHƯA phải bản ghi server thật — định dạng 't' và đơn vị giá phái sinh còn ❓ (docs/broker_notes.md §2.4).",
+  "sub_ok": {"method": "subscribe", "channel": "DATA", "status": "success", "message": "ok"},
+  "sub_error": {"method": "subscribe", "channel": "DATA", "status": "error", "message": "Invalid topic"},
+  "pong": {"method": "ping_pong", "channel": "HEARTBEAT", "status": "success", "message": "pong"},
+  "reject_auth": {"code": 401, "msg": "Unauthorized"},
+  "reject_rate": {"code": 429, "msg": "Too many connections", "retryAfter": 45},
+  "quote": {"channel": "DATA", "topic": "quote.41I1GB000", "data": {"t": 1794197700123, "s": "41I1GB000", "bids": [[1352.3, 12], [1352.2, 20], [1352.1, 31]], "asks": [[1352.5, 7], [1352.6, 9], [1352.7, 15]]}},
+  "trade": {"channel": "DATA", "topic": "trade.41I1GB000", "data": {"t": 1794197700456, "s": "41I1GB000", "p": 1352.5, "q": 3, "si": "B", "v": 15234}},
+  "trade_strings": {"channel": "DATA", "topic": "TRADE.41I1GB000@tick", "data": {"t": "11:15:01", "s": "41I1GB000", "p": "1352.4", "q": "2.0", "si": "S", "v": "15,236"}},
+  "trade_iso": {"channel": "DATA", "topic": "trade.41I1GB000", "data": {"t": "2026-11-09T11:15:02", "s": "41I1GB000", "p": 1352.6, "q": 1, "v": 15237}},
+  "candle": {"channel": "DATA", "topic": "trade.41I1GB000@1m", "data": {"t": 1794197700000, "s": "41I1GB000", "o": 1352, "h": 1353, "l": 1351.5, "c": 1352.5, "v": 900}},
+  "trade_ato": {"channel": "DATA", "topic": "trade.41I1GB000", "data": {"t": 1794197700000, "s": "41I1GB000", "p": "ATO", "q": 5, "v": 5}},
+  "bad_price": {"channel": "DATA", "topic": "trade.41I1GB000", "data": {"t": 1794197700000, "s": "41I1GB000", "p": 1352500, "q": 1, "v": 6}},
+  "other_symbol": {"channel": "DATA", "topic": "trade.41I1GC000", "data": {"t": 1794197700000, "s": "41I1GC000", "p": 1355.0, "q": 1, "v": 1}},
+  "trading_event": {"channel": "TRADING", "topic": "order.0001234568", "data": {"eventType": "orderEvent"}}
+}

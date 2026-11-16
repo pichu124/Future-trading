@@ -1,22 +1,54 @@
 # holidays.yaml — ngày NGHỈ GIAO DỊCH (ngoài thứ 7, CN).
 #
-# ⚠️ DANH SÁCH NÀY CHƯA ĐẦY ĐỦ. Chỉ chứa:
-#   - các ngày lễ cố định dương lịch (01/01, 30/04, 01/05, 02/09) rơi vào ngày thường;
-#   - các ngày Tết 2026 suy ra được chắc chắn (VN30F2602 đáo hạn 13/02 thay vì 19/02).
-# Ngày nghỉ bù, Tết Nguyên đán, Giỗ Tổ Hùng Vương và ngày nghỉ thêm dịp 02/09
-# PHẢI bổ sung theo thông báo lịch nghỉ hằng năm của HOSE/HNX.
+# 2026: ĐỦ (nguồn + kiểm chéo dữ liệu bên dưới; thêm 24/11 ngày 12/11/2026). 2027: CHƯA ĐỦ — ngày lễ dương lịch cố
+# định + Tết DỰ KIẾN theo lịch nghỉ công chức; Giỗ Tổ, Quốc khánh, 24/11, ngày nghỉ bù PHẢI bổ sung/đối chiếu khi
+# HNX/HOSE công bố lịch nghỉ 2027 (thường cuối năm trước).
 # `python scripts/check_calendar.py` cảnh báo khi một năm còn thiếu.
 #
 # Định dạng: YYYY-MM-DD: mô tả
 
+# ---- 2025: theo thông báo HNX qua báo chí (nhandan.vn, thitruongtaichinhtiente.vn, thuvienphapluat.vn) —
+# CHƯA kiểm chéo bằng dữ liệu (dữ liệu ngày VN30 của connector chỉ có từ 10/11/2025). Dùng cho backtest dữ liệu 2025.
+"2025-01-01": Tết Dương lịch
+"2025-01-27": Tết Nguyên đán Ất Tỵ
+"2025-01-28": Tết Nguyên đán Ất Tỵ
+"2025-01-29": Tết Nguyên đán Ất Tỵ
+"2025-01-30": Tết Nguyên đán Ất Tỵ
+"2025-01-31": Tết Nguyên đán Ất Tỵ
+"2025-04-07": Giỗ Tổ Hùng Vương
+"2025-04-30": Ngày Giải phóng miền Nam
+"2025-05-01": Quốc tế Lao động
+"2025-05-02": hoán đổi ngày làm việc sang thứ Bảy 26/04 (giao dịch lại 05/05)
+"2025-09-01": Quốc khánh (ngày nghỉ liền kề)
+"2025-09-02": Quốc khánh
+
+# ---- 2026: ĐỦ (đối chiếu 08/11/2026) ----
+# Nguồn: thông báo lịch nghỉ HNX/HOSE 2026 qua báo chí (nhandan.vn, thitruongtaichinhtiente.vn, thuvienphapluat.vn —
+# TB 2294/TB-SGDHCM); KIỂM CHÉO bằng dữ liệu ngày VN30 (DNSE, 10/11/2025–06/11/2026): đúng 13 ngày thường dưới đây
+# không có phiên, mọi ngày thường khác đều có phiên.
 "2026-01-01": Tết Dương lịch
-"2026-02-16": Tết Nguyên đán (suy từ lịch đáo hạn VN30F2602)
-"2026-02-17": Tết Nguyên đán (suy từ lịch đáo hạn VN30F2602)
-"2026-02-18": Tết Nguyên đán (suy từ lịch đáo hạn VN30F2602)
-"2026-02-19": Tết Nguyên đán (suy từ lịch đáo hạn VN30F2602)
+"2026-01-02": Tết Dương lịch — hoán đổi ngày làm việc (VN30 không có phiên; một bài báo ghi HNX giao dịch ⇒ ❓, nghỉ là hướng an toàn)
+"2026-02-16": Tết Nguyên đán Bính Ngọ
+"2026-02-17": Tết Nguyên đán Bính Ngọ
+"2026-02-18": Tết Nguyên đán Bính Ngọ
+"2026-02-19": Tết Nguyên đán Bính Ngọ
+"2026-02-20": Tết Nguyên đán Bính Ngọ
+"2026-04-27": Nghỉ bù Giỗ Tổ Hùng Vương (10/3 âm lịch = CN 26/04)
 "2026-04-30": Ngày Giải phóng miền Nam
 "2026-05-01": Quốc tế Lao động
+"2026-08-31": Quốc khánh — hoán đổi (làm bù thứ Bảy 22/08, sở KHÔNG giao dịch ngày làm bù)
+"2026-09-01": Quốc khánh
 "2026-09-02": Quốc khánh
+# Bổ sung 12/11/2026: Ngày Văn hóa Việt Nam (Nghị quyết 28/2026/QH16, hiệu lực 01/07/2026). HNX thông báo 10/11/2026,
+# HOSE 11/11/2026 (bổ sung TB 2294/TB-SGDHCM): nghỉ giao dịch thứ Ba 24/11, giao dịch lại 25/11 (cafef.vn, index.vn).
+"2026-11-24": Ngày Văn hóa Việt Nam
 
 "2027-01-01": Tết Dương lịch
+# Tết Đinh Mùi — DỰ KIẾN: công chức nghỉ 04/02 → 10/02/2027 (TB 11483/TB-BNV ngày 09/10/2026 theo VB 10065/VPCP-KGVX;
+# dantri.com.vn). Sở thường theo lịch này (2026 khớp) nhưng CHƯA công bố ⇒ đối chiếu khi HNX/HOSE ra thông báo.
+"2027-02-04": Tết Nguyên đán Đinh Mùi (dự kiến — chờ thông báo sở)
+"2027-02-05": Tết Nguyên đán Đinh Mùi (dự kiến — chờ thông báo sở)
+"2027-02-08": Tết Nguyên đán Đinh Mùi (dự kiến — chờ thông báo sở)
+"2027-02-09": Tết Nguyên đán Đinh Mùi (dự kiến — chờ thông báo sở)
+"2027-02-10": Tết Nguyên đán Đinh Mùi (dự kiến — chờ thông báo sở)
 "2027-04-30": Ngày Giải phóng miền Nam

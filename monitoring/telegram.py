@@ -30,6 +30,24 @@ class TelegramConfigError(RuntimeError):
     pass
 
 
+_BOT_PATH_RE = re.compile(r"/bot[^/\s'\"]+")
+
+
+def redact(text: str, token: str = "") -> str:
+    """Xoá token khỏi chuỗi lỗi (requests đưa nguyên URL /bot<TOKEN>/… vào thông báo lỗi)."""
+    out = str(text)
+    if token:
+        out = out.replace(token, "<token>")
+    return _BOT_PATH_RE.sub("/bot<token>", out)
+
+
+def _call(fn, token: str, *a, **kw):
+    try:
+        return fn(*a, **kw)
+    except Exception as exc:
+        raise RuntimeError(f"Telegram: {type(exc).__name__}: {redact(str(exc), token)}") from None
+
+
 def channel_env(channel: str) -> tuple[str, str]:
     up = channel.upper()
     return f"TELEGRAM_{up}_BOT_TOKEN", f"TELEGRAM_{up}_CHAT_ID"
@@ -117,17 +135,17 @@ def send_message(text: str, channel: Optional[str] = "trading", parse_mode: str 
         body = part if n == 1 else f"{part}\n<i>({i + 1}/{n})</i>"
         payload = {"chat_id": chat, "text": body, "parse_mode": parse_mode,
                    "disable_web_page_preview": True}
-        resp = session.post(url, json=payload, timeout=timeout)
+        resp = _call(session.post, token, url, json=payload, timeout=timeout)
         if resp.status_code == 400:
             new_id = _migrated_to(resp)
             if new_id:
                 log.warning("Group Telegram đã thành supergroup — gửi tới %s; sửa chat id trong .env", new_id)
                 chat = new_id
-                resp = session.post(url, json={**payload, "chat_id": chat}, timeout=timeout)
+                resp = _call(session.post, token, url, json={**payload, "chat_id": chat}, timeout=timeout)
         if resp.status_code == 400 and parse_mode:
             log.warning("Telegram từ chối HTML (%s) — gửi lại dạng plain", _error_detail(resp))
-            resp = session.post(url, json={"chat_id": chat, "text": strip_tags(body),
-                                           "disable_web_page_preview": True}, timeout=timeout)
+            resp = _call(session.post, token, url, json={"chat_id": chat, "text": strip_tags(body),
+                                                         "disable_web_page_preview": True}, timeout=timeout)
         if not resp.ok:
             raise RuntimeError(f"Telegram {resp.status_code}: {_error_detail(resp)}")
         result = resp.json()
@@ -140,5 +158,55 @@ def notify(text: str, channel: Optional[str] = "trading", **kwargs: Any) -> bool
         send_message(text, channel=channel, **kwargs)
         return True
     except Exception as exc:          # cảnh báo hỏng không được làm sập bot
-        log.error("Gửi Telegram thất bại: %s", exc)
+        log.error("Gửi Telegram thất bại: %s", redact(str(exc)))
         return False
+
+
+# ------------------------------------------------------------------ lệnh điều khiển ----
+
+def parse_commands(updates: list, authorized_chat_id: str) -> tuple[list[str], Optional[int]]:
+    """Kết quả getUpdates → (lệnh, offset kế tiếp). Chỉ nhận tin MỚI từ đúng chat được cấu hình.
+
+    "/status@ten_bot" ⇒ "status"; "/otp ssi 123456" ⇒ "otp ssi 123456" (lệnh duy nhất giữ tham số, tối đa 2).
+    Tin sửa (edited_message) bị bỏ: không chạy lại lệnh cũ.
+    """
+    cmds: list[str] = []
+    last_id: Optional[int] = None
+    for u in updates:
+        uid = u.get("update_id")
+        if isinstance(uid, int):
+            last_id = uid if last_id is None else max(last_id, uid)
+        msg = u.get("message")
+        if not isinstance(msg, dict):
+            continue
+        if str((msg.get("chat") or {}).get("id")) != str(authorized_chat_id):
+            continue
+        text = str(msg.get("text") or "").strip()
+        if text.startswith("/"):
+            parts = text[1:].split()
+            if not parts:
+                continue
+            name = parts[0].split("@")[0].lower()
+            # chỉ /otp giữ tham số ("/otp dnse 123456", "/otp 123456"); các lệnh khác bỏ tham số
+            cmds.append(" ".join([name] + parts[1:3]) if name == "otp" else name)
+    return cmds, (last_id + 1 if last_id is not None else None)
+
+
+def fetch_updates(offset: Optional[int], channel: Optional[str] = "trading", session: Any = None,
+                  env: Optional[dict] = None, timeout: float = 10.0) -> list:
+    """Gọi getUpdates (không long-poll). Lỗi mạng ⇒ ném để người gọi tự bỏ qua lượt này."""
+    if session is None:
+        import requests
+        session = requests
+    token, _ = credentials(channel, env)
+    if not token:
+        raise TelegramConfigError("Thiếu token Telegram")
+    params = {"timeout": 0}
+    if offset is not None:
+        params["offset"] = offset
+    resp = _call(session.get, token, _API.format(token=token, method="getUpdates"), params=params,
+                 timeout=timeout)
+    data = resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(f"Telegram getUpdates lỗi: {data.get('description')}")
+    return list(data.get("result") or [])
