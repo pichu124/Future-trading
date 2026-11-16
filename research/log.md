@@ -222,3 +222,39 @@ dùng VWAP — dùng giá đóng HÔM TRƯỚC làm mốc.
   như chỉ là nhiễu), nhưng luật đã chốt; nới ngưỡng gap để có thêm lệnh = cấu hình MỚI, và biến thể 0,24 (17 lệnh)
   còn lỗ nặng hơn ⇒ không có lý do gì để thử tiếp hướng này.
 - Hệ quả: OOS-A (nến SSI 01/01→24/03/2026) VẪN CHƯA ai nhìn ⇒ còn sạch cho chiến lược sau. `n_trials` = 6.
+
+## Nhật ký regime shadow của nhóm AI — đăng ký trước (16/11/2026, TRƯỚC khi có nhận định nào được ghi)
+
+Không phải cấu hình chiến lược ⇒ KHÔNG thêm dòng bảng, `n_trials` giữ **6**. Đây là thí nghiệm đo riêng: nhóm AI
+tranh luận mỗi sáng có dự báo được kiểu phiên hôm nay tốt hơn một baseline thống kê không. Quy trình:
+`research/regime_shadow.md`; công cụ: `scripts/regime_call.py`, `scripts/score_regime_calls.py`; số ở settings
+`research.regime_shadow`. Người dùng chọn chạy bằng tác vụ Claude hẹn giờ trên cloud (16/11/2026).
+
+- **Vì sao làm kiểu "shadow":** nhận định ghi TRƯỚC giờ ATO (script đóng dấu giờ, từ chối từ 08:45, không ghi đè;
+  thời điểm push lên GitHub là bằng chứng thứ hai) ⇒ là dự báo thật về tương lai, tránh được lỗi LLM "nhớ" lịch sử
+  khi backtest. Bot không đọc các file này (CLAUDE.md mục 8 giữ nguyên; `tests/test_regime_shadow_isolation.py`).
+- **Ba câu hỏi, nhãn thực tế** (nến 1 phút của HĐ bot giao dịch hôm đó, 09:00 → 14:45; ADR10 = trung bình đỉnh − đáy
+  10 phiên liền trước): `vol` = (đỉnh − đáy)/ADR10 < 0,8 low · > 1,2 high · còn lại normal; `day_type` =
+  |đóng − mở|/(đỉnh − đáy) ≥ 0,5 trend · còn lại range; `direction` = (đóng − mở) ≥ +0,2·ADR10 up · ≤ −0,2·ADR10 down
+  · còn lại flat. Ngưỡng chốt từ suy luận, CHƯA tính tần suất nhãn trên bất kỳ dữ liệu nào.
+- **Người dự báo:** `debate` (3 vai + trọng tài) và `single` (một agent, làm trước tranh luận). **Baseline** (chỉ dùng
+  nhãn các ngày trước ngày chấm): `climatology` = tần suất làm trơn Laplace; `markov` = tần suất có điều kiện theo nhãn
+  phiên liền trước, làm trơn Laplace.
+- **Điểm:** Brier đa lớp Σ(p − o)² theo ngày.
+- **Luật kết luận (cố định):** chỉ câu hỏi chính `day_type` (thứ quyết định nên dùng bot theo xu hướng hay bot đảo
+  chiều), trên ĐÚNG **60 phiên chấm được đầu tiên** (chạy lại lúc nào cũng ra một kết quả). **CÓ GIÁ TRỊ** ⇔ Brier
+  trung bình của `debate` thấp hơn CẢ `climatology` lẫn `markov` VÀ p sign-flip một phía của chuỗi (Brier baseline tốt
+  hơn − Brier `debate`) theo ngày < 0,05. Chưa đủ 60 phiên ⇒ **CHƯA ĐỦ**. Còn lại ⇒ **KHÔNG CÓ GIÁ TRỊ**, dừng.
+- **Chỉ báo cáo thêm, không đổi kết luận:** `vol`, `direction`; `debate` so với `single` (tranh luận có thêm gì so với
+  một agent không); số ngày giao dịch bị lỡ nhận định.
+- **CÓ GIÁ TRỊ thì sao:** vẫn KHÔNG nối vào bot. Bước kế tiếp là người dùng quyết có sửa CLAUDE.md mục 8 để cho nhận
+  định quyền GIẢM rủi ro (chặn mở vị thế / giảm khối lượng) hay không; dùng nó làm cổng cho một chiến lược = cấu hình
+  MỚI, đăng ký trước, tăng `n_trials`.
+- **Đổi bất kỳ thứ gì dưới đây = thí nghiệm MỚI, chấm lại từ phiên đầu sau khi đổi:** định nghĩa nhãn/ngưỡng, câu hỏi
+  chính, số phiên, cách tranh luận (số vai, số vòng), mô hình chạy tác vụ, danh sách nguồn dữ liệu bắt buộc.
+- **Giới hạn đã biết (ghi trung thực):** (1) không connector nào có chứng khoán thế giới qua đêm, dầu, vàng ⇒ nhóm AI
+  thiếu đúng loại thông tin dễ có ích nhất buổi sáng; kết quả đo "nhóm AI với dữ liệu hiện có", không phải giới hạn
+  trên. (2) 60 phiên chỉ đủ phát hiện lợi thế LỚN; lợi thế nhỏ sẽ ra KHÔNG CÓ GIÁ TRỊ — chấp nhận (thà bỏ sót còn hơn
+  tin nhầm). (3) Ngày tác vụ lỡ giờ hoặc lỗi thì không có nhận định, không bù sau. (4) Công thức gom dữ liệu mới kiểm
+  trong phiên ngày 16/11, hành vi các tool lúc sáng sớm chưa kiểm.
+

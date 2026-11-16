@@ -229,3 +229,19 @@ live:
 monitoring:
   heartbeat_seconds: 30
   telegram_channel: trading             # dùng TELEGRAM_TRADING_BOT_TOKEN / _CHAT_ID trong .env
+
+# Nhật ký regime "shadow" của nhóm AI (research/regime_shadow.md). CHỈ NGHIÊN CỨU: không module nào của bot (live/,
+# strategy/, risk/, brokers/, backtest/…) được đọc mục này hay thư mục `calls_dir` — tests/test_regime_shadow_isolation.py.
+# Định nghĩa nhãn + luật kết luận ĐĂNG KÝ TRƯỚC 16/11/2026 (research/log.md), trước khi có nhận định nào được ghi:
+# đổi bất kỳ số nào = thí nghiệm MỚI (ghi lại trong log, chấm lại từ đầu).
+research:
+  regime_shadow:
+    calls_dir: research/regime_calls    # nằm TRONG git (data/ bị gitignore): tác vụ cloud commit một file mỗi sáng
+    adr_days: 10                        # ADR = trung bình (đỉnh − đáy) của N phiên trước
+    vol_low_below: 0.8                  # (đỉnh − đáy)/ADR < 0,8 ⇒ low
+    vol_high_above: 1.2                 # > 1,2 ⇒ high; còn lại normal
+    trend_min_efficiency: 0.5           # |đóng − mở| / (đỉnh − đáy) ≥ 0,5 ⇒ trend; còn lại range
+    flat_band_adr: 0.2                  # |đóng − mở| < 0,2 × ADR ⇒ flat; ngoài ra up/down theo dấu
+    primary_question: day_type          # câu hỏi DUY NHẤT dùng để kết luận (vol, direction chỉ báo cáo thêm)
+    min_days: 60                        # kết luận trên ĐÚNG N phiên đầu tiên chấm được; trước đó = CHƯA ĐỦ
+    p_threshold: 0.05                   # p sign-flip một phía của (Brier baseline − Brier tranh luận) theo ngày

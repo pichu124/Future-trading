@@ -1,5 +1,27 @@
 # Tiến độ
 
+## 2026-11-16 — Nghiên cứu: nhật ký regime "shadow" của nhóm AI (gói 1)
+
+- Bối cảnh: ý tưởng "nhiều bot theo giai đoạn thị trường + nhóm AI tranh luận chọn bot". Kết luận sau khi đọc tài liệu: chưa có bot nào có edge để mà chọn, và LLM chọn bot là phần yếu bằng chứng nhất ⇒ trước hết ĐO xem nhóm AI có dự báo được kiểu phiên không, không nối vào bot. CLAUDE.md mục 8 giữ nguyên.
+- `scripts/regime_call.py`: ghi một file `research/regime_calls/YYYY-MM-DD.json` mỗi ngày giao dịch; script đóng dấu giờ/ngày/hợp đồng, từ chối từ `session.ato_start`, ngày nghỉ, ghi đè, payload sai; `--check`, `--dry-run`.
+- `scripts/score_regime_calls.py`: nhãn thực tế từ nến 1 phút, Brier, baseline `climatology` + `markov`, kết luận trên đúng 60 phiên đầu.
+- `tests/test_regime_call.py`, `tests/test_score_regime_calls.py` (viết trước), `tests/test_regime_shadow_isolation.py` (bot không được chạm vào nhật ký này).
+- `config/settings.yaml` mục `research.regime_shadow`; `research/regime_shadow.md` (quy trình hằng sáng + công thức gom dữ liệu đã gọi thử); `research/log.md` (đăng ký trước luật kết luận, `n_trials` giữ 6).
+- Chạy bằng tác vụ Claude hẹn giờ trên cloud mỗi sáng ngày thường, ghi vào nhánh `claude/regime-shadow-calls`.
+
+**Giả định / rủi ro còn mở**
+- Không có dữ liệu thế giới qua đêm (connector Finhay đóng băng từ 24/10/2026, SSI chỉ có số tuần). Muốn có phải mở mạng của môi trường cloud cho một nguồn giá.
+- Công thức gom dữ liệu mới kiểm trong phiên; hành vi lúc ~07:50 (dòng "hôm nay", giá tham chiếu DNSE đã sang ngày chưa) chưa kiểm.
+- Tác vụ lỡ giờ ⇒ mất phiên đó (không bù). Bộ chấm liệt kê các ngày lỡ.
+- Bộ chấm cần nến 1 phút ⇒ chạy trên máy người dùng, không chạy được trên cloud.
+- 60 phiên chỉ phát hiện được lợi thế lớn.
+
+**Người dùng cần làm**
+- [ ] Sau ~1 tuần: xem nhánh `claude/regime-shadow-calls` có đủ file mỗi ngày giao dịch không.
+- [ ] Sau ≥ 11 phiên có nến: chạy `scripts/score_regime_calls.py` (cách chạy ở `research/regime_shadow.md` mục 3).
+
+**Bước tiếp theo:** gói 2 — chọn giả thuyết cho bot #7 và đăng ký trước.
+
 ## 2026-11-12 — Hạ tầng C: lịch nghỉ — thêm 24/11/2026, Tết 2027 dự kiến
 
 - Tìm kiếm phát hiện ngày nghỉ MỚI năm nay: **24/11/2026 Ngày Văn hóa Việt Nam** — HNX (10/11) và HOSE (11/11) thông báo nghỉ giao dịch, giao dịch lại 25/11. Chưa có trong `config/holidays.yaml` ⇒ đã thêm (thiếu ⇒ recorder/runner chạy ngày sàn đóng, task canh báo nhầm, và 25/11 runner đòi dữ liệu 24/11 ⇒ từ chối chạy).
