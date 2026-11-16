@@ -7,12 +7,13 @@
 - `scripts/score_regime_calls.py`: nhãn thực tế từ nến 1 phút, Brier, baseline `climatology` + `markov`, kết luận trên đúng 60 phiên đầu.
 - `tests/test_regime_call.py`, `tests/test_score_regime_calls.py` (viết trước), `tests/test_regime_shadow_isolation.py` (bot không được chạm vào nhật ký này).
 - `config/settings.yaml` mục `research.regime_shadow`; `research/regime_shadow.md` (quy trình hằng sáng + công thức gom dữ liệu đã gọi thử); `research/log.md` (đăng ký trước luật kết luận, `n_trials` giữ 6).
-- Chạy bằng tác vụ Claude hẹn giờ trên cloud mỗi sáng ngày thường, ghi vào nhánh `claude/regime-shadow-calls`.
+- Chạy bằng tác vụ Claude hẹn giờ trên cloud, 07:50 thứ Hai–thứ Sáu (giờ VN), ghi vào nhánh `claude/regime-shadow-calls` qua worktree `../regime-calls`. Tác vụ bắn vào CHÍNH phiên Claude đã dựng nó: tác vụ tạo phiên mới mỗi sáng không mang theo connector SSI/DNSE/Finhay (tham số connector không dùng được cho tài khoản này).
 
 **Giả định / rủi ro còn mở**
 - Không có dữ liệu thế giới qua đêm (connector Finhay đóng băng từ 24/10/2026, SSI chỉ có số tuần). Muốn có phải mở mạng của môi trường cloud cho một nguồn giá.
 - Công thức gom dữ liệu mới kiểm trong phiên; hành vi lúc ~07:50 (dòng "hôm nay", giá tham chiếu DNSE đã sang ngày chưa) chưa kiểm.
 - Tác vụ lỡ giờ ⇒ mất phiên đó (không bù). Bộ chấm liệt kê các ngày lỡ.
+- Tác vụ sống nhờ một phiên Claude: phiên đó bị lưu trữ/xoá ⇒ nhật ký dừng. Bền hơn: tạo routine trong giao diện claude.ai có gắn repo + 3 connector, dùng lại lời nhắc ở `research/regime_shadow.md`.
 - Bộ chấm cần nến 1 phút ⇒ chạy trên máy người dùng, không chạy được trên cloud.
 - 60 phiên chỉ phát hiện được lợi thế lớn.
 
