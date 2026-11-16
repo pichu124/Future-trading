@@ -1,5 +1,12 @@
 # Tiến độ
 
+## 2026-11-16 — Lưu trữ nến 1 phút SSI hằng tuần (người dùng đồng ý)
+
+- Nhánh dữ liệu `claude/ssi-bar-archive` (orphan, chỉ dữ liệu): nến 1 phút VN30 + VN30F2611/2612 từ 15/10/2026 (66 file, ~0,9 MB/tháng).
+- `scripts/ssi_archive_plan.py` (danh sách lệnh tải tuần: VN30 + mọi HĐ F1M/F2M trong tuần; test viết trước, gồm tuần đáo hạn), quy trình `docs/ssi_archive.md`.
+- Tác vụ hẹn giờ sáng thứ Bảy 09:13 (giờ VN), bắn vào phiên Claude đã dựng nó (cùng lý do như regime shadow: tác vụ tạo phiên mới không mang connector).
+- Rủi ro: phiên đó bị lưu trữ/xoá ⇒ cả hai tác vụ dừng; SSI đổi chính sách giữ dữ liệu ⇒ tuần bị rỗng (tác vụ báo).
+
 ## 2026-11-16 — Gói 2: đăng ký trước #7, #8, #9; code #7, #9; kiểm tra dữ liệu
 
 - `research/log.md`: đăng ký trước #7 đảo chiều qua ngày, #8 basis quá đà, #9 đà cuối phiên (`n_trials` = 9), commit TRƯỚC khi tải dữ liệu. Settings `strategy.prev_day_reversal`, `strategy.basis_reversion`, `strategy.late_momentum`.
