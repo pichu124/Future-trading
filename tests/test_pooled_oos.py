@@ -84,3 +84,39 @@ def test_slippage_stress_negative_fails():
     slip = [tr(t.entry_ts.date(), -100_000) for t in base]
     r = pooled_verdict(base, slip, [W1, W2], n_trials=5)
     assert r["verdict"] == KHONG_EDGE and r["slip_pnl_vnd"] < 0
+
+
+# ------------------------------------------------------------ CLI --bars (16/11/2026, cho #7/#9 trên nến SSI) ----
+
+class _NeverTrades:
+    TITLE = "không giao dịch"
+
+    @classmethod
+    def from_settings(cls, s):
+        return cls()
+
+    def on_bar(self, bar, ctx):
+        return []
+
+
+def test_cli_accepts_bars_instead_of_ticks(tmp_path, capsys):
+    import pandas as pd
+
+    from backtest.pooled import main
+    for d in (date(2026, 1, 5), date(2026, 1, 6)):
+        rows = [{"symbol": "VN30F2601", "start": datetime(d.year, d.month, d.day, 9, m), "open": 1800.0, "high": 1801.0,
+                 "low": 1799.0, "close": 1800.5, "volume": 10, "interval_s": 60, "volume_reliable": False}
+                for m in range(0, 30)]
+        p = tmp_path / "ohlc1m" / "VN30F2601" / f"{d}.parquet"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(rows).to_parquet(p)
+    rc = main(["--bars", str(tmp_path / "ohlc1m"), "--strategy", "tests.test_pooled_oos:_NeverTrades",
+               "--window", "2026-01-01:2026-01-05", "--window", "2026-01-06:", "--n-trials", "9"])
+    out = capsys.readouterr().out
+    assert rc == 0 and "n_trials = 9" in out and CHUA_DU in out and "0 lệnh" in out
+
+
+def test_cli_requires_exactly_one_source(capsys):
+    from backtest.pooled import main
+    with pytest.raises(SystemExit):
+        main(["--strategy", "tests.test_pooled_oos:_NeverTrades", "--window", "2026-01-01:"])

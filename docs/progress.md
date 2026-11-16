@@ -1,5 +1,16 @@
 # Tiến độ
 
+## 2026-11-16 — Gói 2: đăng ký trước #7, #8, #9; code #7, #9; kiểm tra dữ liệu
+
+- `research/log.md`: đăng ký trước #7 đảo chiều qua ngày, #8 basis quá đà, #9 đà cuối phiên (`n_trials` = 9), commit TRƯỚC khi tải dữ liệu. Settings `strategy.prev_day_reversal`, `strategy.basis_reversion`, `strategy.late_momentum`.
+- `strategy/prev_day_reversal.py` (#7), `strategy/late_momentum.py` (#9), `strategy.indicators.session_bars`; test viết trước (27 + 23), đột biến 9/10 bị bắt (1 đột biến tương đương).
+- `scripts/import_ssi_intraday.py` (kết quả thô SSI → Parquet), `scripts/check_bar_store.py` (ngày thiếu theo cửa sổ), `backtest.pooled --bars`, `backtest.robustness --until`.
+- Kiểm tra dữ liệu: bản tải lại SSI trên cloud thiếu 40/115 phiên IS ⇒ dừng theo luật; cần kho SSI 11/11 trên laptop. #8 KHÔNG KIỂM ĐƯỢC (nến chỉ số SSI chỉ có từ 15/10/2026).
+
+**Người dùng cần làm**
+- [ ] Trên laptop (có `data/ssi/ohlc1m` tải 11/11): `git pull`, chạy bước 1 rồi cổng IS cho #7 và #9 (lệnh trong tin nhắn 16/11), gửi lại kết quả. KHÔNG chạy `backtest.pooled` trước khi cổng IS đạt.
+- [ ] Quyết định có lưu nến chỉ số VN30 mỗi ngày để kiểm #8 về sau không.
+
 ## 2026-11-16 — Nghiên cứu: nhật ký regime "shadow" của nhóm AI (gói 1)
 
 - Bối cảnh: ý tưởng "nhiều bot theo giai đoạn thị trường + nhóm AI tranh luận chọn bot". Kết luận sau khi đọc tài liệu: chưa có bot nào có edge để mà chọn, và LLM chọn bot là phần yếu bằng chứng nhất ⇒ trước hết ĐO xem nhóm AI có dự báo được kiểu phiên không, không nối vào bot. CLAUDE.md mục 8 giữ nguyên.

@@ -7,6 +7,8 @@ CÓ EDGE ⇔ (a) ≥ 30 lệnh gộp; (b) P&L sau phí > 0 ở MỌI cửa sổ 
 
     python -m backtest.pooled --ticks data/history/trades --strategy strategy.morning_momentum:MorningMomentum \\
         --window 2026-03-16:2026-05-10 --window 2026-09-01:
+    python -m backtest.pooled --bars data/ssi/ohlc1m --strategy strategy.prev_day_reversal:PrevDayReversal \\
+        --window 2026-01-01:2026-03-24 --window 2026-03-25:2026-10-30        # chế độ NẾN
 """
 from __future__ import annotations
 
@@ -99,7 +101,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     from core.settings import MissingSetting, load_settings
 
     ap = argparse.ArgumentParser(description="Kiểm định OOS gộp nhiều cửa sổ (luật đăng ký trước)")
-    ap.add_argument("--ticks", nargs="+", required=True, help="vd data/history/trades (đọc dần từng ngày)")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--ticks", nargs="+", help="vd data/history/trades (đọc dần từng ngày)")
+    src.add_argument("--bars", nargs="+", help="nến 1 phút Parquet (chế độ NẾN, vd data/ssi/ohlc1m)")
     ap.add_argument("--source", help="chỉ dùng nguồn này khi dữ liệu có nhiều nguồn")
     ap.add_argument("--strategy", required=True, help="module:Class")
     ap.add_argument("--window", action="append", required=True, help="YYYY-MM-DD:YYYY-MM-DD hoặc YYYY-MM-DD: (tới nay)")
@@ -115,15 +119,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
     settings = load_settings()
     try:
-        store = TickStore(args.ticks, source=args.source,
-                          tick_size=float(settings.require("contract.tick_size_points")),
-                          spread_ticks=int(settings.require("backtest.synthetic_spread_ticks")))
+        if args.bars:
+            from backtest.engine import load_bars_parquet
+            bars, skipped = load_bars_parquet(args.bars)
+            if skipped:
+                print(f"(bỏ {skipped} dòng nến hỏng khi đọc)")
+        else:
+            store = TickStore(args.ticks, source=args.source,
+                              tick_size=float(settings.require("contract.tick_size_points")),
+                              spread_ticks=int(settings.require("backtest.synthetic_spread_ticks")))
     except (ValueError, MissingSetting) as exc:
         print(f"❌ {exc}")
         return 2
 
     def run(s):
-        return BacktestEngine(s, strat_cls.from_settings(s)).run_events(bars_from_ticks(store.iter())).trades
+        engine = BacktestEngine(s, strat_cls.from_settings(s))
+        if args.bars:
+            return engine.run_bars(bars).trades
+        return engine.run_events(bars_from_ticks(store.iter())).trades
 
     base = run(settings)
     slip = run(with_overrides(settings, {"backtest.slippage_ticks": args.slippage_stress_ticks}))

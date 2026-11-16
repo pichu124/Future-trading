@@ -336,3 +336,23 @@ chạy được trên cloud; chế độ nến bi quan hơn tick ~0,2 điểm/l�
   #8 cần engine cấp nến chỉ số đã đóng của hôm nay cho chiến lược (`StrategyContext`) và `--ref-bars` ở robustness /
   pooled; runner live/paper từ chối chiến lược cần nến tham chiếu.
 
+### Kết quả bước 1 — kiểm tra dữ liệu #7, #8, #9 (16/11/2026, cloud, TRƯỚC khi chạy bất kỳ chiến lược nào)
+
+- Tải lại nến 1 phút SSI qua kết nối Claude (20 lệnh gọi theo HĐ, `scripts/import_ssi_intraday.py` ⇒ `data/ssi`, 74.431
+  nến): SSI hiện trả RỖNG cho VN30F2509 (21/08→17/09/2025), VN30F2512 (20/11→17/12/2025) và VN30F2608 khung tháng 7
+  (thử lại 1d/1w/1m và mã liên tục VN30F1M — vẫn rỗng), dù lần tải 11/11/2026 lấy được. `scripts/check_bar_store.py`:
+  **IS thiếu 40/115 phiên** ❌ (> 10 ⇒ theo luật: dừng tìm lỗi đường ống, không kết luận); OOS-A thiếu 1/52 ✅; OOS-B
+  thiếu 5/152 ✅. Thêm: thiếu HĐ kế tiếp ở 8 ngày trước roll ⇒ không đo được chênh roll ⇒ ~10 phiên sau mỗi roll đó
+  không có ADR.
+- **Cách sửa (không đổi tham số, cửa sổ hay luật):** dùng kho SSI tải ngày 11/11/2026 (cùng nguồn, cùng tool; theo
+  `docs/progress.md` chỉ thiếu 8 ngày, có HĐ kế tiếp 5 ngày trước mỗi roll) đang nằm trên máy người dùng
+  (`data/ssi/ohlc1m`). Chạy lại bước 1 trên kho đó TRƯỚC cổng IS. Bản tải lại 16/11 không dùng để kết luận.
+- **#8: KHÔNG KIỂM ĐƯỢC** trên IS, OOS-A, OOS-B — nến 1 phút chỉ số VN30 của SSI chỉ có từ 15/10/2026 (có vẻ SSI giữ
+  ~1 tháng cuộn; "VN30INDEX" rỗng, "VN30-INDEX" lỗi), DNSE `/price/ohlc` không dùng được (docs/broker_notes.md). Đúng
+  luật đăng ký trước: lỗi dữ liệu, không phải kết luận; `n_trials` vẫn tính 9. Chưa viết code #8 (chưa có dữ liệu thì
+  không có gì để kiểm). Hướng khả thi duy nhất: lưu nến chỉ số mỗi ngày từ nay, kiểm #8 trên dữ liệu MỚI (đăng ký cửa
+  sổ trước khi có đủ dữ liệu).
+- Công cụ thêm hôm nay (test trước): `backtest.pooled --bars`, `backtest.robustness --until` (cổng IS không nạp nến sau
+  mốc), `scripts/check_bar_store.py`, `scripts/import_ssi_intraday.py`. Chạy thử trên dữ liệu GIẢ ngẫu nhiên: #7 vào
+  lệnh 09:16, #9 vào 13:50, không cảnh báo — chưa chạy chiến lược nào trên dữ liệu thật.
+
