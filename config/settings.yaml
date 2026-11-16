@@ -140,6 +140,40 @@ strategy:
     exit_bar: "11:24"                   # còn vị thế khi nến 11:24 đóng ⇒ thoát 11:25 (trước nghỉ trưa)
     qty: 1
 
+  # Cấu hình #7 — đảo chiều qua ngày (strategy/prev_day_reversal.py). ĐĂNG KÝ TRƯỚC 16/11/2026 (research/log.md):
+  # đổi bất kỳ số nào = cấu hình mới (thêm dòng log, tăng n_trials).
+  prev_day_reversal:
+    adr_days: 10
+    min_move_adr: 0.50                  # |đóng − mở của phiên trước| ≥ 0,50 × ADR ⇒ vào NGƯỢC hướng phiên trước
+    stop_adr: 0.40                      # stop = đóng nến quyết định ± 0,40 × ADR; không chốt lời
+    decision_bar: "09:15"               # quyết định khi nến 09:15 đóng (09:16) — risk cấm vào trước 09:15
+    exit_bar: "14:19"
+    qty: 1
+
+  # Cấu hình #8 — basis quá đà (strategy/basis_reversion.py). ĐĂNG KÝ TRƯỚC 16/11/2026. Cần nến 1 phút của chỉ số
+  # tham chiếu (backtest --ref-bars); live/paper CHƯA cấp ⇒ runner từ chối chiến lược này.
+  basis_reversion:
+    adr_days: 10
+    reference_symbol: VN30
+    lookback_minutes: 30                # basis tham chiếu = trung bình basis 30 phút khớp được TRƯỚC nến đang xét (hôm nay)
+    entry_dev_adr: 0.10                 # |basis − tham chiếu| ≥ 0,10 × ADR ⇒ vào NGƯỢC độ lệch (HĐ đắt ⇒ bán)
+    stop_adr: 0.15                      # stop = đóng ± 0,15 × ADR (xa thêm về phía lệch)
+    max_hold_minutes: 30                # giữ quá 30 phút ⇒ thoát; độ lệch về 0 (so tham chiếu lúc vào) ⇒ thoát
+    window_start: "09:30"               # xét nến giờ mở 09:30 … 13:59 (bỏ nến 11:29 — đóng lúc nghỉ trưa)
+    window_end: "13:59"
+    max_trades_per_day: 2
+    exit_bar: "14:19"
+    qty: 1
+
+  # Cấu hình #9 — đà cuối phiên (strategy/late_momentum.py). ĐĂNG KÝ TRƯỚC 16/11/2026.
+  late_momentum:
+    adr_days: 10
+    min_move_adr: 0.30                  # |đóng nến 13:49 − đóng phiên trước| ≥ 0,30 × ADR ⇒ vào THEO hướng lúc 13:50
+    stop_adr: 0.20                      # stop = đóng nến 13:49 ∓ 0,20 × ADR; không chốt lời
+    decision_bar: "13:49"
+    exit_bar: "14:19"                   # giữ 30 phút: 13:50 → 14:20 (risk đóng hết 14:25, trước ATC)
+    qty: 1
+
 # Tải lịch sử DNSE tự động mỗi chiều (scripts/download_today.py, Task Scheduler ~15:30 — docs/runner.md).
 history_download:
   not_before: "14:50"                   # trước giờ này (chạy bù buổi sáng) ⇒ chỉ tải tới phiên trước

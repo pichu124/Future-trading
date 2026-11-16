@@ -82,6 +82,9 @@ Thứ tự làm: #3 → #4 → #5, mỗi chiến lược một module (test trư
 | 2026-11-10 | Ngày xu hướng (`strategy/trend_day.py`) — cấu hình #4 | m = C(09:59) − O(09:00); \|m\| ≥ 0,35·ADR10 ⇒ theo m lúc 10:00; stop 0,30·ADR10; EXIT 14:20; 1 lệnh/ngày | như #3 — **chạy 10/11/2026** | IS: 11 lệnh, +2.566.300đ; OOS: 13 lệnh, +1.992.900đ (PF 1,45); trượt 2 tick OOS +1.732.900đ | OOS p 0,373 | **CHƯA ĐỦ BẰNG CHỨNG** (13 < 30). Độ nhạy chỉ 4/6 biến thể lãi (< 75%: min_move_adr 0,28 ⇒ −1,95tr, 0,42 ⇒ −0,81tr ⇒ đỉnh nhọn); walk-forward 3/4 đoạn lãi. Quá ít lệnh (24 trong 6 tháng). → theo dõi tiếp, KHÔNG đổi tham số. |
 | 2026-11-10 | Đảo chiều VWAP (`strategy/vwap_reversion.py`) — cấu hình #5 | \|C − VWAP\| ≥ 0,40·ADR10 (09:30–14:00) ⇒ ngược chiều, TP = VWAP, stop 0,25·ADR10 xa thêm; EXIT 14:20; ≤ 2 lệnh/ngày | như #3 — **chạy 10/11/2026** | IS: 46 lệnh, −10.788.200đ; OOS: 28 lệnh, −5.157.600đ (PF 0,55, win 32%) | OOS p 0,903 | **CHƯA ĐỦ (28 < 30) nhưng rõ ràng KHÔNG CÓ EDGE**: IS và OOS đều lỗ, 6/6 biến thể IS lỗ, 1/4 đoạn lãi, lỗ cả trước phí (−38,5 điểm OOS). DỪNG #5. KHÔNG thử phiên bản đảo ngược (= đào dữ liệu). | Đăng ký trước 10/11/2026. Làm rõ thực thi (10/11, trước khi chạy): bỏ nến đóng đúng 11:30 (risk chặn mở trong giờ trưa — tín hiệu chỉ phí lượt). |
 | 2026-11-12 | Lấp gap mở cửa (`strategy/gap_fade.py`) — cấu hình #6 | g = đóng nến 09:15 − đóng phiên trước (back-adjust); \|g\| ≥ 0,30·ADR10 ⇒ vào NGƯỢC g lúc 09:16; TP = đóng phiên trước; stop 0,30·ADR10; EXIT 11:25; 1 lệnh/ngày | IS nến SSI 23/07→31/12/2025 · OOS-A nến SSI 01/01→24/03/2026 · OOS-B tick DNSE 25/03/2026→ — **IS chạy 12/11/2026** (cloud, nến SSI cắt tới 31/12/2025) | IS: 8 lệnh, −2.763.600đ (PF 0,53); trượt 2 tick −2.893.600đ | IS p 0,776 | **KHÔNG CÓ EDGE — trượt cổng IS, KHÔNG mở OOS.** 0/6 biến thể độ nhạy lãi (min_gap 0,24 ⇒ 17 lệnh −6,06tr), 0/4 đoạn walk-forward lãi. Gap ≥ 0,30·ADR hiếm (10/107 ngày; ADR 2025 ~39 điểm). Luật: mục "Đăng ký trước #6". |
+| 2026-11-16 | Đảo chiều qua ngày (`strategy/prev_day_reversal.py`) — cấu hình #7 | m = đóng − mở phiên trước; \|m\| ≥ 0,50·ADR10 ⇒ vào NGƯỢC m lúc 09:16; stop 0,40·ADR10; EXIT 14:20; 1 lệnh/ngày | IS nến SSI 22/07→31/12/2025 · OOS-A nến SSI 01/01→24/03/2026 · OOS-B nến SSI 25/03→30/10/2026 — **chưa chạy** | | | Đăng ký trước 16/11/2026 (mục "Đăng ký trước #7, #8, #9"). |
+| 2026-11-16 | Basis quá đà (`strategy/basis_reversion.py`) — cấu hình #8 | d = basis − trung bình basis 30′ trước; \|d\| ≥ 0,10·ADR10 (09:30–14:00) ⇒ vào NGƯỢC d; stop 0,15·ADR10; thoát khi d về 0 hoặc giữ 30′; EXIT 14:20; ≤ 2 lệnh/ngày | như #7 + nến 1 phút chỉ số VN30 (SSI) — **chưa chạy** | | | Đăng ký trước 16/11/2026. |
+| 2026-11-16 | Đà cuối phiên (`strategy/late_momentum.py`) — cấu hình #9 | r = đóng nến 13:49 − đóng phiên trước; \|r\| ≥ 0,30·ADR10 ⇒ vào THEO r lúc 13:50; stop 0,20·ADR10; EXIT 14:20; 1 lệnh/ngày | như #7 — **chưa chạy** | | | Đăng ký trước 16/11/2026. |
 
 ### Kết quả #3–#5 và kế hoạch (10/11/2026)
 
@@ -257,4 +260,79 @@ tranh luận mỗi sáng có dự báo được kiểu phiên hôm nay tốt hơ
   trên. (2) 60 phiên chỉ đủ phát hiện lợi thế LỚN; lợi thế nhỏ sẽ ra KHÔNG CÓ GIÁ TRỊ — chấp nhận (thà bỏ sót còn hơn
   tin nhầm). (3) Ngày tác vụ lỡ giờ hoặc lỗi thì không có nhận định, không bù sau. (4) Công thức gom dữ liệu mới kiểm
   trong phiên ngày 16/11, hành vi các tool lúc sáng sớm chưa kiểm.
+
+## Đăng ký trước #7, #8, #9 (16/11/2026 — TRƯỚC khi viết code, tải hay chạy trên dữ liệu)
+
+Người dùng chọn thử cả ba ý tưởng cùng lúc (16/11/2026) ⇒ **`n_trials` = 9** (thêm 3 dòng bảng),
+`apply_selection_penalty` và ngưỡng p tính theo 9. Tham số CHỐT từ suy luận, KHÔNG nhìn kết quả; số nằm ở settings
+`strategy.prev_day_reversal`, `strategy.basis_reversion`, `strategy.late_momentum`. Đổi bất kỳ số nào = cấu hình MỚI
+(thêm dòng, tăng `n_trials`). Ba ý tưởng chọn để KHÁC sáu cấu hình đã trượt (4 theo đà / phá biên trong ngày, 2 đảo
+chiều trong ngày): #7 đảo chiều QUA NGÀY, #8 đảo chiều so với chỉ số cơ sở, #9 đà cuối phiên.
+
+Chung cho cả ba:
+- Nến 1 phút đã đóng; lệnh khớp ở nến kế tiếp; phí/thuế theo `fees.*`, trượt 1 bước, spread giả 1 bước.
+- ADR10 = trung bình (đỉnh − đáy) 10 phiên TRƯỚC (lịch sử nối chuỗi back-adjust); thiếu lịch sử ⇒ không giao dịch.
+- "Phiên trước" = đúng phiên giao dịch liền trước theo lịch nghỉ; thiếu phiên đó trong lịch sử ⇒ không giao dịch
+  (như #6, không lấy phiên cũ hơn).
+- Luật rủi ro cứng giữ nguyên (lỗ ngày 15 điểm, 2 lượt/ngày, thua liên tiếp 2, 1 HĐ, không vào trước 09:15 và sau
+  14:15, đóng hết 14:25, không giao dịch ngày đáo hạn).
+
+**#7 — Đảo chiều qua ngày** (`strategy/prev_day_reversal.py`). Giả thuyết: VN30F chủ yếu là nhà đầu tư cá nhân (DNSE
+27/10/2026: cá nhân ≈ 95% khối lượng) ⇒ phiên đi mạnh một chiều là phản ứng quá đà, phiên sau quay lại một phần
+(đảo chiều chuỗi thời gian qua ngày, ghi nhận trên hợp đồng tương lai CSI 300).
+- m = đóng nến CUỐI − mở nến ĐẦU của phiên trước. Quyết định MỘT lần khi nến 09:15 đóng (09:16).
+- |m| ≥ 0,50 × ADR10 và đang phẳng ⇒ vào NGƯỢC dấu m. Stop = đóng nến 09:15 ± 0,40 × ADR10. Không chốt lời.
+  EXIT khi nến 14:19 đóng. Tối đa 1 lệnh/ngày.
+- Kiểm độ nhạy: `adr_days` 10, `min_move_adr` 0,50, `stop_adr` 0,40.
+
+**#8 — Basis quá đà** (`strategy/basis_reversion.py`). Giả thuyết: HĐ tương lai và chỉ số đồng liên kết, độ lệch được
+điều chỉnh dần; khi HĐ chạy quá xa chỉ số trong vài phút (đám đông cá nhân đẩy giá HĐ), HĐ bị kéo về. Rủi ro đã biết
+TRƯỚC khi chạy: nếu HĐ DẪN chỉ số (chỉ số tính từ giá khớp cuối của cổ phiếu, hay chậm), độ lệch tự đóng nhờ chỉ số
+đuổi theo và chiến lược này lỗ — các nghiên cứu về VN30F mâu thuẫn nhau về chiều dẫn dắt.
+- basis(t) = đóng HĐ(t) − đóng chỉ số VN30(t), chỉ ở phút có CẢ HAI nến. Tham chiếu B(t) = trung bình basis của 30
+  phút khớp được GẦN NHẤT TRƯỚC t trong hôm nay (chưa đủ 30 ⇒ không xét). d(t) = basis(t) − B(t).
+- Xét nến có giờ mở 09:30 … 13:59 (bỏ nến 11:29). |d| ≥ 0,10 × ADR10 và đang phẳng ⇒ vào NGƯỢC dấu d (d > 0 ⇒ bán).
+  Stop = đóng HĐ ± 0,15 × ADR10 (xa thêm về phía lệch). Không có giá chốt lời: thoát khi basis(t) − B(lúc vào) về 0
+  hoặc đổi dấu, hoặc đã giữ ≥ 30 phút, hoặc nến 14:19 đóng. Tối đa 2 lệnh/ngày. Phút thiếu nến chỉ số ⇒ không vào,
+  không xét thoát theo basis (thoát theo giờ vẫn chạy).
+- Kiểm độ nhạy: `lookback_minutes` 30, `entry_dev_adr` 0,10, `stop_adr` 0,15.
+
+**#9 — Đà cuối phiên** (`strategy/late_momentum.py`). Giả thuyết: lợi suất từ đóng cửa hôm trước tới gần cuối phiên dự
+báo cùng chiều lợi suất nửa giờ cuối (Baltussen, Da, Lammers, Martens 2021, trên hơn 60 HĐ tương lai; có bài báo hiệu
+ứng phiên bản qua đêm biến mất ngoài mẫu). Ghi nhận trung thực: họ hàng gần của #3 (đà sáng → chiều, đã KHÔNG CÓ
+EDGE); Việt Nam không có quyền chọn chỉ số nên cơ chế phòng hộ gamma của bài gốc không áp dụng.
+- r = đóng nến 13:49 − đóng nến cuối phiên trước. Quyết định MỘT lần khi nến 13:49 đóng (13:50).
+- |r| ≥ 0,30 × ADR10 và đang phẳng ⇒ vào THEO dấu r. Stop = đóng nến 13:49 ∓ 0,20 × ADR10. Không chốt lời. EXIT khi
+  nến 14:19 đóng (giữ 30 phút; nửa giờ cuối thật 14:15–14:45 gồm ATC, bot không được giữ qua 14:25).
+- Kiểm độ nhạy: `adr_days` 10, `min_move_adr` 0,30, `stop_adr` 0,20.
+
+**Dữ liệu (cố định):** nến 1 phút SSI, tải lại qua kết nối SSI của Claude như ngày 11/11/2026 (`marketdata_list_intraday_stock_infor`,
+theo từng HĐ; HĐ kế tiếp thêm ở ngày trước roll), chế độ NẾN (bid/ask giả ∓ 1 bước, stop khớp ở cực trị nến, nến chạm
+cả TP lẫn SL ⇒ SL thắng). #8 thêm nến 1 phút chỉ số VN30 cùng nguồn. Toàn bộ kết luận chạy trên MỘT nguồn (SSI) để
+chạy được trên cloud; chế độ nến bi quan hơn tick ~0,2 điểm/lệnh ⇒ thiên về KHÔNG CÓ EDGE — chấp nhận.
+- **IS** = 22/07/2025 → 31/12/2025 (~10 phiên đầu làm lịch sử ADR). Đã được #6 dùng làm IS (giả thuyết khác).
+- **OOS-A** = 01/01/2026 → 24/03/2026: CHƯA ai chạy chiến lược nào ⇒ sạch.
+- **OOS-B** = 25/03/2026 → 30/10/2026: đã bị #1–#5 nhìn qua (trên tick DNSE, giả thuyết khác) ⇒ yếu hơn OOS-A.
+- **Loại khỏi kiểm định:** từ 02/11/2026 trở đi. OHLC ngày VN30F 02/11–13/11/2026 (và vài con số chỉ số, basis) đã
+  được nhìn trong lần chạy thử nhật ký regime shadow ngày 16/11, TRƯỚC khi đề xuất ba ý tưởng này — kể cả tần suất
+  "khoảng 1 lệnh / 3 phiên" của #7 nêu với người dùng là ước từ 10 phiên đó. Dữ liệu MỚI sau 16/11 dùng được để kéo
+  dài OOS khi cần.
+
+**Thứ tự và luật kết luận (cố định, cho TỪNG chiến lược):**
+1. **Kiểm tra dữ liệu trước:** số ngày giao dịch thiếu so với lịch trong mỗi cửa sổ (thiếu > 10 ngày trong một cửa sổ ⇒
+   dừng tìm lỗi đường ống, không kết luận). #8: ngày thiếu nến chỉ số > 10% ngày của một cửa sổ ⇒ #8 **KHÔNG KIỂM
+   ĐƯỢC** ở cửa sổ đó (lỗi dữ liệu, không phải kết luận; `n_trials` vẫn tính 9).
+2. **Cổng IS** (`backtest.robustness --bars`, dữ liệu nạp CẮT tới 31/12/2025, `--split 2025-12-31` như #6): P&L IS sau
+   phí ≤ 0 **hoặc** < 75% biến thể độ nhạy ±20% lãi (6 biến thể) **hoặc** < 50% đoạn walk-forward lãi (4 đoạn) ⇒
+   **KHÔNG CÓ EDGE, DỪNG — KHÔNG mở OOS** cho chiến lược đó.
+3. **OOS gộp** (`backtest.pooled`, nến): OOS-A ∪ OOS-B, lệnh tính theo ngày VÀO. **CÓ EDGE** ⇔ (a) ≥ 30 lệnh gộp;
+   (b) P&L sau phí > 0 ở CẢ HAI cửa sổ (0 lệnh = trượt); (c) p sign-flip chuỗi gộp × 9 < 0,1 (⇔ p < 0,0111);
+   (d) P&L gộp > 0 khi trượt 2 tick. Thiếu (a) ⇒ **CHƯA ĐỦ** (kéo dài OOS bằng dữ liệu sau 16/11, KHÔNG đổi tham số);
+   trượt bất kỳ (b)(c)(d) ⇒ **KHÔNG CÓ EDGE**, dừng chiến lược đó.
+- Báo thêm (không đổi kết luận): P&L theo tháng, theo chiều Long/Short, tỉ lệ thoát theo stop / theo giờ / (#8) theo basis.
+- Ba chiến lược độc lập: kết quả của chiến lược này KHÔNG được dùng để sửa chiến lược kia.
+- CÓ EDGE vẫn phải paper ổn định (feed thật, tick, bid/ask) trước khi tính đến live.
+- **Công cụ cần làm trước khi chạy** (test trước, không đổi engine cho #7/#9): `backtest.pooled` nhận `--bars`;
+  #8 cần engine cấp nến chỉ số đã đóng của hôm nay cho chiến lược (`StrategyContext`) và `--ref-bars` ở robustness /
+  pooled; runner live/paper từ chối chiến lược cần nến tham chiếu.
 
