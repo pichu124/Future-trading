@@ -72,12 +72,15 @@ bằng gọi thử ngày 16/11/2026 (trong phiên — hành vi lúc sáng sớm 
 5. `mcp__Finhay__get_index_foreign_trading_history {"symbol":"VN30","from":"<D0 − 21 ngày>","to":"<D-1>"}` (ngày dạng
    YYYY-MM-DD) — `net.total.value` từng phiên (khối ngoại trên cổ phiếu cơ sở).
 6. `mcp__SSI_MCP__marketdata_list_foreign_currency_converter {"bank":"VCB","range":"1w"}` — dòng
-   `currency_name = "VCB_VND-USD"` mới nhất và dòng liền trước; ghi rõ ngày của số đang dùng.
-7. `mcp__Finhay__list_news {"page_size":30}` — chỉ giữ bài có `published_at` trong [15:00 D-1, giờ chạy]; loại bài ghi
-   ngày tương lai; ghi nguồn và giờ đăng.
+   `currency_name = "VCB_VND-USD"` (kết quả xếp ngày TĂNG dần, các cặp tiền xáo trộn, có thể có cả dòng D0): lấy
+   dòng mới nhất và dòng liền trước; ghi rõ ngày của số đang dùng.
+7. `mcp__Finhay__list_news {"page_size":50}` — chỉ giữ bài có `published_at` trong [15:00 D-1, giờ chạy]; loại bài ghi
+   ngày tương lai (hay nổi lên đầu); ghi nguồn và giờ đăng. Một trang chỉ phủ khoảng một giờ tin ⇒ lật thêm bằng
+   `page` tối đa 4 trang; chưa phủ hết khoảng thời gian (nhất là qua cuối tuần) thì ghi rõ vào `inputs.missing`.
 8. Tuỳ chọn, nếu còn thời gian: nến 1 phút phiên D-1 qua
    `mcp__SSI_MCP__marketdata_list_intraday_stock_infor {"symbol":"VN30F1M","range":"1d","toDate":"<D-1 dạng DD/MM/YYYY>"}`
-   (kết quả rất dài, bị lưu ra file ⇒ đọc bằng python, `data.ticks`, đảo lại thứ tự thời gian) để mô tả dáng phiên
+   (kết quả rất dài, bị lưu ra file ⇒ đọc bằng python, `data.ticks`, đảo lại thứ tự thời gian; `trading_date` thực tế
+   dạng DD/MM/YYYY HH:mm:ss dù mô tả tool ghi MM/dd) để mô tả dáng phiên
    trước: hướng buổi sáng/chiều, đóng gần đỉnh hay đáy.
 9. Chứng khoán thế giới qua đêm, dầu, vàng: **không connector nào có số tươi** (Finhay đóng băng từ 24/10/2026, SSI chỉ
    có số tuần). Có thể thử WebSearch, nhưng chỉ nhận một con số khi bài viết nêu đúng ngày của phiên đó; không chắc ⇒
@@ -92,11 +95,12 @@ Bước này không quá ~12 phút. Nên giao cả bước cho MỘT agent phụ
 liệu. Viết gói dữ liệu thành MỘT khối văn bản (số liệu + ngày của từng số + những gì thiếu) để
 phát nguyên văn cho các agent ở bước 2–3.
 
-### Bước 2 — Một agent đơn (làm TRƯỚC tranh luận)
+### Bước 2 — Một agent đơn (độc lập với tranh luận)
 
 Gọi một agent phụ, đưa cho nó: mục 1 của tài liệu này (ba câu hỏi), gói dữ liệu, và yêu cầu trả về ba phân phối xác
-suất cùng lập luận ngắn. Không cho nó dùng tool. Kết quả là `single` và `transcript.single`. Không đưa kết quả này cho
-các agent ở bước 3.
+suất cùng lập luận ngắn. Không cho nó dùng tool. Kết quả là `single` và `transcript.single`. Có thể chạy song song với
+vòng 1 của bước 3 cho kịp giờ, miễn là nó không thấy lập luận của ai và không agent nào ở bước 3 (kể cả trọng tài)
+thấy kết quả của nó.
 
 ### Bước 3 — Tranh luận
 
