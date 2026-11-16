@@ -36,11 +36,19 @@ Giới hạn cứng — vi phạm bất kỳ điều nào thì DỪNG, không gh
 
 ### Bước 0 — Chuẩn bị và kiểm cửa sổ
 
+Làm trong một worktree riêng (`../regime-calls`, cạnh thư mục repo) để không đụng nhánh đang làm việc của phiên. Chạy
+từ thư mục gốc repo:
+
 ```bash
 git fetch origin claude/regime-shadow-calls
-git checkout -B claude/regime-shadow-calls FETCH_HEAD
+git worktree prune
+[ -e ../regime-calls/.git ] || git worktree add --force -B claude/regime-shadow-calls ../regime-calls origin/claude/regime-shadow-calls
+cd ../regime-calls
+git merge --ff-only origin/claude/regime-shadow-calls
 python scripts/regime_call.py --check
 ```
+
+Mọi lệnh `python scripts/…` và `git add/commit/push` ở các bước sau đều chạy TRONG `../regime-calls`.
 
 Mã thoát: `0` ghi được (dòng in ra có ngày và hợp đồng) · `3` ngày nghỉ · `4` đã từ 08:45 trở đi · `5` hôm nay đã có
 nhận định. Khác `0` ⇒ kết thúc ngay, không làm gì thêm.
@@ -80,7 +88,8 @@ vào thứ Hai trả rỗng; Finhay `get_index_history` có đỉnh/đáy sai v�
 DNSE `price_get_history` không nhận mã phái sinh; DNSE `price_get_derivatives` dừng ở 27/10 rồi trả số 0; các tool khối
 ngoại phái sinh của DNSE cần đăng nhập. Mỗi lần chạy kiểm lại ngày/`updated_at` của dữ liệu trước khi tin.
 
-Bước này không quá ~12 phút. Viết gói dữ liệu thành MỘT khối văn bản (số liệu + ngày của từng số + những gì thiếu) để
+Bước này không quá ~12 phút. Nên giao cả bước cho MỘT agent phụ (kết quả các tool rất dài) và chỉ nhận về gói dữ
+liệu. Viết gói dữ liệu thành MỘT khối văn bản (số liệu + ngày của từng số + những gì thiếu) để
 phát nguyên văn cho các agent ở bước 2–3.
 
 ### Bước 2 — Một agent đơn (làm TRƯỚC tranh luận)
