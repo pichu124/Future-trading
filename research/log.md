@@ -406,4 +406,8 @@ chạy được trên cloud; chế độ nến bi quan hơn tick ~0,2 điểm/l�
 - Ghi nhận trung thực: nhận định 18/11 ghi lúc 07:56 khi chưa có số qua đêm; script chạy thử lúc 08:05 cùng ngày cho
   thấy S&P 500 −1,03%, Dow −1,64%, VIX +11% phiên 17/11 — đúng loại thông tin nhóm AI đã thiếu. Không ghi lại nhận
   định 18/11 (luật không ghi đè).
+- Bổ sung cùng ngày (18/11, trước phiên 19/11 nên thuộc gói mới, KHÔNG dời `verdict_from`): khối ngoại trên phái sinh
+  lấy được qua SSI `marketdata_list_daily_stock_infor` khi gọi bằng mã KRX (đo: 17/11 VN30F2611 mua 6.407 / bán 7.945,
+  ròng −1.538 HĐ, −283 tỷ) — quy trình Bước 1 mục 5b. Tự doanh và OI phái sinh: vnstock-dashboard cũng không có
+  (`vnstock_futures_foreign_view.py`: nguồn không có OI) ⇒ vẫn thiếu.
 

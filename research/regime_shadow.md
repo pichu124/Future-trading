@@ -71,6 +71,13 @@ bằng gọi thử ngày 16/11/2026 (trong phiên — hành vi lúc sáng sớm 
    `"indexCode":"VNINDEX"` — 15 phiên gần nhất trước D0. Basis D-1 = đóng VN30F1M − đóng VN30.
 5. `mcp__Finhay__get_index_foreign_trading_history {"symbol":"VN30","from":"<D0 − 21 ngày>","to":"<D-1>"}` (ngày dạng
    YYYY-MM-DD) — `net.total.value` từng phiên (khối ngoại trên cổ phiếu cơ sở).
+5b. **Khối ngoại trên phái sinh (từ 19/11/2026):** `mcp__SSI_MCP__marketdata_list_daily_stock_infor
+   {"symbol":"<mã KRX của HĐ hôm nay, vd 41I1GB000>","range":"3m","pageSize":40}` — PHẢI dùng mã KRX (gọi bằng
+   `VN30F1M` không có trường khối ngoại; cách này giống `vnstock_futures_foreign.py` của vnstock-dashboard). Mỗi ngày SSI
+   trả 2 dòng giống nhau ⇒ giữ dòng có `close_raw` ≠ "0". Lấy 10 phiên gần nhất trước D0: `foreign_buy_volume_total`,
+   `foreign_sell_volume_total`, `net_buy_sell_volume` (hợp đồng) và `net_buy_sell_value` (đồng ⇒ đổi ra tỷ). Ngày trước
+   roll và ngày đáo hạn: gọi thêm mã KRX của HĐ tháng kế tiếp. Không có OI và tự doanh ở nguồn này ⇒ ghi vào
+   `inputs.missing`.
 6. `mcp__SSI_MCP__marketdata_list_foreign_currency_converter {"bank":"VCB","range":"1w"}` — dòng
    `currency_name = "VCB_VND-USD"` (kết quả xếp ngày TĂNG dần, các cặp tiền xáo trộn, có thể có cả dòng D0): lấy
    dòng mới nhất và dòng liền trước; ghi rõ ngày của số đang dùng.
