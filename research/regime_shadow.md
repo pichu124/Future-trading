@@ -75,9 +75,11 @@ bằng gọi thử ngày 16/11/2026 (trong phiên — hành vi lúc sáng sớm 
    {"symbol":"<mã KRX của HĐ hôm nay, vd 41I1GB000>","range":"3m","pageSize":40}` — PHẢI dùng mã KRX (gọi bằng
    `VN30F1M` không có trường khối ngoại; cách này giống `vnstock_futures_foreign.py` của vnstock-dashboard). Mỗi ngày SSI
    trả 2 dòng giống nhau ⇒ giữ dòng có `close_raw` ≠ "0". Lấy 10 phiên gần nhất trước D0: `foreign_buy_volume_total`,
-   `foreign_sell_volume_total`, `net_buy_sell_volume` (hợp đồng) và `net_buy_sell_value` (đồng ⇒ đổi ra tỷ). Ngày trước
-   roll và ngày đáo hạn: gọi thêm mã KRX của HĐ tháng kế tiếp. Không có OI và tự doanh ở nguồn này ⇒ ghi vào
-   `inputs.missing`.
+   `foreign_sell_volume_total`, `net_buy_sell_volume` (hợp đồng) và `net_buy_sell_value` (đồng ⇒ đổi ra tỷ). LUÔN gọi
+   cả HĐ tháng gần (F1M) lẫn tháng kế tiếp (F2M) và báo cả TỔNG hai HĐ: quanh ngày đáo hạn khối ngoại chuyển vị thế sang
+   tháng sau (17/11/2026: F2611 ròng −1.538 nhưng F2612 +1.150 ⇒ tổng chỉ −388), chỉ nhìn F1M sẽ đọc nhầm roll thành bán.
+   Mã KRX: `41I1` + năm (G = 2026, H = 2027) + tháng (`1`–`9`, `A`/`B`/`C`) + `000`. Không có OI và tự doanh ở nguồn
+   này (vnstock-dashboard cũng không có) ⇒ ghi vào `inputs.missing`.
 6. `mcp__SSI_MCP__marketdata_list_foreign_currency_converter {"bank":"VCB","range":"1w"}` — dòng
    `currency_name = "VCB_VND-USD"` (kết quả xếp ngày TĂNG dần, các cặp tiền xáo trộn, có thể có cả dòng D0): lấy
    dòng mới nhất và dòng liền trước; ghi rõ ngày của số đang dùng.
