@@ -122,6 +122,11 @@ def apply_sets(settings: Settings, items) -> Settings:
     return with_overrides(settings, sets) if sets else settings
 
 
+def cut_until(bars, until: Optional[date]):
+    """Bỏ MỌI nến sau ngày `until` (cổng IS: dữ liệu sau mốc không bao giờ tới chiến lược). None ⇒ giữ nguyên."""
+    return list(bars) if until is None else [b for b in bars if b.start.date() <= until]
+
+
 def count_logged_trials(path: Path = REPO_ROOT / "research" / "log.md") -> int:
     """Số cấu hình đã ghi trong research/log.md (mỗi dòng bảng bắt đầu bằng ngày). Tối thiểu 1."""
     p = Path(path)
@@ -330,6 +335,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--strategy", default="strategy.baseline_orb:OpeningRangeBreakout",
                     help="module:Class (mặc định ORB). Class có ROBUSTNESS_PARAMS ⇒ kiểm độ nhạy trên các khoá đó")
     ap.add_argument("--split", required=True, help="ngày đầu out-of-sample (YYYY-MM-DD), chốt TRƯỚC khi chạy")
+    ap.add_argument("--until", help="chỉ với --bars: bỏ mọi nến sau ngày này (YYYY-MM-DD) — cổng IS không nhìn OOS")
     ap.add_argument("--folds", type=int, default=4)
     ap.add_argument("--n-trials", type=int, default=None,
                     help="mặc định = số dòng cấu hình trong research/log.md")
@@ -338,6 +344,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="đổi cấu hình CHỈ cho lần chạy này, vd strategy.orb.range_filter.enabled=true")
     args = ap.parse_args(argv)
 
+    if args.until and not args.bars:
+        print("❌ --until chỉ dùng với --bars")
+        return 2
     try:
         settings = apply_sets(load_settings(), args.set)
     except (ValueError, KeyError) as exc:
@@ -366,6 +375,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 2
     else:
         data, skipped = load_bars_parquet(args.bars)
+        data = cut_until(data, date.fromisoformat(args.until) if args.until else None)
+        if args.until:
+            print(f"Nạp nến tới hết {args.until}: {len(data)} nến (bỏ mọi nến sau mốc)")
     bars = data
     n_trials = args.n_trials or count_logged_trials()
     params = tuple(getattr(strategy_cls, "ROBUSTNESS_PARAMS", ()) or params_for(settings))

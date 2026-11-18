@@ -254,3 +254,22 @@ def test_report_warning_follows_threshold(bad, expect):
     r.data_quality = {"unreliable_volume_bars": bad, "n_bars": 1000}
     rep = build_report(r)
     assert any(expect in w for w in rep["warnings"])
+
+
+# ------------------------------------------------------------ --until (16/11/2026, cổng IS #7/#9) ----
+
+def test_cut_until_drops_every_bar_after_the_day():
+    from datetime import date, datetime
+
+    from backtest.robustness import cut_until
+    from core.models import Bar
+    bars = [Bar("VN30F2512", datetime(2025, 12, 31, 14, 45), 1.0, 1.0, 1.0, 1.0),
+            Bar("VN30F2601", datetime(2026, 1, 2, 9, 0), 1.0, 1.0, 1.0, 1.0)]
+    assert cut_until(bars, date(2025, 12, 31)) == bars[:1]
+    assert cut_until(bars, None) == bars
+
+
+def test_cli_until_needs_bars_mode(capsys):
+    from backtest.robustness import main
+    assert main(["--ticks", "x", "--split", "2025-12-31", "--until", "2025-12-31"]) == 2
+    assert "--until" in capsys.readouterr().out

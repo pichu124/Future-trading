@@ -1,5 +1,31 @@
 # Tiến độ
 
+## 2026-11-18 — Nhật ký regime shadow: thêm thế giới qua đêm + tin tới sáng
+
+- Nguyên nhân thiếu dữ liệu: mạng môi trường cloud chỉ mở 2 host DNSE/TCBS; connector Finhay đóng băng số quốc tế từ 24/10/2026. Không phải lỗi vnstock-dashboard.
+- Mở 4 host (Yahoo chart, cafef, vnexpress, MarketWatch RSS); `scripts/overnight_pack.py` + 7 test (không ra mạng); quy trình sáng bắt buộc chạy script; bộ chấm có `verdict_from` (2 test) ⇒ cửa sổ 60 phiên tính từ 19/11/2026.
+- Lưu ý cho người dùng: `vnstock_assets_mcp.py` của dashboard cũng lấy vàng/dầu/USD-VND qua Finhay ⇒ có thể đang hiện số cũ từ 24/10 trên máy bạn.
+
+## 2026-11-16 — Lưu trữ nến 1 phút SSI hằng tuần (người dùng đồng ý)
+
+- Nhánh dữ liệu `claude/ssi-bar-archive` (orphan, chỉ dữ liệu): nến 1 phút VN30 + VN30F2611/2612 từ 15/10/2026 (66 file, ~0,9 MB/tháng).
+- `scripts/ssi_archive_plan.py` (danh sách lệnh tải tuần: VN30 + mọi HĐ F1M/F2M trong tuần; test viết trước, gồm tuần đáo hạn), quy trình `docs/ssi_archive.md`.
+- Tác vụ hẹn giờ sáng thứ Bảy 09:13 (giờ VN), bắn vào phiên Claude đã dựng nó (cùng lý do như regime shadow: tác vụ tạo phiên mới không mang connector).
+- Rủi ro: phiên đó bị lưu trữ/xoá ⇒ cả hai tác vụ dừng; SSI đổi chính sách giữ dữ liệu ⇒ tuần bị rỗng (tác vụ báo).
+
+## 2026-11-16 — Gói 2: đăng ký trước #7, #8, #9; code #7, #9; kiểm tra dữ liệu
+
+- `research/log.md`: đăng ký trước #7 đảo chiều qua ngày, #8 basis quá đà, #9 đà cuối phiên (`n_trials` = 9), commit TRƯỚC khi tải dữ liệu. Settings `strategy.prev_day_reversal`, `strategy.basis_reversion`, `strategy.late_momentum`.
+- `strategy/prev_day_reversal.py` (#7), `strategy/late_momentum.py` (#9), `strategy.indicators.session_bars`; test viết trước (27 + 23), đột biến 9/10 bị bắt (1 đột biến tương đương).
+- `scripts/import_ssi_intraday.py` (kết quả thô SSI → Parquet), `scripts/check_bar_store.py` (ngày thiếu theo cửa sổ), `backtest.pooled --bars`, `backtest.robustness --until`.
+- Kiểm tra dữ liệu: bản tải lại SSI trên cloud thiếu 40/115 phiên IS ⇒ dừng theo luật; cần kho SSI 11/11 trên laptop. #8 KHÔNG KIỂM ĐƯỢC (nến chỉ số SSI chỉ có từ 15/10/2026).
+
+- Kết quả (laptop, kho SSI 11/11, `scripts/is_gate.py`): bước 1 ✅ cả ba cửa sổ. **#7 trượt cổng IS** (41 lệnh, −15,36tr, 0/6 biến thể lãi); **#9 trượt cổng IS** (40 lệnh, −2,17tr, 3/6 biến thể lãi, 1/4 đoạn) ⇒ dừng cả hai, KHÔNG mở OOS. Tổng: 9 cấu hình, chưa có edge (research/log.md).
+
+**Người dùng cần làm**
+- [ ] Xoá thư mục phụ trên laptop khi không cần: `git worktree remove ..\ft-research` (chạy trong `D:\Future-trading`).
+- [ ] Quyết định có lưu nến chỉ số VN30 mỗi ngày để kiểm #8 về sau không.
+
 ## 2026-11-16 — Nghiên cứu: nhật ký regime "shadow" của nhóm AI (gói 1)
 
 - Bối cảnh: ý tưởng "nhiều bot theo giai đoạn thị trường + nhóm AI tranh luận chọn bot". Kết luận sau khi đọc tài liệu: chưa có bot nào có edge để mà chọn, và LLM chọn bot là phần yếu bằng chứng nhất ⇒ trước hết ĐO xem nhóm AI có dự báo được kiểu phiên không, không nối vào bot. CLAUDE.md mục 8 giữ nguyên.
@@ -8,6 +34,7 @@
 - `tests/test_regime_call.py`, `tests/test_score_regime_calls.py` (viết trước), `tests/test_regime_shadow_isolation.py` (bot không được chạm vào nhật ký này).
 - `config/settings.yaml` mục `research.regime_shadow`; `research/regime_shadow.md` (quy trình hằng sáng + công thức gom dữ liệu đã gọi thử); `research/log.md` (đăng ký trước luật kết luận, `n_trials` giữ 6).
 - Chạy bằng tác vụ Claude hẹn giờ trên cloud, 07:50 thứ Hai–thứ Sáu (giờ VN), ghi vào nhánh `claude/regime-shadow-calls` qua worktree `../regime-calls`. Tác vụ bắn vào CHÍNH phiên Claude đã dựng nó: tác vụ tạo phiên mới mỗi sáng không mang theo connector SSI/DNSE/Finhay (tham số connector không dùng được cho tài khoản này).
+- Chạy thử cả đường ống ngày 16/11 (dry-run trong phiên, file ở `research/regime_calls/dryrun/` trên nhánh nhận định, không chấm): gom dữ liệu → agent đơn → 2 vòng tranh luận → trọng tài → ghi → push hết khoảng 8 phút. `debate` và `single` lệch nhau ≤ 0,02 ở mọi lớp. Lần chạy theo lịch đầu tiên: 07:50 ngày 17/11 — việc tác vụ tự đánh thức phiên CHƯA được kiểm.
 
 **Giả định / rủi ro còn mở**
 - Không có dữ liệu thế giới qua đêm (connector Finhay đóng băng từ 24/10/2026, SSI chỉ có số tuần). Muốn có phải mở mạng của môi trường cloud cho một nguồn giá.

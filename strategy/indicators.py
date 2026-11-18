@@ -25,3 +25,8 @@ def adr_before(history: Sequence[Bar], day: date, n: int) -> Optional[float]:
         return None
     adr = sum(by_day[d][1] - by_day[d][0] for d in last) / n
     return adr if adr > 0 else None
+
+
+def session_bars(history: Sequence[Bar], day: date) -> list[Bar]:
+    """Các nến của đúng ngày `day` trong `history`, theo giờ. Không có ⇒ [] (không lấy ngày khác thay)."""
+    return sorted((b for b in history if b.start.date() == day), key=lambda b: b.start)
