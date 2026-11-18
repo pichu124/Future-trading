@@ -83,6 +83,9 @@ bằng gọi thử ngày 16/11/2026 (trong phiên — hành vi lúc sáng sớm 
 6. `mcp__SSI_MCP__marketdata_list_foreign_currency_converter {"bank":"VCB","range":"1w"}` — dòng
    `currency_name = "VCB_VND-USD"` (kết quả xếp ngày TĂNG dần, các cặp tiền xáo trộn, có thể có cả dòng D0): lấy
    dòng mới nhất và dòng liền trước; ghi rõ ngày của số đang dùng.
+   Số VCB của chính ngày D0 KHÔNG lấy (người dùng quyết 18/11/2026: không mở host vietcombank.com.vn); USD/VND sáng D0
+   xem ở `overnight_pack.py` (Yahoo). Không ghi "thiếu tỷ giá VCB D0" vào `inputs.missing`.
+
 7. `mcp__Finhay__list_news {"page_size":50}` — chỉ giữ bài có `published_at` trong [15:00 D-1, giờ chạy]; loại bài ghi
    ngày tương lai (hay nổi lên đầu); ghi nguồn và giờ đăng. Một trang chỉ phủ khoảng một giờ tin ⇒ lật thêm bằng
    `page` tối đa 4 trang; chưa phủ hết khoảng thời gian (nhất là qua cuối tuần) thì ghi rõ vào `inputs.missing`.
