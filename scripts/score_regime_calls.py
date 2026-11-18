@@ -46,6 +46,7 @@ class Rules:
     primary_question: str
     min_days: int
     p_threshold: float
+    verdict_from: Optional[date] = None      # nhận định trước mốc này không vào cửa sổ kết luận (đổi gói dữ liệu 18/11)
 
     def __post_init__(self) -> None:
         if self.primary_question not in QUESTIONS:
@@ -58,7 +59,14 @@ class Rules:
         r = lambda k: settings.require(f"research.regime_shadow.{k}")   # noqa: E731
         return cls(int(r("adr_days")), float(r("vol_low_below")), float(r("vol_high_above")),
                    float(r("trend_min_efficiency")), float(r("flat_band_adr")), str(r("primary_question")),
-                   int(r("min_days")), float(r("p_threshold")))
+                   int(r("min_days")), float(r("p_threshold")),
+                   _date_or_none(settings.get("research.regime_shadow.verdict_from")))
+
+
+def _date_or_none(v) -> Optional[date]:
+    if v is None or v == "":
+        return None
+    return v if isinstance(v, date) else date.fromisoformat(str(v))
 
 
 @dataclass(frozen=True)
@@ -194,15 +202,18 @@ def score(calls: Sequence[Mapping], labels: Mapping[date, Mapping[str, str]], ru
                 missing.append(d.isoformat())
             d = calendar.next_trading_day(d)
 
+    eligible = [r for r in rows if rules.verdict_from is None or date.fromisoformat(r["date"]) >= rules.verdict_from]
     rep = {"n_calls": len(calls), "n_scored": len(rows), "unscored": unscored, "missing_days": missing,
+           "verdict_from": rules.verdict_from, "n_before_verdict_from": len(rows) - len(eligible),
            "rows": rows, "primary": rules.primary_question, "min_days": rules.min_days,
            "p_threshold": rules.p_threshold,
            "all": {q: _summary(rows, q) for q in QUESTIONS} if rows else {},
            "verdict_window": None, "verdict": "CHƯA ĐỦ", "reasons": []}
-    if len(rows) < rules.min_days:
-        rep["reasons"].append(f"mới chấm được {len(rows)}/{rules.min_days} phiên")
+    if len(eligible) < rules.min_days:
+        rep["reasons"].append(f"mới chấm được {len(eligible)}/{rules.min_days} phiên"
+                              + (f" từ mốc {rules.verdict_from}" if rules.verdict_from else ""))
         return rep
-    window = rows[:rules.min_days]
+    window = eligible[:rules.min_days]
     rep["verdict_window"] = {q: _summary(window, q) for q in QUESTIONS}
     w = rep["verdict_window"][rules.primary_question]
     for b in BASELINES:
@@ -241,8 +252,12 @@ def render(rep: dict) -> str:
         lines.append("Tất cả phiên đã chấm (chỉ để theo dõi, KHÔNG dùng kết luận):")
         lines += _table(rep["all"], rep["primary"])
     if rep["verdict_window"]:
-        lines.append(f"Cửa sổ kết luận = {rep['min_days']} phiên đầu tiên:")
+        lines.append(f"Cửa sổ kết luận = {rep['min_days']} phiên đầu tiên"
+                     + (f" từ {rep['verdict_from']}" if rep.get("verdict_from") else "") + ":")
         lines += _table(rep["verdict_window"], rep["primary"])
+    if rep.get("n_before_verdict_from"):
+        lines.append(f"{rep['n_before_verdict_from']} phiên chấm được nằm trước mốc {rep['verdict_from']} "
+                     "(gói dữ liệu cũ) — chỉ theo dõi, không vào kết luận")
     if rep["unscored"]:
         lines.append(f"Chưa chấm được ({len(rep['unscored'])}; thiếu nến ngày đó hoặc thiếu lịch sử ADR): "
                      + ", ".join(rep["unscored"][-5:]))

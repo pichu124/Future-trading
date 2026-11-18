@@ -389,3 +389,21 @@ chạy được trên cloud; chế độ nến bi quan hơn tick ~0,2 điểm/l�
 - Mẫu hình chung của 9 lần thử: các ý tưởng giữ lệnh trong ngày, 1 HĐ, chi phí ~0,9 điểm/lượt, chưa lần nào có lãi
   trước phí đủ lớn để bù phí một cách ổn định. `max_contracts` giữ 1; không paper/live vì lý do edge.
 
+### Sửa nhật ký regime shadow — thêm thế giới qua đêm + tin tới sáng (18/11/2026, người dùng đồng ý)
+
+- **Vì sao thiếu dữ liệu:** không phải lỗi `vnstock-dashboard`. Dashboard lấy số thế giới từ Yahoo/FRED/gold-api và
+  tin từ RSS (cafef, vnexpress, CNBC, MarketWatch); môi trường cloud chỉ mở `developers.tcbs.com.vn` và
+  `developers.dnse.com.vn` ⇒ proxy chặn hết. Connector Finhay đóng băng số quốc tế từ 24/10/2026 (lỗi phía Finhay);
+  tin Finhay gần như trống từ ~21:30 tới sáng.
+- **Sửa:** mở `query1.finance.yahoo.com`, `cafef.vn`, `vnexpress.net`, `feeds.content.dowjones.io` cho môi trường cloud
+  (CNBC bị Akamai chặn máy chủ cloud ⇒ bỏ); `scripts/overnight_pack.py` (test viết trước, không test nào ra mạng)
+  in giá kèm thời điểm và tiêu đề tin trong cửa sổ [15:00 phiên trước, lúc chạy]; `research/regime_shadow.md` Bước 1
+  mục 9 bắt buộc chạy script.
+- **Hệ quả theo luật đăng ký ("đổi danh sách nguồn dữ liệu = thí nghiệm MỚI"):** cửa sổ kết luận 60 phiên tính từ
+  phiên đầu tiên có gói mới = **19/11/2026** (`research.regime_shadow.verdict_from`). Nhận định 17/11 và 18/11 (gói cũ,
+  thiếu số qua đêm) vẫn được chấm để theo dõi, KHÔNG vào kết luận. Mọi luật khác (nhãn, ngưỡng, câu hỏi chính, 60
+  phiên, p < 0,05, hai baseline) giữ nguyên.
+- Ghi nhận trung thực: nhận định 18/11 ghi lúc 07:56 khi chưa có số qua đêm; script chạy thử lúc 08:05 cùng ngày cho
+  thấy S&P 500 −1,03%, Dow −1,64%, VIX +11% phiên 17/11 — đúng loại thông tin nhóm AI đã thiếu. Không ghi lại nhận
+  định 18/11 (luật không ghi đè).
+

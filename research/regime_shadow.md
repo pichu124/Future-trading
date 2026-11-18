@@ -82,9 +82,18 @@ bằng gọi thử ngày 16/11/2026 (trong phiên — hành vi lúc sáng sớm 
    (kết quả rất dài, bị lưu ra file ⇒ đọc bằng python, `data.ticks`, đảo lại thứ tự thời gian; `trading_date` thực tế
    dạng DD/MM/YYYY HH:mm:ss dù mô tả tool ghi MM/dd) để mô tả dáng phiên
    trước: hướng buổi sáng/chiều, đóng gần đỉnh hay đáy.
-9. Chứng khoán thế giới qua đêm, dầu, vàng: **không connector nào có số tươi** (Finhay đóng băng từ 24/10/2026, SSI chỉ
-   có số tuần). Có thể thử WebSearch, nhưng chỉ nhận một con số khi bài viết nêu đúng ngày của phiên đó; không chắc ⇒
-   ghi "không có dữ liệu thế giới qua đêm" vào `inputs.missing`.
+9. **Thế giới qua đêm + tin tới sáng (BẮT BUỘC từ 19/11/2026):** chạy trong worktree `../regime-calls`
+
+   ```bash
+   python scripts/overnight_pack.py
+   ```
+
+   Script đọc web công khai (đã mở mạng cho môi trường cloud: `query1.finance.yahoo.com`, `cafef.vn`, `vnexpress.net`,
+   `feeds.content.dowjones.io`): S&P 500, Nasdaq, Dow, SOX, VIX, lợi suất Mỹ 10 năm, dầu WTI/Brent, vàng, DXY,
+   USD/VND, Nikkei, Kospi (mỗi số kèm thời điểm) và tiêu đề tin cafef / vnexpress / MarketWatch từ 15:00 phiên trước
+   tới lúc chạy. Dán NGUYÊN VĂN kết quả vào gói dữ liệu (mục 7 "Thế giới qua đêm" và bổ sung mục 6 "Tin"); dòng
+   `THIẾU:` của script chép vào `inputs.missing`. Connector Finhay đóng băng số quốc tế từ 24/10/2026 ⇒ không dùng
+   Finhay cho mục này. Script lỗi hẳn ⇒ ghi "không có dữ liệu thế giới qua đêm" và làm tiếp (không dừng cả quy trình).
 
 Cạm bẫy đã gặp: SSI trả mảng RỖNG kèm `status: ok` khi tham số không hợp (kiểm số dòng); `range:"1d"` không kèm ngày
 vào thứ Hai trả rỗng; Finhay `get_index_history` có đỉnh/đáy sai và trả cả dòng hôm nay dở dang ⇒ không dùng;

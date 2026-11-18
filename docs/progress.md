@@ -1,5 +1,11 @@
 # Tiến độ
 
+## 2026-11-18 — Nhật ký regime shadow: thêm thế giới qua đêm + tin tới sáng
+
+- Nguyên nhân thiếu dữ liệu: mạng môi trường cloud chỉ mở 2 host DNSE/TCBS; connector Finhay đóng băng số quốc tế từ 24/10/2026. Không phải lỗi vnstock-dashboard.
+- Mở 4 host (Yahoo chart, cafef, vnexpress, MarketWatch RSS); `scripts/overnight_pack.py` + 7 test (không ra mạng); quy trình sáng bắt buộc chạy script; bộ chấm có `verdict_from` (2 test) ⇒ cửa sổ 60 phiên tính từ 19/11/2026.
+- Lưu ý cho người dùng: `vnstock_assets_mcp.py` của dashboard cũng lấy vàng/dầu/USD-VND qua Finhay ⇒ có thể đang hiện số cũ từ 24/10 trên máy bạn.
+
 ## 2026-11-16 — Lưu trữ nến 1 phút SSI hằng tuần (người dùng đồng ý)
 
 - Nhánh dữ liệu `claude/ssi-bar-archive` (orphan, chỉ dữ liệu): nến 1 phút VN30 + VN30F2611/2612 từ 15/10/2026 (66 file, ~0,9 MB/tháng).

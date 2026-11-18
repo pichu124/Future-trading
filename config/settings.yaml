@@ -279,3 +279,6 @@ research:
     primary_question: day_type          # câu hỏi DUY NHẤT dùng để kết luận (vol, direction chỉ báo cáo thêm)
     min_days: 60                        # kết luận trên ĐÚNG N phiên đầu tiên chấm được; trước đó = CHƯA ĐỦ
     p_threshold: 0.05                   # p sign-flip một phía của (Brier baseline − Brier tranh luận) theo ngày
+    # Mốc bắt đầu cửa sổ kết luận (sửa 18/11/2026, research/log.md): từ 19/11 gói dữ liệu có thêm thế giới qua đêm +
+    # tin tới sáng ⇒ thí nghiệm mới theo luật đăng ký; nhận định trước mốc chỉ để theo dõi.
+    verdict_from: "2026-11-19"

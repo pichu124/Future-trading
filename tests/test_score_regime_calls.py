@@ -247,3 +247,31 @@ def test_cli_reads_calls_and_bars(tmp_path, cal, schedule, capsys, monkeypatch):
 def test_cli_no_calls(tmp_path, capsys):
     assert main(["--bars", str(tmp_path), "--calls", str(tmp_path / "none")]) == 1
     assert "Chưa có nhận định" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------------ verdict_from (sửa 18/11/2026) ----
+
+def test_verdict_window_starts_at_verdict_from(cal, schedule):
+    """Nhận định trước `verdict_from` (gói dữ liệu cũ) vẫn được chấm để theo dõi nhưng KHÔNG vào cửa sổ kết luận."""
+    import dataclasses
+    ds, truth, labels, _ = _world(cal, schedule, 30)
+    start = ds[5]
+    rules = dataclasses.replace(RULES, verdict_from=start)
+    bad_then_good = [call(d, (0.0 if truth[d] else 1.0) if d < start else (0.9 if truth[d] else 0.1)) for d in ds]
+    rep = score(bad_then_good, labels, rules, cal)
+    assert rep["n_scored"] == 30 and rep["n_before_verdict_from"] == 5
+    assert rep["verdict"] == "CÓ GIÁ TRỊ"                                  # 25 phiên từ mốc ≥ 20: chấm 20 phiên đầu từ mốc
+    assert rep["verdict_window"]["day_type"]["n"] == 20
+    assert rep["verdict_window"]["day_type"]["brier"]["debate"] == pytest.approx(0.02)
+    assert "trước mốc" in render(rep)
+    short = score(bad_then_good[:20], labels, rules, cal)                  # 15 phiên từ mốc < 20 ⇒ CHƯA ĐỦ
+    assert short["verdict"] == "CHƯA ĐỦ"
+
+
+def test_rules_from_settings_reads_verdict_from():
+    from core.settings import Settings
+    base = {"adr_days": 10, "vol_low_below": 0.8, "vol_high_above": 1.2, "trend_min_efficiency": 0.5,
+            "flat_band_adr": 0.2, "primary_question": "day_type", "min_days": 60, "p_threshold": 0.05}
+    s = Settings({"research": {"regime_shadow": dict(base, verdict_from="2026-11-19")}})
+    assert Rules.from_settings(s).verdict_from == date(2026, 11, 19)
+    assert Rules.from_settings(Settings({"research": {"regime_shadow": base}})).verdict_from is None
