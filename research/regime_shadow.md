@@ -71,15 +71,26 @@ bằng gọi thử ngày 16/11/2026 (trong phiên — hành vi lúc sáng sớm 
    `"indexCode":"VNINDEX"` — 15 phiên gần nhất trước D0. Basis D-1 = đóng VN30F1M − đóng VN30.
 5. `mcp__Finhay__get_index_foreign_trading_history {"symbol":"VN30","from":"<D0 − 21 ngày>","to":"<D-1>"}` (ngày dạng
    YYYY-MM-DD) — `net.total.value` từng phiên (khối ngoại trên cổ phiếu cơ sở).
-5b. **Khối ngoại trên phái sinh (từ 19/11/2026):** `mcp__SSI_MCP__marketdata_list_daily_stock_infor
-   {"symbol":"<mã KRX của HĐ hôm nay, vd 41I1GB000>","range":"3m","pageSize":40}` — PHẢI dùng mã KRX (gọi bằng
-   `VN30F1M` không có trường khối ngoại; cách này giống `vnstock_futures_foreign.py` của vnstock-dashboard). Mỗi ngày SSI
-   trả 2 dòng giống nhau ⇒ giữ dòng có `close_raw` ≠ "0". Lấy 10 phiên gần nhất trước D0: `foreign_buy_volume_total`,
-   `foreign_sell_volume_total`, `net_buy_sell_volume` (hợp đồng) và `net_buy_sell_value` (đồng ⇒ đổi ra tỷ). LUÔN gọi
-   cả HĐ tháng gần (F1M) lẫn tháng kế tiếp (F2M) và báo cả TỔNG hai HĐ: quanh ngày đáo hạn khối ngoại chuyển vị thế sang
-   tháng sau (17/11/2026: F2611 ròng −1.538 nhưng F2612 +1.150 ⇒ tổng chỉ −388), chỉ nhìn F1M sẽ đọc nhầm roll thành bán.
-   Mã KRX: `41I1` + năm (G = 2026, H = 2027) + tháng (`1`–`9`, `A`/`B`/`C`) + `000`. Không có OI và tự doanh ở nguồn
-   này (vnstock-dashboard cũng không có) ⇒ ghi vào `inputs.missing`.
+5b. **Khối ngoại trên phái sinh — dòng lệnh và vị thế ròng (từ 20/11/2026):**
+
+   ```bash
+   python scripts/foreign_futures_position.py --plan --date <D0 dạng YYYY-MM-DD>
+   ```
+
+   in mã KRX của mọi HĐ đang lưu hành (2 tháng gần + 2 quý gần). Với MỖI mã gọi
+   `mcp__SSI_MCP__marketdata_list_daily_stock_infor {"symbol":"<mã>","range":"1y","toDate":"<D-1 DD/MM/YYYY>","pageSize":200}`;
+   trả đúng 200 dòng thì gọi thêm `"pageIndex":2` (rồi 3…) tới khi < 200 dòng. Lưu nguyên văn từng kết quả vào một thư
+   mục tạm NGOÀI repo (`cp` file harness lưu ra; kết quả nhỏ thì ghi JSON nguyên văn), rồi chạy
+
+   ```bash
+   python scripts/foreign_futures_position.py <thư mục tạm> --date <D0>
+   ```
+
+   và dán NGUYÊN VĂN kết quả vào gói dữ liệu (mục 3b). Script giữ dòng `close_raw` ≠ "0" (SSI trả 2 dòng/ngày), bỏ mọi
+   phiên từ D0, in: vị thế ròng ước tính từng HĐ (Σ mua − bán từ phiên niêm yết, cách của vnstock-dashboard; nguồn
+   KHÔNG có OI), ròng 5 phiên gần nhất, tổng mọi HĐ và tổng không tính HĐ đáo hạn hôm nay. Quanh ngày đáo hạn đọc cả hai
+   tháng: khối ngoại chuyển vị thế sang tháng sau (17/11/2026: F2611 ròng −1.538 nhưng F2612 +1.150). Script in
+   "CẢNH BÁO … còn trang" ⇒ tải tiếp trang rồi chạy lại. OI và tự doanh không có ⇒ ghi vào `inputs.missing`.
 6. `mcp__SSI_MCP__marketdata_list_foreign_currency_converter {"bank":"VCB","range":"1w"}` — dòng
    `currency_name = "VCB_VND-USD"` (kết quả xếp ngày TĂNG dần, các cặp tiền xáo trộn, có thể có cả dòng D0): lấy
    dòng mới nhất và dòng liền trước; ghi rõ ngày của số đang dùng.
