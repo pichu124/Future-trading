@@ -411,3 +411,13 @@ chạy được trên cloud; chế độ nến bi quan hơn tick ~0,2 điểm/l�
   ròng −1.538 HĐ, −283 tỷ) — quy trình Bước 1 mục 5b. Tự doanh và OI phái sinh: vnstock-dashboard cũng không có
   (`vnstock_futures_foreign_view.py`: nguồn không có OI) ⇒ vẫn thiếu.
 
+### Thêm vị thế ròng khối ngoại phái sinh vào gói sáng (19/11/2026, người dùng yêu cầu) ⇒ `verdict_from` = 20/11/2026
+
+- `scripts/foreign_futures_position.py` (test viết trước): vị thế ròng ước tính mỗi HĐ đang lưu hành = Σ (KL mua − KL
+  bán) khối ngoại từ phiên niêm yết, nguồn SSI `marketdata_list_daily_stock_infor` theo mã KRX (range 1y, phân trang).
+  Đối chiếu: VN30F2612 từ SSI riêng (147 phiên 17/04→18/11/2026) = +1.642 HĐ, khớp seed vnstock-dashboard + SSI;
+  VN30F2611 = −11.479 HĐ. Quy trình sáng Bước 1 mục 5b.
+- Đổi nguồn dữ liệu sau khi cửa sổ đã mở 19/11 ⇒ theo luật đăng ký: thí nghiệm mới, **cửa sổ kết luận 60 phiên tính
+  từ 20/11/2026**. Nhận định 19/11 (gói chưa có vị thế ròng) chỉ theo dõi, như 17–18/11. Đề xuất từ đây CHỐT gói dữ
+  liệu: mỗi lần thêm nguồn lại mất cửa sổ đã chạy.
+
