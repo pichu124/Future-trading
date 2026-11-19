@@ -3,7 +3,7 @@
 ## 2026-11-19 — Gói sáng: thêm vị thế ròng khối ngoại phái sinh
 
 - `scripts/foreign_futures_position.py` + 7 test: vị thế ròng ước tính khối ngoại mỗi HĐ đang lưu hành (Σ mua − bán từ phiên niêm yết, SSI theo mã KRX, cách của vnstock-dashboard), bỏ phiên từ D0, đánh dấu HĐ đáo hạn, cảnh báo thiếu trang. Đối chiếu VN30F2612 = +1.642 khớp dashboard.
-- Quy trình sáng Bước 1 mục 5b; `research.regime_shadow.verdict_from` dời sang 2026-11-20 (đổi nguồn dữ liệu = thí nghiệm mới). Khuyên chốt gói dữ liệu từ đây.
+- Quy trình sáng Bước 1 mục 5b; `research.regime_shadow.verdict_from` dời sang 2026-11-20 (đổi nguồn dữ liệu = thí nghiệm mới). Người dùng CHỐT gói dữ liệu (19/11): không đổi nguồn tới khi có kết luận 60 phiên từ 20/11.
 
 ## 2026-11-18 — Nhật ký regime shadow: thêm thế giới qua đêm + tin tới sáng
 

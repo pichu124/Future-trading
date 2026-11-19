@@ -55,6 +55,9 @@ nhận định. Khác `0` ⇒ kết thúc ngay, không làm gì thêm.
 
 ### Bước 1 — Gom "gói dữ liệu trước giờ mở"
 
+**Gói dữ liệu đã CHỐT ngày 19/11/2026** (research/log.md): không thêm/bớt/đổi nguồn cho tới khi có kết luận 60 phiên
+tính từ 20/11/2026. Nguồn hỏng một ngày ⇒ ghi vào `inputs.missing`, không thay nguồn khác.
+
 Ký hiệu: D0 = hôm nay, D-1 = phiên giao dịch liền trước (lấy từ dữ liệu, đừng tự trừ 1 ngày lịch). Công thức đã kiểm
 bằng gọi thử ngày 16/11/2026 (trong phiên — hành vi lúc sáng sớm chưa kiểm, nên luôn tự lọc theo ngày):
 
