@@ -421,3 +421,11 @@ chạy được trên cloud; chế độ nến bi quan hơn tick ~0,2 điểm/l�
   từ 20/11/2026**. Nhận định 19/11 (gói chưa có vị thế ròng) chỉ theo dõi, như 17–18/11. Đề xuất từ đây CHỐT gói dữ
   liệu: mỗi lần thêm nguồn lại mất cửa sổ đã chạy.
 
+### CHỐT gói dữ liệu nhật ký regime shadow (19/11/2026, người dùng quyết)
+
+- Gói dữ liệu buổi sáng được CHỐT như `research/regime_shadow.md` Bước 1 ở commit này (mục 1–9, gồm 5b vị thế ròng
+  khối ngoại và 9 thế giới qua đêm). Cửa sổ kết luận: 60 phiên chấm được đầu tiên từ **20/11/2026**.
+- Từ nay KHÔNG thêm, bớt hay đổi nguồn trong gói cho tới khi có kết luận 60 phiên. Nguồn nào hỏng giữa chừng ⇒ ghi vào
+  `inputs.missing` của ngày đó và chạy tiếp, KHÔNG thay nguồn khác và KHÔNG dời mốc. Ý tưởng nguồn mới (OI, tự doanh…)
+  ghi lại để dùng cho thí nghiệm SAU, không chen vào thí nghiệm đang chạy.
+
