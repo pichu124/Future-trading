@@ -461,3 +461,35 @@ KHÔNG phải một lần thử: không thêm dòng bảng, `n_trials` giữ 9. 
   làm tham chiếu, 136 lệnh, độ lệch chuẩn 12,28 điểm/lệnh (P&L của ORB KHÔNG được in hay xem — công cụ chỉ lấy độ phân
   tán). Lợi thế giả định 2 điểm, 100 lệnh, `n_trials` 10 ⇒ lực mô phỏng 22% (công thức 24%), báo động giả 1,8% (mức
   danh nghĩa 1%, 400 lần lặp). Số chính thức phải chạy lại trên laptop với kho đầy đủ.
+
+## Giai đoạn đo tín hiệu — tách "tín hiệu có dự báo được không" khỏi "chiến lược có lãi không" (27/11/2026, người dùng đồng ý)
+
+KHÔNG phải một lần thử: không thêm dòng bảng, `n_trials` giữ 9. Đây là luật về TRÌNH TỰ nghiên cứu từ ý tưởng #10.
+
+- **Vì sao:** chín lần thử trước gộp tín hiệu + stop + chốt lời + giới hạn lệnh và kiểm trên vài chục lệnh ⇒ lực thấp
+  (mục "Cổng lực thống kê") và trượt mà không biết trượt ở đâu. Đo riêng tín hiệu dùng MỌI nến: mỗi ngày ~200 quan sát.
+- **Công cụ:** `backtest/signal_study.py` (`python -m backtest.signal_study`), test viết trước (`tests/test_signal_study.py`).
+  Tín hiệu là hàm thuần `(bars_today, history) -> số | None`, chạy trong `BacktestEngine` qua một "chiến lược" không ra
+  lệnh ⇒ nhận đúng dữ liệu chiến lược thật nhận (hợp đồng giao dịch, back-adjust qua roll, chỉ nến đã đóng). Quan sát:
+  tín hiệu ở nến i ⇒ vào giá MỞ nến i+1, ra giá ĐÓNG nến i+h, trong cửa sổ được phép của luật rủi ro (vào 09:15 →
+  trước 14:15, ra trước 14:25, bỏ ngày đáo hạn). Thống kê theo NGÀY: IC Spearman từng ngày, p sign-flip một phía theo
+  chiều đã đăng ký × `n_trials` < 0,1, ≥ 50% trong 4 đoạn walk-forward đúng chiều, ≥ 30 ngày. Độ lớn: lợi suất kỳ sau lấy
+  dấu theo tín hiệu tại các nến |tín hiệu| ≥ ngưỡng, đã trừ trôi giá trung bình trong ngày, trừ chi phí một lượt của
+  engine (phí + thuế hai chiều + mỗi chiều trượt 1 bước và nửa spread = 0,87 điểm với settings hiện tại).
+- **Luật (CHỐT trước khi xét #10):**
+  1. Trước mỗi phép đo, ghi và commit bản đăng ký: công thức tín hiệu (hàm trong `strategy/`), kỳ `h` (số nến), chiều
+     (+1 thuận / −1 nghịch), ngưỡng |tín hiệu| dùng để đo độ lớn, cửa sổ IS và cửa sổ OOS, lý do.
+  2. Mỗi (tín hiệu, tham số, kỳ, ngưỡng) đo trên dữ liệu thật = MỘT dòng bảng, `n_trials` + 1 — chung một sổ với chiến
+     lược. Không quét nhiều kỳ hay ngưỡng rồi chọn cái đẹp nhất.
+  3. Đo trên IS. KHÔNG CÓ TÍN HIỆU hoặc KHÔNG ĐỦ TRẢ PHÍ ⇒ dừng, không dựng chiến lược. ĐỦ LỚN ⇒ đo lại ĐÚNG MỘT lần
+     trên cửa sổ OOS đã đăng ký, cùng tham số và cùng `n_trials`; phải ĐỦ LỚN lần nữa.
+  4. Qua cả hai ⇒ chạy cổng lực thống kê với lợi thế giả định KHÔNG cao hơn lợi thế ròng đo ở OOS, rồi mới đăng ký
+     chiến lược (một lần thử riêng, kiểm định như cũ).
+  5. Giả dược (`placebo_signal`) không mang giả thuyết ⇒ chạy để thử đường ống không tính là lần thử.
+- **Giới hạn đã biết:** độ lớn là ước lượng SÀNG LỌC (bỏ qua luật một vị thế, stop, số lệnh/ngày; các nến vượt ngưỡng
+  liền nhau không phải các lệnh riêng); `h` tính theo số nến nên phút thiếu và giờ nghỉ trưa không được bù; kiểm định
+  coi các NGÀY là độc lập; "chung một sổ `n_trials`" là đề xuất của Claude — đổi phải ghi tại đây trước phép đo đầu tiên.
+- **Thử đường ống bằng giả dược (cloud, kho SSI thiếu ngày, nến tới hết 31/12/2025, kỳ 5 nến):** 74 ngày, 15.540 quan
+  sát (~210/ngày), IC trung bình −0,0019, độ lệch chuẩn IC ngày 0,0495, p 0,616 ⇒ KHÔNG CÓ TÍN HIỆU, đúng như phải thế.
+  Từ độ lệch chuẩn này: với 74 ngày và `n_trials` 10 (p < 0,01, lực 80%), IC trung bình nhỏ nhất bắt được ≈
+  3,17 × 0,0495/√74 ≈ 0,018. Trôi giá trung bình 0,13 điểm mỗi 5 nến trong giai đoạn đó (đã trừ khỏi phép đo độ lớn).

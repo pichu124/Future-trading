@@ -1,5 +1,31 @@
 # Tiến độ
 
+## 2026-11-27 — Nghiên cứu: đo tín hiệu trên toàn bộ nến (`backtest/signal_study.py`)
+
+**Đã xong**
+- `backtest/signal_study.py` + `tests/test_signal_study.py` (42 test, viết trước; thử phá 23 dòng ⇒ đều có test đỏ sau
+  khi bổ sung 2 test): `SignalProbe` (chiến lược không ra lệnh, chạy trong engine ⇒ tín hiệu nhận đúng `bars_today` +
+  `history` của chiến lược thật), `forward_observations` (vào mở nến kế, ra đóng nến thứ h, trong cửa sổ luật rủi ro),
+  IC Spearman theo ngày, kiểm định sign-flip một phía × `n_trials`, walk-forward, độ lớn so với chi phí một lượt (đã
+  trừ trôi giá trong ngày), `placebo_signal`, CLI `python -m backtest.signal_study`.
+- `research/log.md`: luật "Giai đoạn đo tín hiệu" (không phải lần thử, `n_trials` giữ 9).
+- Giả dược trên nến SSI tới 31/12/2025 (cloud): 74 ngày, IC −0,0019, p 0,616 ⇒ KHÔNG CÓ TÍN HIỆU (đúng kỳ vọng).
+  Độ lệch chuẩn IC ngày 0,0495 ở kỳ 5 nến ⇒ với 74 ngày, `n_trials` 10, bắt được IC trung bình ≥ ~0,018.
+
+**Giả định / rủi ro còn mở**
+- Độ lớn là ước lượng sàng lọc (bỏ qua một vị thế, stop, số lệnh/ngày) — tín hiệu qua được vẫn phải qua cổng lực và
+  kiểm định chiến lược.
+- Kỳ `h` tính theo số nến: phút thiếu (~0,4% nến) và nghỉ trưa không được bù.
+- Chưa có tín hiệu thật nào được đo; "chung một sổ `n_trials` với chiến lược" là đề xuất của Claude, người dùng chưa xem lại.
+- Kho SSI trên cloud thiếu ngày ⇒ số của giả dược chỉ để thử đường ống.
+
+**Người dùng cần làm**
+- [ ] Trên laptop, thử đường ống với kho DNSE (không tính lần thử):
+  `python -m backtest.signal_study --bars data/history/ohlc1m --signal backtest.signal_study:placebo_signal --horizon 5 --expected-sign 1 --until 2026-08-31 --n-trials 1`
+- [ ] Chọn tín hiệu đầu tiên để đăng ký (công thức, kỳ, chiều, ngưỡng, cửa sổ IS/OOS).
+
+**Bước tiếp theo:** đăng ký trước và đo tín hiệu đầu tiên (#10).
+
 ## 2026-11-27 — Nghiên cứu: cổng lực thống kê trước khi đăng ký ý tưởng (`backtest/power.py`)
 
 **Đã xong**
