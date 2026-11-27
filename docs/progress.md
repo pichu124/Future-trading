@@ -1,5 +1,31 @@
 # Tiến độ
 
+## 2026-11-27 — Nghiên cứu: cổng lực thống kê trước khi đăng ký ý tưởng (`backtest/power.py`)
+
+**Đã xong**
+- `backtest/power.py` + `tests/test_power.py` (43 test, viết trước; thử phá 10 dòng ⇒ đều có test đỏ): lực của kiểm định
+  quyết định (p sign-flip × `n_trials` < 0,1) theo lợi thế giả định, số lệnh, độ phân tán; lợi thế nhỏ nhất bắt được;
+  số lệnh cần; mô phỏng bằng đúng `monte_carlo_pvalue` trên P&L tham chiếu đã trừ trung bình; `power_gate` + CLI
+  `python -m backtest.power`.
+- `research/log.md`: luật "Cổng lực thống kê" áp dụng từ ý tưởng #10 (không phải lần thử, `n_trials` giữ 9).
+- Cả bộ: 1.697 test đạt.
+- Con số chính (công thức, `n_trials` = 10, lực 80%, sd 10 điểm/lệnh): 60 lệnh chỉ bắt được lợi thế ≥ 4,09 điểm/lệnh;
+  100 lệnh ≥ 3,17; 1.000 lệnh ≥ 1,00. Chi phí ~0,9 điểm/lượt ⇒ kiểu thử "vài chục lệnh OOS" không thể kết luận về lợi
+  thế cỡ 1–2 điểm.
+
+**Giả định / rủi ro còn mở**
+- Lực là cận trên của xác suất qua OOS gộp (còn điều kiện mọi cửa sổ lãi, trượt giá căng).
+- Độ phân tán 12,28 điểm/lệnh mới đo trên kho SSI thiếu ngày của cloud (ORB, nến tới 31/12/2025) — chưa phải số chính thức.
+- Ngưỡng lực 80% là mức quy ước Claude đề xuất; người dùng chưa xem lại.
+- `mc_sims` = 1.000 ⇒ từ `n_trials` = 101 kiểm định không bao giờ đạt.
+
+**Người dùng cần làm**
+- [ ] Trên laptop (kho DNSE đầy đủ), lấy độ phân tán thật, vd:
+  `python -m backtest.power --edge 1.5 --n-trades 60 --bars data/history/ohlc1m --strategy strategy.baseline_orb:OpeningRangeBreakout --until 2026-11-06`
+- [ ] Xem lại ngưỡng lực 80% trước khi xét ý tưởng #10.
+
+**Bước tiếp theo:** việc 2 — tách "tín hiệu có dự báo được không" (đo trên toàn bộ nến, nhiều quan sát) khỏi "chiến lược có lãi không".
+
 ## 2026-11-19 — Gói sáng: thêm vị thế ròng khối ngoại phái sinh
 
 - `scripts/foreign_futures_position.py` + 7 test: vị thế ròng ước tính khối ngoại mỗi HĐ đang lưu hành (Σ mua − bán từ phiên niêm yết, SSI theo mã KRX, cách của vnstock-dashboard), bỏ phiên từ D0, đánh dấu HĐ đáo hạn, cảnh báo thiếu trang. Đối chiếu VN30F2612 = +1.642 khớp dashboard.

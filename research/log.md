@@ -429,3 +429,35 @@ chạy được trên cloud; chế độ nến bi quan hơn tick ~0,2 điểm/l�
   `inputs.missing` của ngày đó và chạy tiếp, KHÔNG thay nguồn khác và KHÔNG dời mốc. Ý tưởng nguồn mới (OI, tự doanh…)
   ghi lại để dùng cho thí nghiệm SAU, không chen vào thí nghiệm đang chạy.
 
+
+## Cổng lực thống kê — áp dụng từ ý tưởng #10 (27/11/2026, người dùng đồng ý làm cổng)
+
+KHÔNG phải một lần thử: không thêm dòng bảng, `n_trials` giữ 9. Đây là luật về việc ĐƯỢC đăng ký hay không.
+
+- **Vì sao:** kiểm định quyết định là p sign-flip × `n_trials` < 0,1 trên lệnh OOS gộp (`backtest.pooled`). Với ý tưởng
+  thứ 10 mỗi phép thử cần p < 0,01. Công thức chuẩn, một phía, lực 80%: lợi thế nhỏ nhất bắt được =
+  (z₀.₉₉ + z₀.₈) × sd/√n = 3,17 × sd/√n. Với sd = 10 điểm/lệnh: 60 lệnh ⇒ 4,09 điểm/lệnh; 100 ⇒ 3,17; 300 ⇒ 1,83;
+  1.000 ⇒ 1,00. Chi phí mỗi lượt ~0,9 điểm. Tức là các lần thử kiểu "≤ 2 lệnh/ngày, vài chục lệnh OOS" chỉ có thể
+  phát hiện lợi thế rất lớn; chúng KHÔNG bác được lợi thế cỡ 1–2 điểm/lệnh, và mỗi lần thử lại làm ngưỡng p chặt thêm.
+- **Công cụ:** `backtest/power.py` (`python -m backtest.power`), test viết trước (`tests/test_power.py`).
+  `power_normal`, `min_detectable_edge`, `trades_needed` (công thức); `simulated_power` (lấy mẫu lại P&L của một chiến
+  lược tham chiếu ĐÃ TRỪ TRUNG BÌNH + lợi thế giả định, chạy đúng `monte_carlo_pvalue`); `power_gate` (kết luận).
+- **Luật (CHỐT trước khi xét #10):**
+  1. Bản đăng ký trước phải ghi: (a) lợi thế giả định SAU phí, điểm/lệnh, kèm lý do; (b) số lệnh OOS gộp dự kiến và
+     cách ước lượng; (c) độ phân tán lấy từ đâu — `--sd`, hoặc một chiến lược tham chiếu đã thử, chạy trên dữ liệu ĐÃ
+     dùng (`--until`, không chạm cửa sổ còn sạch như OOS-A).
+  2. Chạy `python -m backtest.power` với `n_trials` = số dòng bảng + 1 (mặc định của công cụ); dán kết quả vào bản
+     đăng ký.
+  3. ĐỦ LỰC ⇔ số lệnh dự kiến ≥ 30 VÀ kiểm định còn đạt được (p nhỏ nhất 1/(mc_sims+1) × n_trials < 0,1) VÀ lực ≥ 80%.
+     KHÔNG ĐỦ LỰC ⇒ không đăng ký, không viết code chiến lược, không thêm dòng bảng, không tăng `n_trials`.
+  4. Không nâng lợi thế giả định hay số lệnh cho vừa cổng: lợi thế thật nhỏ hơn giả định thì lần thử vẫn trượt và vẫn
+     tốn một `n_trials`. Đổi giả định phải có lý do mới, ghi tại đây.
+  5. Ngưỡng 80% và α = 0,1/`n_trials` là mức quy ước Claude đề xuất; đổi ngưỡng phải ghi tại đây TRƯỚC khi xét ý tưởng
+     kế tiếp.
+- **Giới hạn đã biết:** lực là CẬN TRÊN (luật gộp còn đòi mọi cửa sổ lãi và chịu trượt giá căng); công thức là xấp xỉ
+  chuẩn, mô phỏng mới dùng hình dạng P&L thật; độ phân tán của chiến lược tham chiếu có thể khác ý tưởng mới;
+  `mc_sims` = 1.000 ⇒ từ `n_trials` = 101 kiểm định không thể đạt (công cụ báo).
+- **Chạy thử đường mô phỏng (cloud, kho SSI thiếu ngày, nến tới hết 31/12/2025 — dữ liệu IS đã dùng của #6/#7/#9):** ORB
+  làm tham chiếu, 136 lệnh, độ lệch chuẩn 12,28 điểm/lệnh (P&L của ORB KHÔNG được in hay xem — công cụ chỉ lấy độ phân
+  tán). Lợi thế giả định 2 điểm, 100 lệnh, `n_trials` 10 ⇒ lực mô phỏng 22% (công thức 24%), báo động giả 1,8% (mức
+  danh nghĩa 1%, 400 lần lặp). Số chính thức phải chạy lại trên laptop với kho đầy đủ.
