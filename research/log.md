@@ -85,6 +85,9 @@ Thứ tự làm: #3 → #4 → #5, mỗi chiến lược một module (test trư
 | 2026-11-16 | Đảo chiều qua ngày (`strategy/prev_day_reversal.py`) — cấu hình #7 | m = đóng − mở phiên trước; \|m\| ≥ 0,50·ADR10 ⇒ vào NGƯỢC m lúc 09:16; stop 0,40·ADR10; EXIT 14:20; 1 lệnh/ngày | IS nến SSI 22/07→31/12/2025 (kho tải 11/11, laptop) — **IS chạy 16/11/2026**; OOS KHÔNG mở | IS: 41 lệnh, −15.364.700đ (thắng 29%, PF 0,58); trượt 2 tick −17.074.700đ | — | **KHÔNG CÓ EDGE — trượt cổng IS** (cả 3 điều kiện): 0/6 biến thể lãi, 1/4 đoạn walk-forward lãi. Lỗ cả trước phí. Đăng ký trước 16/11/2026 (mục "Đăng ký trước #7, #8, #9"). |
 | 2026-11-16 | Basis quá đà (`strategy/basis_reversion.py`) — cấu hình #8 | d = basis − trung bình basis 30′ trước; \|d\| ≥ 0,10·ADR10 (09:30–14:00) ⇒ vào NGƯỢC d; stop 0,15·ADR10; thoát khi d về 0 hoặc giữ 30′; EXIT 14:20; ≤ 2 lệnh/ngày | như #7 + nến 1 phút chỉ số VN30 (SSI) — **KHÔNG KIỂM ĐƯỢC** | — | — | Nến chỉ số SSI chỉ có từ 15/10/2026, DNSE không có OHLC lịch sử ⇒ lỗi dữ liệu, không phải kết luận; chưa viết code. Đăng ký trước 16/11/2026. |
 | 2026-11-16 | Đà cuối phiên (`strategy/late_momentum.py`) — cấu hình #9 | r = đóng nến 13:49 − đóng phiên trước; \|r\| ≥ 0,30·ADR10 ⇒ vào THEO r lúc 13:50; stop 0,20·ADR10; EXIT 14:20; 1 lệnh/ngày | như #7 — **IS chạy 16/11/2026**; OOS KHÔNG mở | IS: 40 lệnh, −2.168.000đ (thắng 40%, PF 0,88); trượt 2 tick −2.968.000đ | — | **KHÔNG CÓ EDGE — trượt cổng IS** (cả 3 điều kiện): 3/6 biến thể lãi (< 75%), 1/4 đoạn walk-forward lãi. Trước phí ≈ hoà. Đăng ký trước 16/11/2026. |
+| 2026-11-27 | Đo tín hiệu: dòng tiền theo khối lượng (`strategy/signals.py:volume_flow`) — cấu hình #10 | F = Σ dấu(đóng − mở) × KL / Σ KL trên 30 nến gần nhất của hôm nay; kỳ 60 nến; chiều THUẬN (+1); ngưỡng độ lớn = phân vị 85% của \|F\| trên quan sát IS | nến DNSE (`data/history/ohlc1m`): IS 11/05→31/08/2026 · OOS 01/09→30/10/2026 | CHƯA CHẠY | — | đăng ký trước 27/11/2026 (mục "Đăng ký trước #10, #11, #12") |
+| 2026-11-27 | Đo tín hiệu: xu hướng trong ngày (`strategy/signals.py:intraday_trend`) — cấu hình #11 | T = (đóng nến hiện tại − mở nến đầu tiên hôm nay) / ADR10; kỳ 60 nến; chiều THUẬN (+1); ngưỡng độ lớn = phân vị 85% của \|T\| trên quan sát IS | nến SSI (`data/ssi/ohlc1m`): IS 22/07→31/12/2025 · OOS-A 01/01→24/03/2026 | CHƯA CHẠY | — | đăng ký trước 27/11/2026 |
+| 2026-11-27 | Đo tín hiệu: basis lệch khỏi mức quen (`strategy/signals.py:basis_deviation`) — cấu hình #12 | D = (basis − trung bình basis 30 phút khớp được gần nhất trước đó, hôm nay) / ADR10, basis = đóng HĐ − đóng VN30 cùng phút; kỳ 30 nến; chiều NGHỊCH (−1); ngưỡng độ lớn \|D\| ≥ 0,10 | nến SSI HĐ + chỉ số VN30: IS 15/10→31/12/2026 · OOS 04/01→31/03/2027 | CHƯA CHẠY (chờ đủ dữ liệu) | — | đăng ký trước 27/11/2026 |
 
 ### Kết quả #3–#5 và kế hoạch (10/11/2026)
 
@@ -493,3 +496,73 @@ KHÔNG phải một lần thử: không thêm dòng bảng, `n_trials` giữ 9. 
   sát (~210/ngày), IC trung bình −0,0019, độ lệch chuẩn IC ngày 0,0495, p 0,616 ⇒ KHÔNG CÓ TÍN HIỆU, đúng như phải thế.
   Từ độ lệch chuẩn này: với 74 ngày và `n_trials` 10 (p < 0,01, lực 80%), IC trung bình nhỏ nhất bắt được ≈
   3,17 × 0,0495/√74 ≈ 0,018. Trôi giá trung bình 0,13 điểm mỗi 5 nến trong giai đoạn đó (đã trừ khỏi phép đo độ lớn).
+
+## Đăng ký trước #10, #11, #12 — ba phép ĐO TÍN HIỆU (27/11/2026 — TRƯỚC khi viết code tín hiệu hay chạy trên dữ liệu)
+
+Người dùng chọn đo cả ba ứng viên (27/11/2026) ⇒ **`n_trials` = 12** (thêm 3 dòng bảng); cả ba phép đo dùng
+`--n-trials 12` ⇒ mỗi phép cần p < 0,1/12 = 0,0083. Theo luật "Giai đoạn đo tín hiệu": đây là phép đo tín hiệu
+(`backtest.signal_study`), CHƯA phải chiến lược. Mọi con số dưới đây CHỐT từ suy luận; đổi bất kỳ số nào = cấu hình MỚI.
+
+Chung cho cả ba:
+- Tín hiệu là hàm thuần `(bars_today, history)` trong `strategy/signals.py`, chỉ dùng nến đã đóng. Quan sát: tín hiệu ở
+  nến i ⇒ vào giá MỞ nến i+1, ra giá ĐÓNG nến i+h; nến vào mở trong [09:15, 14:15), nến ra đóng không muộn hơn 14:25;
+  bỏ ngày đáo hạn. Chi phí một lượt theo settings (0,87 điểm).
+- Kết luận theo `backtest.signal_study.study` với luật mặc định (≥ 30 ngày có IC; IC trung bình đúng chiều; p sign-flip
+  × 12 < 0,1; ≥ 50% trong 4 đoạn đúng chiều; ≥ 30 ngày có tín hiệu vượt ngưỡng; lợi thế thô − chi phí > 0).
+- **Trình tự cho TỪNG phép đo:** (1) kiểm tra dữ liệu — số ngày giao dịch thiếu trong mỗi cửa sổ (`scripts/check_bar_store.py`;
+  thiếu > 10 ngày ⇒ dừng, không kết luận); (2) đo IS; kết luận khác "ĐỦ LỚN" ⇒ DỪNG, không mở OOS, không sửa tham số
+  để cứu; (3) "ĐỦ LỚN" ⇒ ghi con số ngưỡng của IS vào đây, rồi đo OOS ĐÚNG MỘT lần với ngưỡng đó và mọi tham số giữ
+  nguyên; phải "ĐỦ LỚN" lần nữa; (4) qua cả hai ⇒ cổng lực thống kê (lợi thế giả định ≤ lợi thế ròng đo ở OOS) rồi
+  mới đăng ký chiến lược (lần thử riêng).
+- Ngưỡng "phân vị 85% của |tín hiệu| trên quan sát IS": tính CHỈ từ giá trị tín hiệu (không dùng lợi suất kỳ sau), bằng
+  tuỳ chọn `--threshold-quantile 0.85` (thêm vào công cụ trước khi chạy). Chọn 85% vì ngưỡng hoà vốn ước lượng trước
+  đó tính cho khoảng 13% số nến mạnh nhất. `--n-trials` của công cụ đổi mặc định thành số dòng bảng (phép đo đã có dòng).
+- Ba phép đo độc lập: kết quả phép này KHÔNG được dùng để sửa phép kia.
+
+**#10 — Dòng tiền theo khối lượng** (`volume_flow`). Giả thuyết: thị trường ~95% khối lượng là cá nhân ⇒ dòng lệnh một
+chiều có quán tính; khối lượng dồn vào các nến tăng (giảm) trong nửa giờ qua báo trước giá đi tiếp cùng chiều trong
+giờ tới. Nguồn thông tin MỚI: chín lần thử trước chỉ dùng giá. Điểm yếu biết trước: dấu của nến 1 phút là xấp xỉ thô
+của dòng lệnh chủ động.
+- W = 30 nến đã đóng gần nhất của HÔM NAY, gồm nến hiện tại. Hôm nay chưa đủ 30 nến ⇒ không có tín hiệu. Bất kỳ nến
+  nào trong W có `volume_reliable = False` ⇒ không có tín hiệu. Tổng khối lượng W = 0 ⇒ không có tín hiệu.
+- F = Σ_W dấu(đóng − mở) × khối lượng / Σ_W khối lượng ∈ [−1, 1] (nến đóng = mở góp 0 vào tử số).
+- Kỳ h = 60 nến. Chiều +1. Ngưỡng độ lớn = phân vị 85% của |F| trên quan sát IS.
+- Dữ liệu: nến 1 phút DNSE dựng từ khớp lệnh (`data/history/ohlc1m`, khối lượng tin được). KHÔNG dùng nến SSI: khối
+  lượng SSI chưa đối chiếu từng phút (`volume_reliable = False`). **IS** = 11/05/2026 → 31/08/2026. **OOS** =
+  01/09/2026 → 30/10/2026 (đã bị #1–#5 nhìn qua với giả thuyết khác, chỉ dùng giá ⇒ OOS yếu hơn OOS-A; chấp nhận vì
+  không có cửa sổ nào khác có khối lượng tin được). Từ 02/11/2026 trở đi loại khỏi phép đo (đã ghi 16/11).
+
+**#11 — Xu hướng trong ngày** (`intraday_trend`). Giả thuyết: đà trong ngày (lợi suất từ đầu phiên dự báo phần còn lại
+của phiên — ghi nhận trên chỉ số Mỹ và hợp đồng tương lai chỉ số Trung Quốc). Bốn chiến lược theo đà (#1–#4) và #9 đã
+trượt, nhưng mỗi lần chỉ vài chục lệnh ở một khung giờ cố định; phép đo này hỏi câu tổng quát trên mọi nến để đóng
+hoặc mở lại cả họ ý tưởng. Xác suất thành công thấp nhất trong ba — biết trước.
+- T = (đóng nến hiện tại − mở nến ĐẦU TIÊN của hôm nay) / ADR10. ADR10 = trung bình (đỉnh − đáy) 10 phiên TRƯỚC
+  (`strategy.indicators.adr_before`, lịch sử back-adjust); thiếu ⇒ không có tín hiệu. `history_days` = 10.
+- Kỳ h = 60 nến. Chiều +1. Ngưỡng độ lớn = phân vị 85% của |T| trên quan sát IS.
+- Dữ liệu: nến 1 phút SSI (`data/ssi/ohlc1m`, kho đầy đủ trên laptop). **IS** = 22/07/2025 → 31/12/2025 (dữ liệu nạp
+  CẮT tới 31/12/2025; ~10 phiên đầu làm lịch sử ADR). **OOS** = OOS-A 01/01/2026 → 24/03/2026 (chưa chiến lược nào
+  chạy ⇒ sạch).
+
+**#12 — Basis lệch khỏi mức quen** (`basis_deviation`). Giả thuyết như #8 (16/11): hợp đồng và chỉ số bị buộc vào nhau;
+khi đám đông đẩy hợp đồng lệch xa chỉ số trong vài phút, hợp đồng bị kéo về. Rủi ro biết trước: nếu hợp đồng DẪN chỉ
+số thì độ lệch tự đóng nhờ chỉ số đuổi theo và chiều đăng ký sai. #8 (chiến lược) chưa từng chạy vì thiếu dữ liệu;
+phép đo này là bước trước của nó, tính là lần thử riêng.
+- basis(t) = đóng HĐ(t) − đóng VN30(t), chỉ ở phút có CẢ HAI nến. B(t) = trung bình basis của 30 phút khớp được GẦN
+  NHẤT TRƯỚC t trong hôm nay (chưa đủ 30 ⇒ không có tín hiệu). D(t) = (basis(t) − B(t)) / ADR10. Phút thiếu nến chỉ số
+  ⇒ không có tín hiệu. (Đúng định nghĩa d và B của #8.)
+- Kỳ h = 30 nến. Chiều −1 (D > 0 ⇒ kỳ vọng HĐ giảm). Ngưỡng độ lớn |D| ≥ 0,10 (mức vào lệnh đã đăng ký của #8).
+- Dữ liệu: nến 1 phút SSI của HĐ và của chỉ số VN30 (cùng nguồn, cùng mốc phút; chỉ số chỉ có từ 15/10/2026).
+  **IS** = 15/10/2026 → 31/12/2026. **OOS** = 04/01/2027 → 31/03/2027. Đo IS khi cửa sổ IS đã kết thúc và công cụ đã
+  nhận được chuỗi thứ hai (việc riêng, test trước); đo OOS sau 31/03/2027. Ngày thiếu nến chỉ số > 10% số ngày của một
+  cửa sổ ⇒ KHÔNG ĐO ĐƯỢC ở cửa sổ đó (lỗi dữ liệu, `n_trials` vẫn tính).
+
+**Ghi nhận trung thực — những gì đã được nhìn TRƯỚC khi đăng ký:**
+- Số mô tả từ giả dược trên nến SSI tới 31/12/2025 (kho cloud thiếu ngày): độ lệch chuẩn lợi suất theo kỳ (5/15/30/60/120
+  nến: 3,20/5,55/7,62/10,36/13,32 điểm), độ lệch chuẩn IC ngày (0,049/0,055/0,060/0,084/0,124), trôi giá 0,13 điểm mỗi 5
+  nến. Không phụ thuộc tín hiệu nào; dùng để chọn kỳ 60 nến (kỳ ngắn không thể hoà vốn với chi phí 0,87 điểm).
+- Kết quả chín lần thử trước trên chính các cửa sổ IS này (vd ORB trước phí ≈ +0,2 điểm/lượt trên IS DNSE; #9 trước phí
+  ≈ hoà và #7 lỗ trước phí trên IS SSI) ⇒ chiều THUẬN của #11 không hoàn toàn "mù" với IS. Vì vậy IS chỉ là sàng lọc;
+  bằng chứng là cửa sổ OOS.
+- #12: từ 16/11 tới 27/11, nhật ký regime shadow mỗi sáng đã nhìn OHLC ngày, basis lúc đóng cửa và mô tả dáng phiên
+  trước của hợp đồng. CHƯA ai tính độ lệch basis trong ngày so với trung bình 30 phút. Nhật ký đó sẽ tiếp tục nhìn số
+  NGÀY trong suốt cửa sổ IS/OOS của #12; cấu hình #12 đã chốt nên việc nhìn không đổi được gì.
