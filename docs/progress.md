@@ -1,5 +1,35 @@
 # Tiến độ
 
+## 2026-11-27 — Đăng ký #10–#12; sửa lệch phương pháp đo tín hiệu; lực thật của giai đoạn đo
+
+**Đã xong**
+- `research/log.md`: đăng ký trước ba phép đo tín hiệu (#10 dòng tiền theo khối lượng, #11 xu hướng trong ngày, #12 basis
+  lệch khỏi mức quen), commit 94b28b3 TRƯỚC khi viết code tín hiệu; `n_trials` = 12.
+- `strategy/signals.py` (`volume_flow`, `intraday_trend`) + `tests/test_signals.py` (13 test, viết trước; 9/9 đột biến bị bắt).
+- `backtest/signal_study.py`: `--threshold-quantile` (ngưỡng = phân vị của |tín hiệu|, không dùng lợi suất); `--n-trials`
+  mặc định = số dòng bảng.
+- **Sửa lỗi phương pháp (phát hiện khi thử trên nến giả bước ngẫu nhiên, trước mọi lần chạy tín hiệu thật trên dữ liệu
+  thật):** IC Spearman từng ngày + trừ trôi giá trong ngày + trung bình của trung bình ngày đều dùng tương lai của
+  chính ngày đó ⇒ "đảo chiều" giả với tín hiệu chậm (IC −0,16 và −0,50 trên bước ngẫu nhiên). Thay bằng "điểm ngày"
+  không định tâm trong ngày, trôi giá của các ngày khác, lợi thế thô gộp trên mọi nến vượt ngưỡng; thêm test chặn lỗi.
+- Hiệu chuẩn 300 bộ bước ngẫu nhiên: báo động giả gần mức danh nghĩa (chi tiết ở research/log.md).
+
+**Kết luận quan trọng**
+- Lực thật của ba phép đo thấp: chỉ bắt được lợi thế thô ≥ ~3,7 điểm/lượt (#11), 3,3 (#10), 2,1 (#12), trong khi hoà vốn
+  là 0,87 điểm. Với ~50–115 ngày dữ liệu và kỳ giữ 30–60 nến, chỉ lợi thế gấp 2,5–4 lần chi phí mới kiểm chứng được.
+- Bảng "tương quan nhỏ nhất đo được" Claude đưa trước đó là quá lạc quan với tín hiệu chậm (lỗi của Claude).
+
+**Giả định / rủi ro còn mở**
+- Kiểm định hơi rộng tay ở chiều nghịch (chiều của #12): cần hiệu chuẩn lại với nhiều bộ hơn trước khi đo #12.
+- Kịch bản hiệu chuẩn chưa nằm trong repo. #12 còn cần mở rộng công cụ để nhận chuỗi chỉ số.
+- Tín hiệu #11 cần lịch sử 10 phiên: thiếu nến HĐ kế tiếp ngày trước roll ⇒ mất ~10 phiên sau mỗi roll.
+
+**Người dùng cần làm**
+- [ ] Quyết định: chạy #10 và #11 như đã đăng ký (biết trước lực thấp) hay rút. Lệnh chạy ở cuối mục đăng ký trong câu
+  trả lời của Claude ngày 27/11.
+
+**Bước tiếp theo:** theo quyết định của người dùng; kiểm toán chi phí từ dữ liệu recorder đầu tháng 12.
+
 ## 2026-11-27 — Nghiên cứu: đo tín hiệu trên toàn bộ nến (`backtest/signal_study.py`)
 
 **Đã xong**
@@ -11,6 +41,8 @@
 - `research/log.md`: luật "Giai đoạn đo tín hiệu" (không phải lần thử, `n_trials` giữ 9).
 - Giả dược trên nến SSI tới 31/12/2025 (cloud): 74 ngày, IC −0,0019, p 0,616 ⇒ KHÔNG CÓ TÍN HIỆU (đúng kỳ vọng).
   Độ lệch chuẩn IC ngày 0,0495 ở kỳ 5 nến ⇒ với 74 ngày, `n_trials` 10, bắt được IC trung bình ≥ ~0,018.
+  **(ĐÍNH CHÍNH — xem mục "Đăng ký #10–#12; sửa lệch phương pháp" phía trên: con số này chỉ đúng cho tín hiệu đổi độc
+  lập từng nến, và cách tính theo ngày ban đầu bị lệch với tín hiệu chậm.)**
 
 **Giả định / rủi ro còn mở**
 - Độ lớn là ước lượng sàng lọc (bỏ qua một vị thế, stop, số lệnh/ngày) — tín hiệu qua được vẫn phải qua cổng lực và

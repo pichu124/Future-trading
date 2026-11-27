@@ -496,6 +496,9 @@ KHÔNG phải một lần thử: không thêm dòng bảng, `n_trials` giữ 9. 
   sát (~210/ngày), IC trung bình −0,0019, độ lệch chuẩn IC ngày 0,0495, p 0,616 ⇒ KHÔNG CÓ TÍN HIỆU, đúng như phải thế.
   Từ độ lệch chuẩn này: với 74 ngày và `n_trials` 10 (p < 0,01, lực 80%), IC trung bình nhỏ nhất bắt được ≈
   3,17 × 0,0495/√74 ≈ 0,018. Trôi giá trung bình 0,13 điểm mỗi 5 nến trong giai đoạn đó (đã trừ khỏi phép đo độ lớn).
+- **⚠ ĐÍNH CHÍNH (27/11/2026, cùng ngày):** cách tính "IC Spearman từng ngày" và "trừ trôi giá trong ngày" mô tả ở mục
+  này bị LỆCH với tín hiệu chậm và đã được thay; con số 0,018 chỉ đúng cho tín hiệu đổi độc lập từng nến. Xem mục
+  "Sửa phương pháp đo tín hiệu" bên dưới.
 
 ## Đăng ký trước #10, #11, #12 — ba phép ĐO TÍN HIỆU (27/11/2026 — TRƯỚC khi viết code tín hiệu hay chạy trên dữ liệu)
 
@@ -566,3 +569,39 @@ phép đo này là bước trước của nó, tính là lần thử riêng.
 - #12: từ 16/11 tới 27/11, nhật ký regime shadow mỗi sáng đã nhìn OHLC ngày, basis lúc đóng cửa và mô tả dáng phiên
   trước của hợp đồng. CHƯA ai tính độ lệch basis trong ngày so với trung bình 30 phút. Nhật ký đó sẽ tiếp tục nhìn số
   NGÀY trong suốt cửa sổ IS/OOS của #12; cấu hình #12 đã chốt nên việc nhìn không đổi được gì.
+
+## Sửa phương pháp đo tín hiệu — TRƯỚC khi bất kỳ tín hiệu thật nào chạy trên dữ liệu thật (27/11/2026)
+
+KHÔNG phải một lần thử. Công thức tín hiệu, kỳ, chiều, ngưỡng, cửa sổ và `n_trials` = 12 của #10–#12 GIỮ NGUYÊN.
+
+- **Phát hiện:** thử đường ống #10 và #11 trên nến GIẢ là bước ngẫu nhiên (không có gì để dự báo), công cụ báo IC
+  Spearman theo ngày −0,16 (t = −3,6) và −0,50 (t = −5,3), lợi thế thô −1,70 và −5,97 điểm. Ba nguyên nhân, đều là dùng
+  thông tin TƯƠNG LAI của chính ngày đó: (1) xếp hạng / định tâm tín hiệu và lợi suất TRONG ngày; (2) trừ lợi suất kỳ
+  sau trung bình CỦA NGÀY để khử trôi giá; (3) lấy trung bình của trung bình ngày cho lợi thế thô, trong khi số nến
+  vượt ngưỡng của một ngày phụ thuộc diễn biến sau đó. Với tín hiệu chậm (mức giá, dòng tiền 30 nến, độ lệch) điều này
+  tạo "đảo chiều" giả (lệch kiểu Dickey–Fuller). Giả dược không lộ lỗi vì nó đổi độc lập từng nến.
+- **Chưa có gì bị nhiễm:** trước khi sửa chỉ có giả dược chạy trên dữ liệu thật; #10/#11 mới chạy trên nến giả.
+- **Sửa (test viết kèm, có test "bước ngẫu nhiên + tín hiệu chậm ⇒ không ra đảo chiều"):** thống kê kiểm định là "điểm
+  ngày" = trung bình trong ngày của (tín hiệu × lợi suất kỳ sau) chia hằng số chuẩn hoá của cả mẫu — không xếp hạng,
+  không định tâm trong ngày; trôi giá trừ đi là trung bình của CÁC NGÀY KHÁC; lợi thế thô là trung bình trên mọi nến
+  vượt ngưỡng. Trong luật chung của #10–#12, cụm "≥ 30 ngày có IC; IC trung bình đúng chiều" đọc là "≥ 30 ngày đủ
+  quan sát; điểm ngày trung bình đúng chiều"; mọi điều kiện khác giữ nguyên.
+- **Hiệu chuẩn trên bước ngẫu nhiên** (300 bộ × 110 ngày × 240 nến, 1,34 điểm/nến ≈ độ lệch chuẩn lợi suất 60 nến 10,4
+  điểm đo trên nến SSI; ngưỡng phân vị 85%):
+  - kiểu #11 (mức giá so với giá mở, kỳ 60): t trung bình −0,14; báo động giả ở p < 0,10: thuận 5,3% / nghịch 10,7%; ở
+    p < 0,0083: 1,0% / 1,7%; độ lệch chuẩn điểm ngày 0,529; lợi thế thô trung bình −0,13, độ lệch chuẩn giữa các bộ 1,13 điểm.
+  - kiểu #10 (khối lượng theo chiều nến 30 nến, kỳ 60): t −0,04; 10,3% / 12,7%; 1,0% / 1,0%; 0,389; −0,03 và 0,85 điểm.
+  - kiểu #12 (lệch khỏi trung bình 30 nến, kỳ 30): t −0,06; 10,0% / 11,3%; 0,0% / 2,0%; 0,296; −0,02 và 0,46 điểm.
+  ⇒ gần mức danh nghĩa; hơi rộng tay ở chiều NGHỊCH (chiều của #12) ⇒ trước khi đo #12 phải hiệu chuẩn lại với nhiều
+  bộ hơn. Kịch bản hiệu chuẩn chưa nằm trong repo (việc riêng, cần test).
+- **Lực THẬT của ba phép đo** (p < 0,0083, lực 80% ⇒ 3,24 × sai số chuẩn; thay cho con số 0,018–0,046 suy từ giả dược):
+  lợi thế thô nhỏ nhất bắt được ≈ 3,7 điểm/lượt cho #11 (~105 ngày IS), 3,3 điểm cho #10 (78 ngày), 2,1 điểm cho #12
+  (~54 ngày); theo tương quan: 0,17 / 0,14 / 0,13. Hoà vốn là 0,87 điểm (tương quan ước 0,04–0,06). Tức là ba phép đo
+  chỉ bắt được lợi thế gấp ~2,5–4 lần chi phí; "KHÔNG CÓ TÍN HIỆU" phải đọc là "không có lợi thế RẤT LỚN", không phải
+  "không có lợi thế". Nguyên nhân gốc: số lượt đặt cược độc lập ≈ số ngày × 240 / kỳ; kỳ dài thì ít lượt, kỳ ngắn thì
+  không trả nổi phí.
+- **Lỗi quy trình (Claude):** #10–#12 được đăng ký TRƯỚC khi có con số lực này; bảng "tương quan nhỏ nhất đo được" đưa
+  cho người dùng ngày 27/11 là quá lạc quan với tín hiệu chậm. Người dùng quyết định chạy hay rút; `n_trials` giữ 12
+  trong cả hai trường hợp (như tiền lệ #8).
+- **Luật bổ sung cho các phép đo SAU #12:** trước khi đăng ký, chạy công thức tín hiệu trên bước ngẫu nhiên để (a) xác
+  nhận không lệch và (b) biết lợi thế nhỏ nhất bắt được với số ngày hiện có; không đủ lực ⇒ không đăng ký.

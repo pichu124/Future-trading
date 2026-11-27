@@ -15,8 +15,9 @@ import pandas as pd
 import pytest
 
 from backtest.signal_study import (CHUA_DU, DU_LON, KHONG, NHO, Observation, SignalProbe, StudyRules, collect,
-                                   daily_ic, forward_observations, main, placebo_signal, quantile_table, render,
-                                   round_trip_cost_points, spearman, study, tradable_window, triggered_edge)
+                                   daily_scores, drift_adjusted, forward_observations, main, placebo_signal, quantile_table, render,
+                                   round_trip_cost_points, signal_quantile, study, tradable_window,
+                                   triggered_edge)
 from core.clock import FakeClock, MarketClock
 from core.models import Bar
 from core.settings import Settings
@@ -112,33 +113,54 @@ def test_forward_rejects_mixed_contracts_in_one_day():
         forward_observations(rows, 1)
 
 
-# ------------------------------------------------------------ Spearman ----
-def test_spearman_basic_and_ties():
-    assert spearman([1, 2, 3, 4], [10, 20, 30, 40]) == pytest.approx(1.0)
-    assert spearman([1, 2, 3, 4], [4, 3, 2, 1]) == pytest.approx(-1.0)
-    assert spearman([1, 2, 3, 4], [1, 100, 2, 3]) == pytest.approx(0.4)     # hạng [1,4,2,3]: 1 − 6×6/(4×15)
-    # hạng trung bình khi hoà: x = [1, 1, 2] ⇒ [1.5, 1.5, 3]
-    assert spearman([1, 1, 2], [1, 2, 3]) == pytest.approx(np.corrcoef([1.5, 1.5, 3], [1, 2, 3])[0, 1])
-    # hoà ở giữa: hạng trung bình [1, 2.5, 2.5, 4, 5] (không phải hạng lớn nhất [1, 3, 3, 4, 5])
-    assert spearman([1, 2, 2, 3, 10], [1, 2, 3, 5, 4]) == pytest.approx(
-        np.corrcoef([1, 2.5, 2.5, 4, 5], [1, 2, 3, 5, 4])[0, 1])
+# ------------------------------------------------------------ điểm ngày ----
+def random_walk_obs(n_days=200, bars=240, horizon=60, seed=4):
+    """Bước ngẫu nhiên + tín hiệu CHẬM kiểu "mức giá so với giá mở" — không có gì để dự báo."""
+    rng = np.random.default_rng(seed)
+    out = []
+    for d in range(n_days):
+        day = date(2026, 1, 5) + timedelta(days=d)
+        px = np.cumsum(rng.normal(0, 1.0, bars))
+        ts0 = datetime.combine(day, time(9, 0))
+        for i in range(bars - horizon):
+            out.append(Observation(day, ts0 + timedelta(minutes=i), float(px[i]), float(px[i + horizon] - px[i])))
+    return out
 
 
-def test_spearman_none_when_undefined():
-    assert spearman([1, 1, 1], [1, 2, 3]) is None
-    assert spearman([1, 2], [1, 2]) is None
+def test_daily_scores_average_to_the_pooled_correlation():
+    scores = daily_scores(planted(rho=0.3))
+    assert len(scores) == 60 and [d for d, _ in scores] == sorted(d for d, _ in scores)
+    assert np.mean([v for _, v in scores]) == pytest.approx(0.3, abs=0.03)
 
 
-def test_daily_ic_skips_thin_days():
-    obs = planted(n_days=3, per_day=30) + [Observation(date(2026, 3, 2), datetime(2026, 3, 2, 9, 15), 1.0, 1.0)] * 5
-    ics = daily_ic(obs, min_obs=20)
-    assert len(ics) == 3 and all(-1 <= v <= 1 for _, v in ics)
-    assert [d for d, _ in ics] == sorted(d for d, _ in ics)
-
-
-def test_daily_ic_keeps_day_with_exactly_min_obs():
+def test_daily_scores_skip_thin_days_and_degenerate_input():
     obs = planted(n_days=1, per_day=20)
-    assert len(daily_ic(obs, min_obs=20)) == 1 and daily_ic(obs, min_obs=21) == []
+    assert len(daily_scores(obs, min_obs=20)) == 1 and daily_scores(obs, min_obs=21) == []
+    assert daily_scores([]) == []
+    assert daily_scores([Observation(o.day, o.ts, 0.0, o.fwd) for o in obs]) == []
+
+
+def test_no_fake_reversal_on_random_walk_for_a_slow_signal():
+    """Xếp hạng / trừ trung bình TRONG ngày cho tương quan ≈ −0,5 và lợi thế thô ≈ −6 điểm trên dữ liệu này (lệch kiểu
+    Dickey–Fuller: trong một mẫu hữu hạn, giá đang cao thì phần còn lại của mẫu thấp hơn trung bình mẫu)."""
+    obs = random_walk_obs()
+    for sign in (1, -1):
+        r = study(obs, expected_sign=sign, n_trials=1, cost_points=0.0, threshold=10.0, rules=FAST)
+        assert abs(r["mean_ic"]) < 0.05 and abs(r["ic_tstat"]) < 2.5
+        assert abs(r["gross_edge"]) < 1.5
+        assert r["verdict"] == KHONG
+
+
+def test_drift_adjustment_uses_other_days_only():
+    ts = datetime(2026, 1, 5, 9, 15)
+    d1, d2 = date(2026, 1, 5), date(2026, 1, 6)
+    obs = [Observation(d1, ts, 1.0, 1.0), Observation(d1, ts, 1.0, 3.0), Observation(d2, ts, 1.0, 10.0)]
+    adj, drift = drift_adjusted(obs)
+    assert [o.fwd for o in adj] == pytest.approx([1.0 - 10.0, 3.0 - 10.0, 10.0 - 2.0])
+    assert drift == pytest.approx(14.0 / 3)
+    assert drift_adjusted([]) == ([], None)
+    one_day, _ = drift_adjusted(obs[:2])
+    assert [o.fwd for o in one_day] == [1.0, 3.0]                          # không có ngày khác ⇒ không trừ gì
 
 
 # -------------------------------------------------- lợi thế vượt ngưỡng ----
@@ -160,6 +182,16 @@ def test_quantile_table_orders_buckets_by_signal():
     assert len(tab) == 5 and sum(r["n"] for r in tab) == 6000
     assert [r["mean_signal"] for r in tab] == sorted(r["mean_signal"] for r in tab)
     assert tab[-1]["mean_fwd"] > tab[0]["mean_fwd"]                         # tín hiệu cao ⇒ lợi suất kỳ sau cao hơn
+
+
+def test_gross_edge_is_pooled_over_triggers_not_mean_of_day_means():
+    ts = datetime(2026, 1, 5, 9, 15)
+    d1, d2, d3 = date(2026, 1, 5), date(2026, 1, 6), date(2026, 1, 7)
+    obs = [Observation(d1, ts, 1.0, 9.0)] + [Observation(d2, ts, 1.0, 1.0)] * 3 + [Observation(d3, ts, 0.0, 0.0)] * 8
+    r = study(obs, expected_sign=1, n_trials=1, cost_points=0.0, threshold=0.5)
+    # trôi giá của các ngày khác: d1 ⇒ 3/11, d2 ⇒ 9/9 = 1 ⇒ (9 − 3/11) + 3 × (1 − 1) chia 4 nến
+    assert r["gross_edge"] == pytest.approx((9.0 - 3.0 / 11.0) / 4.0)
+    assert r["trigger_days"] == 2 and r["triggers_per_day"] == pytest.approx(4 / 3)
 
 
 # ------------------------------------------------------------- kết luận ----
@@ -194,7 +226,8 @@ def test_gross_edge_does_not_credit_market_drift_to_a_one_sided_signal():
         obs += [Observation(day, ts, 1.0, 1.0 + float(x)) for x in rng.normal(0, 2, 50)]
     r = study(obs, expected_sign=1, n_trials=1, cost_points=0.0, rules=FAST)
     assert r["drift"] == pytest.approx(1.0, abs=0.15)                       # trôi giá trung bình mỗi kỳ
-    assert r["gross_edge"] == pytest.approx(0.0, abs=1e-9)                  # đã trừ trôi giá từng ngày
+    assert r["gross_edge"] == pytest.approx(0.0, abs=1e-9)                  # đã trừ trôi giá (của các ngày khác)
+    assert r["mean_ic"] == pytest.approx(0.0, abs=1e-9)                     # điểm ngày cũng không ăn theo trôi giá
     assert r["verdict"] != DU_LON
 
 
@@ -413,3 +446,47 @@ def test_cli_rejects_unknown_signal(tmp_path, capsys):
     assert main(["--bars", str(path), "--signal", "backtest.signal_study:khong_co", "--horizon", "5",
                  "--expected-sign", "1"]) == 2
     assert "❌" in capsys.readouterr().out
+
+
+# ------------------------------------------------ ngưỡng theo phân vị ----
+def test_signal_quantile_uses_absolute_signal_only():
+    ts = datetime(2026, 1, 5, 9, 15)
+    d = date(2026, 1, 5)
+    obs = [Observation(d, ts, s, 999.0 * s) for s in (-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0)]
+    assert signal_quantile(obs, 0.5) == pytest.approx(2.0)                  # trung vị của |tín hiệu|
+    flipped = [Observation(o.day, o.ts, o.signal, -o.fwd) for o in obs]
+    assert signal_quantile(flipped, 0.5) == signal_quantile(obs, 0.5)       # không phụ thuộc lợi suất kỳ sau
+    assert signal_quantile([], 0.85) is None
+    for bad in (0.0, 1.0, -0.1, 1.5):
+        with pytest.raises(ValueError):
+            signal_quantile(obs, bad)
+
+
+def cli_bars(tmp_path):
+    from core.settings import load_settings
+    mclock = MarketClock.from_settings(load_settings(), clock=FakeClock(datetime(2000, 1, 3)))
+    bars = []
+    for d in (date(2026, 6, 1), date(2026, 6, 2)):
+        bars += flat_day(d, 40, mclock.trading_contract(d), start="09:10")
+    return write_bars(tmp_path, bars)
+
+
+def test_cli_threshold_quantile_prints_the_number_to_reuse(tmp_path, capsys):
+    path = cli_bars(tmp_path)
+    args = ["--bars", str(path), "--signal", "backtest.signal_study:placebo_signal", "--horizon", "5",
+            "--expected-sign", "1", "--n-trials", "3"]
+    assert main(args + ["--threshold-quantile", "0.85"]) == 0
+    out = capsys.readouterr().out
+    line = next(ln for ln in out.splitlines() if "--threshold " in ln)
+    value = float(line.split("--threshold ")[1].split()[0])
+    assert 0.5 < value < 1.0                                                # giả dược đều trên [−1, 1] ⇒ ~0,85
+    assert main(args + ["--threshold", "0.3", "--threshold-quantile", "0.85"]) == 2
+    assert "❌" in capsys.readouterr().out
+
+
+def test_cli_default_n_trials_is_rows_already_logged(tmp_path, capsys, monkeypatch):
+    import backtest.robustness as rob
+    monkeypatch.setattr(rob, "count_logged_trials", lambda: 7)
+    assert main(["--bars", str(cli_bars(tmp_path)), "--signal", "backtest.signal_study:placebo_signal",
+                 "--horizon", "5", "--expected-sign", "1"]) == 0
+    assert "× 7 cấu hình" in capsys.readouterr().out
