@@ -85,8 +85,8 @@ Thứ tự làm: #3 → #4 → #5, mỗi chiến lược một module (test trư
 | 2026-11-16 | Đảo chiều qua ngày (`strategy/prev_day_reversal.py`) — cấu hình #7 | m = đóng − mở phiên trước; \|m\| ≥ 0,50·ADR10 ⇒ vào NGƯỢC m lúc 09:16; stop 0,40·ADR10; EXIT 14:20; 1 lệnh/ngày | IS nến SSI 22/07→31/12/2025 (kho tải 11/11, laptop) — **IS chạy 16/11/2026**; OOS KHÔNG mở | IS: 41 lệnh, −15.364.700đ (thắng 29%, PF 0,58); trượt 2 tick −17.074.700đ | — | **KHÔNG CÓ EDGE — trượt cổng IS** (cả 3 điều kiện): 0/6 biến thể lãi, 1/4 đoạn walk-forward lãi. Lỗ cả trước phí. Đăng ký trước 16/11/2026 (mục "Đăng ký trước #7, #8, #9"). |
 | 2026-11-16 | Basis quá đà (`strategy/basis_reversion.py`) — cấu hình #8 | d = basis − trung bình basis 30′ trước; \|d\| ≥ 0,10·ADR10 (09:30–14:00) ⇒ vào NGƯỢC d; stop 0,15·ADR10; thoát khi d về 0 hoặc giữ 30′; EXIT 14:20; ≤ 2 lệnh/ngày | như #7 + nến 1 phút chỉ số VN30 (SSI) — **KHÔNG KIỂM ĐƯỢC** | — | — | Nến chỉ số SSI chỉ có từ 15/10/2026, DNSE không có OHLC lịch sử ⇒ lỗi dữ liệu, không phải kết luận; chưa viết code. Đăng ký trước 16/11/2026. |
 | 2026-11-16 | Đà cuối phiên (`strategy/late_momentum.py`) — cấu hình #9 | r = đóng nến 13:49 − đóng phiên trước; \|r\| ≥ 0,30·ADR10 ⇒ vào THEO r lúc 13:50; stop 0,20·ADR10; EXIT 14:20; 1 lệnh/ngày | như #7 — **IS chạy 16/11/2026**; OOS KHÔNG mở | IS: 40 lệnh, −2.168.000đ (thắng 40%, PF 0,88); trượt 2 tick −2.968.000đ | — | **KHÔNG CÓ EDGE — trượt cổng IS** (cả 3 điều kiện): 3/6 biến thể lãi (< 75%), 1/4 đoạn walk-forward lãi. Trước phí ≈ hoà. Đăng ký trước 16/11/2026. |
-| 2026-11-27 | Đo tín hiệu: dòng tiền theo khối lượng (`strategy/signals.py:volume_flow`) — cấu hình #10 | F = Σ dấu(đóng − mở) × KL / Σ KL trên 30 nến gần nhất của hôm nay; kỳ 60 nến; chiều THUẬN (+1); ngưỡng độ lớn = phân vị 85% của \|F\| trên quan sát IS | nến DNSE (`data/history/ohlc1m`): IS 11/05→31/08/2026 · OOS 01/09→30/10/2026 | CHƯA CHẠY | — | đăng ký trước 27/11/2026 (mục "Đăng ký trước #10, #11, #12") |
-| 2026-11-27 | Đo tín hiệu: xu hướng trong ngày (`strategy/signals.py:intraday_trend`) — cấu hình #11 | T = (đóng nến hiện tại − mở nến đầu tiên hôm nay) / ADR10; kỳ 60 nến; chiều THUẬN (+1); ngưỡng độ lớn = phân vị 85% của \|T\| trên quan sát IS | nến SSI (`data/ssi/ohlc1m`): IS 22/07→31/12/2025 · OOS-A 01/01→24/03/2026 | CHƯA CHẠY | — | đăng ký trước 27/11/2026 |
+| 2026-11-27 | Đo tín hiệu: dòng tiền theo khối lượng (`strategy/signals.py:volume_flow`) — cấu hình #10 | F = Σ dấu(đóng − mở) × KL / Σ KL trên 30 nến gần nhất của hôm nay; kỳ 60 nến; chiều THUẬN (+1); ngưỡng độ lớn = phân vị 85% của \|F\| trên quan sát IS | nến DNSE (`data/history/ohlc1m`): IS 11/05→31/08/2026 · OOS 01/09→30/10/2026 — **IS chạy 28/11/2026** (desktop) | IS: 75 ngày, 10.738 quan sát; tương quan +0,0047 (t 0,09); lợi thế thô 0,10 điểm − chi phí 0,87 = −0,77 | p 0,470 / p_adj 1,000 | **KHÔNG CÓ TÍN HIỆU** — dừng, KHÔNG mở OOS. Đăng ký trước 27/11/2026 |
+| 2026-11-27 | Đo tín hiệu: xu hướng trong ngày (`strategy/signals.py:intraday_trend`) — cấu hình #11 | T = (đóng nến hiện tại − mở nến đầu tiên hôm nay) / ADR10; kỳ 60 nến; chiều THUẬN (+1); ngưỡng độ lớn = phân vị 85% của \|T\| trên quan sát IS | nến SSI (`data/ssi/ohlc1m`): IS 22/07→31/12/2025 · OOS-A 01/01→24/03/2026 — **IS chạy 28/11/2026** (desktop) | IS: 89 ngày, 14.329 quan sát; tương quan −0,0206 (t −0,32, ngược chiều); lợi thế thô 0,27 điểm − chi phí 0,87 = −0,59 | p 0,632 / p_adj 1,000 | **KHÔNG CÓ TÍN HIỆU** — dừng, KHÔNG mở OOS (OOS-A vẫn sạch). Đăng ký trước 27/11/2026 |
 | 2026-11-27 | Đo tín hiệu: basis lệch khỏi mức quen (`strategy/signals.py:basis_deviation`) — cấu hình #12 | D = (basis − trung bình basis 30 phút khớp được gần nhất trước đó, hôm nay) / ADR10, basis = đóng HĐ − đóng VN30 cùng phút; kỳ 30 nến; chiều NGHỊCH (−1); ngưỡng độ lớn \|D\| ≥ 0,10 | nến SSI HĐ + chỉ số VN30: IS 15/10→31/12/2026 · OOS 04/01→31/03/2027 | CHƯA CHẠY (chờ đủ dữ liệu) | — | đăng ký trước 27/11/2026 |
 
 ### Kết quả #3–#5 và kế hoạch (10/11/2026)
@@ -605,3 +605,22 @@ KHÔNG phải một lần thử. Công thức tín hiệu, kỳ, chiều, ngư�
   trong cả hai trường hợp (như tiền lệ #8).
 - **Luật bổ sung cho các phép đo SAU #12:** trước khi đăng ký, chạy công thức tín hiệu trên bước ngẫu nhiên để (a) xác
   nhận không lệch và (b) biết lợi thế nhỏ nhất bắt được với số ngày hiện có; không đủ lực ⇒ không đăng ký.
+
+### Kết quả #10 và #11 — đo IS (28/11/2026, desktop `E:\ft-research` ở commit de43eb7)
+
+- **Kiểm tra dữ liệu (bước 1) ✅:** SSI IS 115 phiên thiếu 2 (16–17/10/2025), thiếu HĐ kế tiếp ngày trước roll 15/10;
+  OOS-A 52 phiên thiếu 1 (13/02), thiếu HĐ kế tiếp 14/01 và 12/02. DNSE IS 80 phiên và OOS 42 phiên, thiếu 0.
+- **#11 IS** (nến SSI tới 31/12/2025, kỳ 60, chiều +1): 113 ngày nạp, bỏ 4 ngày đáo hạn; 89 ngày có quan sát (thiếu lịch sử
+  10 phiên quanh roll và đầu kho), 14.329 quan sát. Tương quan trung bình −0,0206, độ lệch chuẩn theo ngày 0,6086,
+  t = −0,32; p 0,632 × 12 = 1,000; walk-forward 50%. Ngưỡng phân vị 85% |T| = 0,459210; 42 ngày, 24,2 nến/ngày vượt ngưỡng;
+  lợi thế thô 0,27 − chi phí 0,87 = −0,59 điểm. Trôi giá cả mẫu 1,52 điểm mỗi 60 nến. ⇒ **KHÔNG CÓ TÍN HIỆU, dừng.**
+- **#10 IS** (nến DNSE tới 31/08/2026, kỳ 60, chiều +1): 80 ngày nạp, bỏ 4 ngày đáo hạn; 75 ngày, 10.738 quan sát. Tương
+  quan +0,0047, độ lệch chuẩn theo ngày 0,4369, t = 0,09; p 0,470 × 12 = 1,000; walk-forward 50%. Ngưỡng 0,365250; 73 ngày,
+  21,5 nến/ngày; lợi thế thô 0,10 − 0,87 = −0,77 điểm. Trôi giá 0,24 điểm mỗi 60 nến. ⇒ **KHÔNG CÓ TÍN HIỆU, dừng.**
+- Cả hai tương quan nằm sát 0 (|t| < 0,35), lợi thế thô ≤ 0,27 điểm — xa cả ngưỡng phát hiện (~3,3–3,7 điểm) lẫn chi phí.
+  Theo luật: không mở OOS, không sửa tham số. OOS-A (SSI 01/01→24/03/2026) VẪN SẠCH; OOS DNSE 01/09→30/10/2026 không bị
+  #10 nhìn. Bảng nhóm tín hiệu của #11 (mô tả) có hình chữ U — KHÔNG được dùng làm giả thuyết mới từ chính dữ liệu này.
+- **Độ phân tán thật cho cổng lực** (`backtest.power`, ORB làm tham chiếu, nến DNSE tới 06/11/2026, 222 lệnh): độ lệch
+  chuẩn 9,49 điểm/lệnh (P&L của ORB không xem). Với `n_trials` 13: 60 lệnh ⇒ lợi thế nhỏ nhất bắt được 4,00 điểm/lệnh;
+  1.000 lệnh ⇒ 0,98. Lợi thế giả định 1,5 điểm cần ~427 lệnh OOS.
+- Tổng: 12 cấu hình đã thử (9 chiến lược + 3 phép đo; #12 chờ dữ liệu), chưa có tín hiệu/edge nào.

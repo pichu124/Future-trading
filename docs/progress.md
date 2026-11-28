@@ -1,5 +1,16 @@
 # Tiến độ
 
+## 2026-11-28 — Kết quả đo tín hiệu #10, #11 (IS): KHÔNG CÓ TÍN HIỆU
+
+- Người dùng chạy trên desktop (`E:\Future-trading`, thư mục phụ `E:\ft-research`). Kiểm tra dữ liệu ✅ cả bốn cửa sổ.
+- #11 xu hướng trong ngày: 89 ngày, tương quan −0,021 (t −0,32), lợi thế thô 0,27 điểm < chi phí 0,87 ⇒ dừng.
+- #10 dòng tiền khối lượng: 75 ngày, tương quan +0,005 (t 0,09), lợi thế thô 0,10 điểm ⇒ dừng. Không mở OOS cho cả hai.
+- Độ phân tán thật P&L/lệnh (ORB, nến DNSE): 9,49 điểm ⇒ 60 lệnh chỉ bắt được lợi thế ≥ 4,0 điểm/lệnh.
+- `n_trials` = 12; #12 (basis) chờ dữ liệu chỉ số tới hết 31/12/2026 + công cụ nhận chuỗi thứ hai.
+
+**Người dùng cần làm**
+- [ ] Xoá thư mục phụ trên desktop khi không cần: `git worktree remove ..\ft-research` (chạy trong `E:\Future-trading`).
+
 ## 2026-11-27 — Đăng ký #10–#12; sửa lệch phương pháp đo tín hiệu; lực thật của giai đoạn đo
 
 **Đã xong**
