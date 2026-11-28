@@ -1,5 +1,20 @@
 # Tiến độ
 
+## 2026-11-28 — Kiểm toán chi phí khớp lệnh (`backtest/cost_audit.py`)
+
+**Đã xong**
+- `backtest/cost_audit.py` + `tests/test_cost_audit.py` (27 test, viết trước; 28/28 đột biến bị bắt sau khi thêm 5 test
+  ca biên): đọc dữ liệu recorder một ngày (gộp + part, khử trùng, một HĐ, một nguồn), spread/độ sâu theo thời gian và khung
+  giờ, lệnh thị trường và lệnh giới hạn-rồi-đuổi tại mỗi đầu phút hai chiều, nửa spread hiệu dụng của giao dịch thật, gộp
+  nhiều ngày với sai số chuẩn theo ngày, so với giả định backtest; CLI.
+- `research/log.md`: luật dùng kết quả chốt TRƯỚC khi có số thật (không "cứu" lần thử cũ; chỉ hạ giả định khi cận trên
+  vẫn thấp hơn, trên ≥ 10 phiên).
+- Thử trên dữ liệu recorder giả cỡ phiên thật: ~1 giây cho 2 phiên.
+
+**Người dùng cần làm**
+- [ ] Trên LAPTOP (máy chạy recorder), trong `D:\ft-research` (thư mục phụ ở commit mới nhất):
+  `& $PY -m backtest.cost_audit --raw D:\Future-trading\data\raw --from 2026-11-10 --to 2026-11-27` rồi gửi kết quả.
+
 ## 2026-11-28 — Kết quả đo tín hiệu #10, #11 (IS): KHÔNG CÓ TÍN HIỆU
 
 - Người dùng chạy trên desktop (`E:\Future-trading`, thư mục phụ `E:\ft-research`). Kiểm tra dữ liệu ✅ cả bốn cửa sổ.

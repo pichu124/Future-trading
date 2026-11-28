@@ -624,3 +624,30 @@ KHÔNG phải một lần thử. Công thức tín hiệu, kỳ, chiều, ngư�
   chuẩn 9,49 điểm/lệnh (P&L của ORB không xem). Với `n_trials` 13: 60 lệnh ⇒ lợi thế nhỏ nhất bắt được 4,00 điểm/lệnh;
   1.000 lệnh ⇒ 0,98. Lợi thế giả định 1,5 điểm cần ~427 lệnh OOS.
 - Tổng: 12 cấu hình đã thử (9 chiến lược + 3 phép đo; #12 chờ dữ liệu), chưa có tín hiệu/edge nào.
+
+## Kiểm toán chi phí khớp lệnh từ dữ liệu recorder (28/11/2026 — luật dùng kết quả CHỐT TRƯỚC khi có số thật)
+
+KHÔNG phải một lần thử (không thêm dòng bảng, `n_trials` giữ 12): đo chi phí, không đo lợi thế của chiến lược nào.
+
+- **Vì sao:** chi phí mỗi lượt của backtest = phí + thuế 0,467 điểm (cố định) + khớp lệnh 0,4 điểm (mỗi chiều trượt 1 bước
+  + nửa spread giả làm tròn 1 bước). Phần 0,4 điểm chưa từng được đo; 12 lần thử đều chết vì chi phí.
+- **Công cụ:** `backtest/cost_audit.py` (`python -m backtest.cost_audit --from … --to …`), test viết trước
+  (`tests/test_cost_audit.py`). Dữ liệu: tick + giá tốt nhất recorder ghi (`data/raw/`, feed DNSE), HĐ giao dịch, phiên
+  liên tục. Mỗi đầu phút trong cửa sổ vào lệnh (09:15 → trước 14:15), CẢ HAI chiều, 1 HĐ, độ trễ `paper.latency_ms`:
+  lệnh thị trường; lệnh giới hạn ở giá tốt nhất cùng phía xếp sau toàn bộ hàng chờ (không tính huỷ phía trước), chờ 10 /
+  30 / 60 s rồi đuổi. Thiếu hụt so với mid lúc ra quyết định; sai số chuẩn theo ngày. Kèm spread theo thời gian, độ sâu,
+  nửa spread hiệu dụng của giao dịch thật.
+- **Luật dùng kết quả (chốt trước khi chạy trên dữ liệu thật):**
+  1. Kết quả CHỈ dùng để đặt giả định chi phí cho các lần thử SAU; 12 lần thử đã kết luận giữ nguyên kết luận, kể cả khi
+     chi phí đo được thấp hơn giả định (không chạy lại để "cứu"). Muốn kiểm lại một ý tưởng cũ với chi phí mới = đăng ký
+     như cấu hình MỚI, cửa sổ OOS mới, tăng `n_trials`.
+  2. Đổi `backtest.slippage_ticks` / `backtest.synthetic_spread_ticks` chỉ khi đo trên ≥ 10 phiên và cận trên (trung bình
+     + 2 sai số chuẩn) của chi phí lệnh thị trường mỗi chiều vẫn thấp hơn giả định hiện tại — và chỉ hạ tới mức làm tròn
+     LÊN theo bước giá của cận trên đó. Chi phí đo được CAO hơn giả định ⇒ nâng giả định ngay (bảo thủ).
+  3. Lệnh giới hạn chỉ được đưa vào giả định của một chiến lược khi chiến lược đó dùng lệnh giới hạn thật trong paper, và
+     dùng con số của chính kiểu tín hiệu đó (quyết định đầu phút không gắn tín hiệu là cận dưới cho tín hiệu theo đà).
+  4. Mọi thay đổi settings từ kết quả này ghi tại đây kèm con số, trước khi dùng.
+- **Thử đường ống (cloud, dữ liệu recorder GIẢ 2 phiên × 510 nghìn dòng, bước ngẫu nhiên, spread 1 bước 85% thời gian):**
+  chạy ~1 giây; lệnh thị trường 0,058 điểm/chiều (= nửa spread trung bình, đúng như phải thế); lệnh giới hạn chờ 10/30/60 s
+  khớp 83/91/94% nhưng thiếu hụt 0,10–0,13 — trên bước ngẫu nhiên, lệnh giới hạn khớp đúng lúc giá đi ngược và bị lỡ đúng
+  lúc giá đi xuôi, nên rẻ hơn lệnh thị trường là KHÔNG tự nhiên; số thật sẽ cho biết thị trường có khác bước ngẫu nhiên không.
